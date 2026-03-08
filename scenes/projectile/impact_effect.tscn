@@ -1,0 +1,37 @@
+[gd_scene load_steps=2 format=3]
+
+[sub_resource type="GDScript" id="GDScript_1"]
+script/source = "extends Node2D
+
+var time_passed: float = 0.0
+var lifetime: float = 0.4
+var color: Color = Color.WHITE
+var particles: Array[Dictionary] = []
+
+func _ready() -> void:
+	for i in range(12):
+		particles.append({
+			\"pos\": Vector2.ZERO,
+			\"vel\": Vector2(randf_range(-1, 1), randf_range(-1, 1)).normalized() * randf_range(100, 250)
+		})
+
+func _process(delta: float) -> void:
+	time_passed += delta
+	if time_passed > lifetime:
+		queue_free()
+		return
+	
+	for p in particles:
+		p.pos += p.vel * delta
+	queue_redraw()
+
+func _draw() -> void:
+	var factor = 1.0 - (time_passed / lifetime)
+	var c = color
+	c.a = factor
+	for p in particles:
+		draw_circle(p.pos, 5.0 * factor, c)
+"
+
+[node name="ImpactEffect" type="Node2D"]
+script = SubResource("GDScript_1")

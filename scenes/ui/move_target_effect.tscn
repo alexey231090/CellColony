@@ -1,0 +1,23 @@
+[gd_scene load_steps=2 format=3]
+
+[sub_resource type="GDScript" id="GDScript_1"]
+script/source = "extends Node2D
+
+func _ready() -> void:
+	# Анимация появления
+	scale = Vector2.ZERO
+	var tween = create_tween()
+	tween.tween_property(self, \"scale\", Vector2(1.2, 1.2), 0.1)
+	tween.tween_property(self, \"scale\", Vector2.ZERO, 0.4).set_delay(0.2)
+	tween.tween_callback(queue_free)
+
+func _draw() -> void:
+	# Рисуем простой ромб или крестик
+	var size = 15.0
+	var color = Color(0.0, 1.0, 0.5, 0.8) # Зеленоватый как в RTS
+	draw_line(Vector2(-size, 0), Vector2(size, 0), color, 2.0)
+	draw_line(Vector2(0, -size), Vector2(0, size), color, 2.0)
+"
+
+[node name="MoveTargetEffect" type="Node2D"]
+script = SubResource("GDScript_1")

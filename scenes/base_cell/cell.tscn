@@ -1,0 +1,37 @@
+[gd_scene load_steps=6 format=3]
+
+[ext_resource type="Script" path="res://scenes/base_cell/cell.gd" id="1_cell"]
+[ext_resource type="Script" path="res://scenes/base_cell/modules/shooter.gd" id="2_shooter"]
+[ext_resource type="Script" path="res://scenes/base_cell/modules/ai_module.gd" id="3_ai"]
+[ext_resource type="Script" path="res://scenes/base_cell/modules/mover.gd" id="4_mover"]
+
+[sub_resource type="CircleShape2D" id="CircleShape2D_1"]
+radius = 32.0
+
+[node name="Cell" type="CharacterBody2D"]
+collision_layer = 1
+collision_mask = 1
+input_pickable = true
+script = ExtResource("1_cell")
+
+[node name="EnergyLabel" type="Label" parent="."]
+offset_left = -20.0
+offset_top = -11.5
+offset_right = 20.0
+offset_bottom = 11.5
+text = "0"
+horizontal_alignment = 1
+vertical_alignment = 1
+
+[node name="ShooterModule" type="Node2D" parent="."]
+script = ExtResource("2_shooter")
+
+[node name="AIModule" type="Node" parent="."]
+script = ExtResource("3_ai")
+
+[node name="MoverModule" type="Node" parent="."]
+script = ExtResource("4_mover")
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="."]
+shape = SubResource("CircleShape2D_1")
+

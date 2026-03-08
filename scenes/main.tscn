@@ -1,0 +1,30 @@
+[gd_scene load_steps=5 format=3 uid="uid://cixua1bn5oas8"]
+
+[ext_resource type="Script" uid="uid://bsigb2r1q8011" path="res://scenes/main.gd" id="1_main"]
+[ext_resource type="Script" uid="uid://odonncolli0p" path="res://scripts/core/SelectionManager.gd" id="2_sm"]
+[ext_resource type="PackedScene" path="res://scenes/base_cell/cell.tscn" id="3_cell"]
+[ext_resource type="Script" uid="uid://cf35f2y81m0gb" path="res://scripts/core/CameraFollow.gd" id="4_cam"]
+
+[node name="Main" type="Node2D"]
+script = ExtResource("1_main")
+
+[node name="BackgroundLayer" type="CanvasLayer" parent="."]
+layer = -1
+
+[node name="ColorRect" type="ColorRect" parent="BackgroundLayer"]
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+color = Color(0.1, 0.1, 0.12, 1)
+
+[node name="SelectionManager" type="Node" parent="."]
+script = ExtResource("2_sm")
+
+[node name="Camera2D" type="Camera2D" parent="."]
+script = ExtResource("4_cam")
+
+[node name="PlayerCell" parent="." instance=ExtResource("3_cell")]
+owner_type = 1
