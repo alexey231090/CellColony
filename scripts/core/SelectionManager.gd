@@ -3,6 +3,9 @@ extends Node
 ## Клик по клетке = Атака/лечение. Клик в пустоту = Передвижение всей колонии.
 ## В режиме наблюдателя (нет клеток игрока) — ввод игнорируется.
 
+var CLICK_FEEDBACK_SCENE = preload("res://scenes/ui/click_feedback.tscn")
+var TARGET_HIGHLIGHT_SCENE = preload("res://scenes/ui/target_highlight.tscn")
+
 func _unhandled_input(event: InputEvent) -> void:
 	# В режиме наблюдателя нет смысла в командах
 	if get_tree().get_nodes_in_group("player_cells").is_empty():
@@ -38,6 +41,20 @@ func _handle_selection(pos: Vector2) -> void:
 		for p_cell in player_cells:
 			if p_cell is BaseCell:
 				p_cell.command_attack(clicked_node.global_position, clicked_node)
+				
+		# Визуальный отклик (атака/лечение)
+		if CLICK_FEEDBACK_SCENE:
+			var feedback = CLICK_FEEDBACK_SCENE.instantiate()
+			get_parent().add_child(feedback)
+			var is_attack = clicked_node.owner_type != BaseCell.OwnerType.PLAYER
+			feedback.setup(player_cells, clicked_node.global_position, is_attack)
+			
+		# Временное выделение атакуемой/нейтральной цели на 3 секунды
+		if TARGET_HIGHLIGHT_SCENE and clicked_node.owner_type != BaseCell.OwnerType.PLAYER:
+			var highlight = TARGET_HIGHLIGHT_SCENE.instantiate()
+			get_parent().add_child(highlight)
+			var ht_color = Color(0.9, 0.3, 0.3) if clicked_node.owner_type != BaseCell.OwnerType.NEUTRAL else Color(0.8, 0.8, 0.8)
+			highlight.setup(clicked_node, ht_color)
 	else:
 		# ЦЕЛИ НЕТ — ПЛЫВЕМ ВСЕЙ КОЛОНИЕЙ ТУДА
 		if circle:
@@ -47,3 +64,9 @@ func _handle_selection(pos: Vector2) -> void:
 		for p_cell in player_cells:
 			if p_cell is BaseCell:
 				p_cell.command_move(pos)
+				
+		# Визуальный отклик (перемещение)
+		if CLICK_FEEDBACK_SCENE:
+			var feedback = CLICK_FEEDBACK_SCENE.instantiate()
+			get_parent().add_child(feedback)
+			feedback.setup(player_cells, pos, false)
