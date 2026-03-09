@@ -67,10 +67,6 @@ func _process(delta: float) -> void:
 func _is_target_valid_for_fire(node: Node2D, parent: BaseCell) -> bool:
 	if not is_instance_valid(node) or node == parent: return false
 	
-	# Проверка дистанции: не стреляем в цель, если она дальше 1000 пикселей (чтобы не лупить в никуда)
-	if global_position.distance_to(node.global_position) > 1000.0:
-		return false
-
 	# Проверяем наличие необходимых полей (для всех типов клеток)
 	if "owner_type" in node and "stats" in node:
 		if node.owner_type == parent.owner_type:
