@@ -9,14 +9,24 @@ enum OwnerType { NEUTRAL, PLAYER, ENEMY_RED, ENEMY_GREEN, ENEMY_YELLOW }
 @export var radius: float = 32.0
 
 @onready var energy_label: Label = $EnergyLabel
+@onready var contr_label: Label = $ContrLabel
 
 # Визуальные эффекты при попадании
 var hit_flash_timer: float = 0.0
 var hit_impact_wobble: float = 0.0
 
+# Баффы
+var reflect_chance: float = 0.0
+var reflect_timer: float = 0.0
+
 # Сглаживание желейной физики
 var visual_stretch: float = 0.0
 var visual_angle: float = 0.0
+
+# Система вклада (для перков)
+var contributions: Dictionary = {} # OwnerType -> float
+var last_damage_time: float = 0.0
+var decay_accum: float = 0.0
 
 # Оптимизация: троттлинг перерисовки
 var _redraw_timer: float = 0.0
@@ -40,6 +50,14 @@ func _ready() -> void:
 		settings.shadow_offset = Vector2(1, 2)
 		energy_label.label_settings = settings
 
+	if contr_label:
+		var c_settings = LabelSettings.new()
+		c_settings.font_size = 18
+		c_settings.font_color = Color(0.2, 0.6, 1.0, 0.9) # Синий
+		c_settings.outline_size = 4
+		c_settings.outline_color = Color(0, 0, 0, 0.8)
+		contr_label.label_settings = c_settings
+
 func _update_groups() -> void:
 	# Убираем из всех фракционных групп
 	for g in ["player_cells", "enemy_red_cells", "enemy_green_cells", "enemy_yellow_cells"]:
@@ -55,6 +73,10 @@ func take_damage(amount: float, attacker_owner: OwnerType) -> void:
 		stats.current_energy = min(stats.max_energy, stats.current_energy + amount)
 	else:
 		stats.current_energy -= amount
+		# Отслеживаем вклад атакующего
+		contributions[attacker_owner] = contributions.get(attacker_owner, 0.0) + amount
+		last_damage_time = Time.get_ticks_msec() / 1000.0
+		
 		# Визуальный отклик на урон
 		hit_flash_timer = 0.2
 		hit_impact_wobble = 15.0
@@ -65,6 +87,17 @@ func take_damage(amount: float, attacker_owner: OwnerType) -> void:
 			_capture(attacker_owner)
 
 func _capture(new_owner: OwnerType) -> void:
+	# Награда за захват: отдаем накопленный вклад новому владельцу
+	if new_owner == OwnerType.PLAYER:
+		var reward = contributions.get(OwnerType.PLAYER, 0.0)
+		if reward > 0:
+			var sm = get_tree().get_first_node_in_group("selection_manager")
+			if sm and sm.has_method("add_perk_energy"):
+				sm.add_perk_energy(reward)
+	
+	# Сбрасываем вклады после смены владельца
+	contributions.clear()
+	
 	owner_type = new_owner
 	_update_groups()
 	_update_visuals()
@@ -144,6 +177,14 @@ func _draw() -> void:
 		org_color.a = 0.7
 		draw_circle(org_pos, current_radius * 0.12, org_color)
 
+	# 6. Щит (Отражение)
+	if reflect_chance > 0.0:
+		var shield_color = Color(0.1, 0.9, 0.3, 0.3 + sin(local_time * 8.0) * 0.15)
+		draw_arc(Vector2.ZERO, current_radius * 1.3, 0, TAU, 32, shield_color, 4.0, true)
+		# Мелкие частицы/гексы щита (простая отрисовка пунктиром)
+		draw_arc(Vector2.ZERO, current_radius * 1.4, time * 2.0, time * 2.0 + PI, 16, shield_color, 2.0, true)
+		draw_arc(Vector2.ZERO, current_radius * 1.4, time * 2.0 + PI * 1.2, time * 2.0 + PI * 2.2, 16, shield_color, 2.0, true)
+
 func _get_cell_color() -> Color:
 	match owner_type:
 		OwnerType.PLAYER:       return Color(0.40, 0.60, 1.00)  # Синий
@@ -157,6 +198,12 @@ func _process(delta: float) -> void:
 		hit_flash_timer -= delta
 	if hit_impact_wobble > 0.0:
 		hit_impact_wobble = lerp(hit_impact_wobble, 0.0, delta * 15.0)
+
+	if reflect_timer > 0.0:
+		reflect_timer -= delta
+		if reflect_timer <= 0.0:
+			reflect_chance = 0.0
+			queue_redraw()
 
 	# Сглаживание желейной физики
 	var speed = velocity.length()
@@ -172,6 +219,16 @@ func _process(delta: float) -> void:
 	_update_size()
 	_update_ui()
 	
+	# Распад вклада через 10 секунд бездействия
+	var current_time = Time.get_ticks_msec() / 1000.0
+	if current_time - last_damage_time > 10.0:
+		decay_accum += delta
+		if decay_accum >= 2.0: # Каждые 2 секунды
+			decay_accum = 0.0
+			for key in contributions.keys():
+				contributions[key] = max(0.0, contributions[key] - 1.0)
+			queue_redraw()
+
 	# Оптимизация: перерисовка только ~30 раз в секунду (физика остаётся 60fps)
 	_redraw_timer += delta
 	if _redraw_timer >= REDRAW_INTERVAL:
@@ -210,3 +267,16 @@ func _update_ui() -> void:
 		# Используем общий scale клетки, а не её текущий сплющенный scale_x / scale_y
 		var base_scale = max(0.5, 1.0 + (stats.current_energy * stats.size_multiplier))
 		energy_label.scale = Vector2.ONE / base_scale
+	
+	if contr_label:
+		var player_cont = contributions.get(OwnerType.PLAYER, 0.0)
+		if player_cont > 0.5:
+			contr_label.text = "+" + str(roundi(player_cont))
+			contr_label.show()
+			# Позиционируем Label за пределами клетки
+			contr_label.position = Vector2(radius * 0.8, -radius * 1.5)
+			
+			var base_scale = max(0.5, 1.0 + (stats.current_energy * stats.size_multiplier))
+			contr_label.scale = Vector2.ONE / base_scale
+		else:
+			contr_label.hide()

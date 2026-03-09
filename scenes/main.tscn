@@ -1,13 +1,27 @@
-[gd_scene load_steps=6 format=3 uid="uid://cixua1bn5oas8"]
+[gd_scene load_steps=7 format=3 uid="uid://cixua1bn5oas8"]
 
 [ext_resource type="Script" uid="uid://bsigb2r1q8011" path="res://scenes/main.gd" id="1_main"]
 [ext_resource type="Script" uid="uid://odonncolli0p" path="res://scripts/core/SelectionManager.gd" id="2_sm"]
 [ext_resource type="PackedScene" path="res://scenes/base_cell/cell.tscn" id="3_cell"]
 [ext_resource type="Script" uid="uid://cf35f2y81m0gb" path="res://scripts/core/CameraFollow.gd" id="4_cam"]
 [ext_resource type="Script" uid="uid://wtdsrlqfg7i5" path="res://scripts/core/fps_counter.gd" id="5_fps"]
+[ext_resource type="PackedScene" path="res://scenes/ui/perks_ui.tscn" id="6_perks"]
+[ext_resource type="Script" path="res://scripts/core/AIFactionManager.gd" id="7_ai_mgr"]
 
 [node name="Main" type="Node2D"]
 script = ExtResource("1_main")
+
+[node name="AIManager_Red" type="Node" parent="."]
+script = ExtResource("7_ai_mgr")
+faction = 2
+
+[node name="AIManager_Green" type="Node" parent="."]
+script = ExtResource("7_ai_mgr")
+faction = 3
+
+[node name="AIManager_Yellow" type="Node" parent="."]
+script = ExtResource("7_ai_mgr")
+faction = 4
 
 [node name="BackgroundLayer" type="CanvasLayer" parent="."]
 layer = -1
@@ -35,3 +49,5 @@ layer = 100
 
 [node name="FPSCounter" type="Label" parent="HUDLayer"]
 script = ExtResource("5_fps")
+
+[node name="PerksUI" parent="HUDLayer" instance=ExtResource("6_perks")]

@@ -15,19 +15,10 @@ func _ready() -> void:
 	# Случайный разброс таймеров, чтобы не все AI думали одновременно
 	scan_timer = randf_range(0.0, scan_interval)
 
-func _process(delta: float) -> void:
-	var parent_cell = get_parent() as BaseCell
-	if not parent_cell: return
-	
-	# AI работает только для AI-фракций
-	if parent_cell.owner_type == BaseCell.OwnerType.NEUTRAL or \
-	   parent_cell.owner_type == BaseCell.OwnerType.PLAYER:
-		return
-	
-	scan_timer -= delta
-	if scan_timer <= 0.0:
-		_perform_ai_action(parent_cell)
-		scan_timer = scan_interval
+func _process(_delta: float) -> void:
+	# Индивидуальная логика ИИ отключена.
+	# Теперь колонией управляет глобальный AIFactionManager.
+	return
 
 func _perform_ai_action(cell: BaseCell) -> void:
 	# Если энергии мало — ждём

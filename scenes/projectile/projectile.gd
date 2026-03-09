@@ -90,6 +90,12 @@ func _on_body_entered(body: Node2D) -> void:
 @export var impact_effect_scene: PackedScene = preload("res://scenes/projectile/impact_effect.tscn")
 
 func _impact(cell: BaseCell) -> void:
+	# Проверка на отскок (если у цели есть активный щит)
+	if cell.reflect_chance > 0.0 and cell.owner_type != owner_type:
+		if randf() <= cell.reflect_chance:
+			_reflect(cell)
+			return
+
 	# Создаем вспышку
 	var impact = impact_effect_scene.instantiate()
 	get_tree().current_scene.add_child(impact)
@@ -104,3 +110,20 @@ func _impact(cell: BaseCell) -> void:
 	# Наносим урон/лечение
 	cell.take_damage(damage, owner_type)
 	queue_free()
+
+func _reflect(cell: BaseCell) -> void:
+	# Меняем направление (чуть с разбросом для красоты)
+	direction = -direction.rotated(randf_range(-0.2, 0.2))
+	# Скорость немного возрастает при отскоке!
+	speed *= 1.2
+	# Снаряд теперь принадлежит отражающему!
+	owner_type = cell.owner_type
+	projectile_color = cell._get_cell_color()
+	target_node = null # Сбрасываем цель, пусть летит прямо
+
+	# Эффект отскока
+	var impact = impact_effect_scene.instantiate()
+	get_tree().current_scene.add_child(impact)
+	impact.global_position = global_position
+	impact.color = Color.WHITE # Яркая вспышка
+	impact.scale = Vector2(1.5, 1.5)

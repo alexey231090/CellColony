@@ -5,8 +5,8 @@ extends Camera2D
 @export var follow_speed: float = 3.0
 @export var zoom_speed: float = 2.0
 @export var min_zoom: float = 0.1
-@export var max_zoom: float = 1.0
-@export var padding: float = 800.0
+@export var max_zoom: float = 0.7
+@export var padding: float = 1200.0
 
 ## Режим наблюдателя
 @export var spectator_move_speed: float = 900.0
