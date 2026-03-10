@@ -63,10 +63,10 @@ func _ready() -> void:
 
 func _spawn_cell(pos: Vector2, owner_type: BaseCell.OwnerType, energy: float) -> BaseCell:
 	var cell = cell_scene.instantiate() as BaseCell
-	add_child(cell)
 	cell.position = pos
 	cell.owner_type = owner_type
 	cell.stats.current_energy = energy
+	add_child(cell)
 	return cell
 
 func _int_to_owner_type(i: int) -> BaseCell.OwnerType:

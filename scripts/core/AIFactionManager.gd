@@ -6,12 +6,20 @@ class_name AIFactionManager
 
 @export var faction: BaseCell.OwnerType = BaseCell.OwnerType.NEUTRAL
 @export var decision_interval: float = 2.5
-@export var attack_range: float = 2000.0  # Когда ИИ вступает в бой
-@export var expand_range: float = 10000.0 # Как далеко ищет нейтралов
+@export var attack_range: float = 2000.0
+@export var expand_range: float = 10000.0
+@export var min_energy_ratio_for_war: float = 0.55
+@export var goal_lock_time: float = 4.0
+@export var score_distance_scale: float = 2200.0
+@export var patrol_min_distance: float = 900.0
+@export var patrol_max_distance: float = 2600.0
+@export var patrol_reached_distance: float = 350.0
 
 var decision_timer: float = 0.0
 var base_pos: Vector2 = Vector2.ZERO
-var current_target_node: Node2D = null
+var current_target_node: BaseCell = null
+var current_goal_pos: Vector2 = Vector2.ZERO
+var goal_lock_timer: float = 0.0
 
 func _ready() -> void:
 	# Небольшой разброс, чтобы фракции не думали одновременно
@@ -19,9 +27,10 @@ func _ready() -> void:
 	call_deferred("_init_base")
 
 func _init_base() -> void:
-	var my_cells = _get_my_cells()
+	var my_cells: Array[BaseCell] = _get_my_cells()
 	if not my_cells.is_empty():
-		base_pos = my_cells[0].global_position
+		base_pos = _pick_base_pos(my_cells)
+		current_goal_pos = base_pos
 
 func _process(delta: float) -> void:
 	if faction == BaseCell.OwnerType.NEUTRAL or faction == BaseCell.OwnerType.PLAYER:
@@ -33,62 +42,188 @@ func _process(delta: float) -> void:
 		_tick_ai()
 
 func _tick_ai() -> void:
-	var my_cells = _get_my_cells()
+	var my_cells: Array[BaseCell] = _get_my_cells()
 	if my_cells.is_empty(): return
 	
-	# Считаем центр группы
-	var center = Vector2.ZERO
-	for c in my_cells: center += c.global_position
-	center /= my_cells.size()
+	var center := _get_center(my_cells)
+	base_pos = _pick_base_pos(my_cells)
 	
-	# ПРИОРИТЕТ 1: Атака врага, если он в тактическом радиусе (attack_range)
-	var enemy = _find_nearest(center, attack_range, false)
-	if enemy:
-		_order_all(my_cells, enemy.global_position, enemy)
+	goal_lock_timer = maxf(0.0, goal_lock_timer - decision_interval)
+	
+	if _is_target_still_valid(current_target_node) and goal_lock_timer > 0.0:
+		_order_all_attack(my_cells, current_target_node)
 		return
-		
-	# ПРИОРИТЕТ 2: Глобальная экспансия (ближайший нейтрал на всей карте)
-	var neutral = _find_nearest(center, expand_range, true)
-	if neutral:
-		_order_all(my_cells, neutral.global_position, neutral)
+	
+	var all_cells := _get_all_cells()
+	
+	var tactical_enemy := _find_best_enemy_in_range(center, attack_range, all_cells)
+	if tactical_enemy != null:
+		_set_goal_lock()
+		_order_all_attack(my_cells, tactical_enemy)
 		return
-		
-	# ПРИОРИТЕТ 3: Вернуться к базе, если делать нечего
-	if center.distance_to(base_pos) > 500:
-		_order_all(my_cells, base_pos, null)
+	
+	var avg_energy_ratio := _get_avg_energy_ratio(my_cells)
+	var best_enemy := _find_best_enemy_global(center, all_cells)
+	var best_neutral := _find_best_neutral_global(center, all_cells)
+	
+	if best_enemy != null and (avg_energy_ratio >= min_energy_ratio_for_war or best_neutral == null):
+		_set_goal_lock()
+		_order_all_attack(my_cells, best_enemy)
+		return
+	
+	if best_neutral != null:
+		_set_goal_lock()
+		_order_all_attack(my_cells, best_neutral)
+		return
+	
+	if center.distance_to(current_goal_pos) <= patrol_reached_distance:
+		current_goal_pos = _pick_patrol_point(center)
+	_order_all_move(my_cells, current_goal_pos)
 
-func _order_all(cells: Array, pos: Vector2, target: Node2D) -> void:
+func _set_goal_lock() -> void:
+	goal_lock_timer = goal_lock_time
+
+func _order_all_attack(cells: Array[BaseCell], target: BaseCell) -> void:
 	current_target_node = target
+	if is_instance_valid(target):
+		current_goal_pos = target.global_position
 	for c in cells:
 		if c.has_method("command_attack"):
-			c.command_attack(pos, target)
+			c.command_attack(current_goal_pos, target)
 
-func _find_nearest(from: Vector2, max_dist: float, find_neutral: bool) -> BaseCell:
-	var all_cells = get_tree().get_nodes_in_group("cells")
-	var best = null
-	var min_d = max_dist
-	
+func _order_all_move(cells: Array[BaseCell], pos: Vector2) -> void:
+	current_target_node = null
+	current_goal_pos = pos
+	for c in cells:
+		if c.has_method("command_move"):
+			c.command_move(pos)
+
+func _get_center(cells: Array[BaseCell]) -> Vector2:
+	var center := Vector2.ZERO
+	for c in cells:
+		center += c.global_position
+	return center / float(cells.size())
+
+func _pick_base_pos(cells: Array[BaseCell]) -> Vector2:
+	var best: BaseCell = cells[0]
+	var best_energy := best.stats.current_energy
+	for c in cells:
+		if c.stats.current_energy > best_energy:
+			best = c
+			best_energy = c.stats.current_energy
+	return best.global_position
+
+func _is_target_still_valid(target: BaseCell) -> bool:
+	if not is_instance_valid(target): return false
+	if not target.is_inside_tree(): return false
+	if target.owner_type == faction: return false
+	return true
+
+func _get_all_cells() -> Array[BaseCell]:
+	var raw := get_tree().get_nodes_in_group("cells")
+	var result: Array[BaseCell] = []
+	result.resize(0)
+	for n in raw:
+		if n is BaseCell:
+			result.append(n)
+	return result
+
+func _get_avg_energy_ratio(cells: Array[BaseCell]) -> float:
+	if cells.is_empty(): return 0.0
+	var sum := 0.0
+	for c in cells:
+		if c.stats.max_energy > 0.0:
+			sum += c.stats.current_energy / c.stats.max_energy
+	return sum / float(cells.size())
+
+func _find_best_enemy_in_range(from: Vector2, max_dist: float, all_cells: Array[BaseCell]) -> BaseCell:
+	var max_dist_sq := max_dist * max_dist
+	var best: BaseCell = null
+	var best_score := -INF
 	for c in all_cells:
-		if not is_instance_valid(c): continue
-		if c.owner_type == faction: continue # Своих пропускаем
-		
-		# Если ищем нейтралов - пропускаем врагов, и наоборот
-		if find_neutral:
-			if c.owner_type != BaseCell.OwnerType.NEUTRAL: continue
-		else:
-			if c.owner_type == BaseCell.OwnerType.NEUTRAL: continue
-			
-		var d = from.distance_to(c.global_position)
-		if d < min_d:
-			min_d = d
+		if c.owner_type == faction or c.owner_type == BaseCell.OwnerType.NEUTRAL: continue
+		var dist_sq := from.distance_squared_to(c.global_position)
+		if dist_sq > max_dist_sq: continue
+		var score := _score_enemy(from, c, dist_sq)
+		if score > best_score:
+			best_score = score
 			best = c
 	return best
 
-func _get_my_cells() -> Array:
+func _find_best_enemy_global(from: Vector2, all_cells: Array[BaseCell]) -> BaseCell:
+	var best: BaseCell = null
+	var best_score := -INF
+	for c in all_cells:
+		if c.owner_type == faction or c.owner_type == BaseCell.OwnerType.NEUTRAL: continue
+		var dist_sq := from.distance_squared_to(c.global_position)
+		if dist_sq > expand_range * expand_range: continue
+		var score := _score_enemy(from, c, dist_sq)
+		if score > best_score:
+			best_score = score
+			best = c
+	return best
+
+func _find_best_neutral_global(from: Vector2, all_cells: Array[BaseCell]) -> BaseCell:
+	var best: BaseCell = null
+	var best_score := -INF
+	for c in all_cells:
+		if c.owner_type != BaseCell.OwnerType.NEUTRAL: continue
+		var dist_sq := from.distance_squared_to(c.global_position)
+		if dist_sq > expand_range * expand_range: continue
+		var score := _score_neutral(from, c, dist_sq)
+		if score > best_score:
+			best_score = score
+			best = c
+	return best
+
+func _score_enemy(_from: Vector2, enemy: BaseCell, dist_sq: float) -> float:
+	var weakness := 0.0
+	if enemy.stats.max_energy > 0.0:
+		weakness = 1.0 - (enemy.stats.current_energy / enemy.stats.max_energy)
+	var denom := 1.0 + (dist_sq / (score_distance_scale * score_distance_scale))
+	return (1.0 + weakness * 1.6) / denom
+
+func _score_neutral(_from: Vector2, neutral: BaseCell, dist_sq: float) -> float:
+	var value := neutral.stats.current_energy
+	var denom := 1.0 + (dist_sq / (score_distance_scale * score_distance_scale))
+	return value / denom
+
+func _pick_patrol_point(from: Vector2) -> Vector2:
+	var map_rect := _get_map_rect()
+	var dir := Vector2.RIGHT.rotated(randf_range(-PI, PI))
+	var dist := randf_range(patrol_min_distance, patrol_max_distance)
+	var p := from + dir * dist
+	p.x = clampf(p.x, map_rect.position.x, map_rect.position.x + map_rect.size.x)
+	p.y = clampf(p.y, map_rect.position.y, map_rect.position.y + map_rect.size.y)
+	return p
+
+func _get_map_rect() -> Rect2:
+	var scene := get_tree().current_scene
+	if scene != null and ("map_size" in scene):
+		var ms = scene.map_size
+		if ms is Vector2:
+			return Rect2(-ms / 2.0, ms)
+	var fallback_half := Vector2.ONE * expand_range
+	return Rect2(base_pos - fallback_half, fallback_half * 2.0)
+
+func _get_my_cells() -> Array[BaseCell]:
 	var group = ""
 	match faction:
 		BaseCell.OwnerType.ENEMY_RED:    group = "enemy_red_cells"
 		BaseCell.OwnerType.ENEMY_GREEN:  group = "enemy_green_cells"
 		BaseCell.OwnerType.ENEMY_YELLOW: group = "enemy_yellow_cells"
 	if group == "": return []
-	return get_tree().get_nodes_in_group(group)
+	var raw := get_tree().get_nodes_in_group(group)
+	var result: Array[BaseCell] = []
+	result.resize(0)
+	for n in raw:
+		if n is BaseCell:
+			result.append(n)
+	if not result.is_empty():
+		return result
+	
+	var all_raw := get_tree().get_nodes_in_group("cells")
+	for n in all_raw:
+		if n is BaseCell and n.owner_type == faction:
+			result.append(n)
+	return result
