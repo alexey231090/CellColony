@@ -1,4 +1,4 @@
-[gd_scene load_steps=7 format=3 uid="uid://cixua1bn5oas8"]
+[gd_scene load_steps=8 format=3 uid="uid://cixua1bn5oas8"]
 
 [ext_resource type="Script" uid="uid://bsigb2r1q8011" path="res://scenes/main.gd" id="1_main"]
 [ext_resource type="Script" uid="uid://odonncolli0p" path="res://scripts/core/SelectionManager.gd" id="2_sm"]
@@ -7,6 +7,7 @@
 [ext_resource type="Script" uid="uid://wtdsrlqfg7i5" path="res://scripts/core/fps_counter.gd" id="5_fps"]
 [ext_resource type="PackedScene" path="res://scenes/ui/perks_ui.tscn" id="6_perks"]
 [ext_resource type="Script" path="res://scripts/core/AIFactionManager.gd" id="7_ai_mgr"]
+[ext_resource type="PackedScene" path="res://scenes/ui/dev_console.tscn" id="8_console"]
 
 [node name="Main" type="Node2D"]
 script = ExtResource("1_main")
@@ -51,3 +52,5 @@ layer = 100
 script = ExtResource("5_fps")
 
 [node name="PerksUI" parent="HUDLayer" instance=ExtResource("6_perks")]
+
+[node name="DevConsole" parent="HUDLayer" instance=ExtResource("8_console")]

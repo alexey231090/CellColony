@@ -12,6 +12,7 @@ extends Camera2D
 @export var spectator_move_speed: float = 900.0
 
 var _spectator_mode: bool = false
+var _forced_spectator: bool = false
 var _spectator_label: Label = null
 var _is_first_frame: bool = true
 
@@ -43,12 +44,14 @@ func _ready() -> void:
 
 func _process(delta: float) -> void:
 	var player_cells = get_tree().get_nodes_in_group("player_cells")
+	var spectator_active := _forced_spectator or player_cells.is_empty()
 
-	if not player_cells.is_empty():
+	if not spectator_active:
 		# === Режим слежения ===
 		if _spectator_mode:
 			_spectator_mode = false
 			_spectator_label.hide()
+			_is_first_frame = true
 
 		var avg_pos = Vector2.ZERO
 		var min_pos = player_cells[0].global_position
@@ -83,6 +86,7 @@ func _process(delta: float) -> void:
 		_is_first_frame = false # Чтобы не сбивать камеру если вдруг враг захватил игрока
 		if not _spectator_mode:
 			_spectator_mode = true
+			_spectator_label.text = "DEV: свободная камера включена\nWASD — перемещение  |  Колесо мыши — зум" if _forced_spectator else "☠ Ты проиграл! Наблюдаешь за битвой...\nWASD — перемещение  |  Колесо мыши — зум"
 			_spectator_label.show()
 
 		_handle_spectator_movement(delta)
@@ -112,3 +116,20 @@ func _unhandled_input(event: InputEvent) -> void:
 			zoom = (zoom * 1.12).clamp(Vector2(min_zoom, min_zoom), Vector2(max_zoom, max_zoom))
 		elif event.button_index == MOUSE_BUTTON_WHEEL_DOWN:
 			zoom = (zoom * 0.89).clamp(Vector2(min_zoom, min_zoom), Vector2(max_zoom, max_zoom))
+
+func set_forced_spectator(enabled: bool) -> void:
+	_forced_spectator = enabled
+	if enabled:
+		_spectator_mode = true
+		_is_first_frame = false
+		if _spectator_label:
+			_spectator_label.text = "DEV: свободная камера включена\nWASD — перемещение  |  Колесо мыши — зум"
+			_spectator_label.show()
+	else:
+		_spectator_mode = false
+		_is_first_frame = true
+		if _spectator_label:
+			_spectator_label.hide()
+
+func is_forced_spectator() -> bool:
+	return _forced_spectator

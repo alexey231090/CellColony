@@ -1,0 +1,58 @@
+[gd_scene load_steps=3 format=3]
+
+[ext_resource type="Script" path="res://scenes/ui/dev_console.gd" id="1_console"]
+
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_1"]
+bg_color = Color(0, 0, 0, 0.78)
+border_width_left = 2
+border_width_top = 0
+border_width_right = 2
+border_width_bottom = 2
+border_color = Color(0.2, 0.2, 0.2, 0.9)
+corner_radius_bottom_left = 10
+corner_radius_bottom_right = 10
+content_margin_left = 14.0
+content_margin_top = 12.0
+content_margin_right = 14.0
+content_margin_bottom = 12.0
+
+[node name="DevConsole" type="Control"]
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+script = ExtResource("1_console")
+
+[node name="Panel" type="PanelContainer" parent="."]
+anchors_preset = 10
+anchor_right = 1.0
+grow_horizontal = 2
+offset_bottom = 320.0
+mouse_filter = 0
+theme_override_styles/panel = SubResource("StyleBoxFlat_1")
+
+[node name="VBox" type="VBoxContainer" parent="Panel"]
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+theme_override_constants/separation = 8
+
+[node name="Title" type="Label" parent="Panel/VBox"]
+layout_mode = 2
+text = "DEV Панель"
+theme_override_font_sizes/font_size = 22
+
+[node name="Options" type="ItemList" parent="Panel/VBox"]
+custom_minimum_size = Vector2(0, 200)
+layout_mode = 2
+focus_mode = 2
+select_mode = 0
+
+[node name="Help" type="Label" parent="Panel/VBox"]
+layout_mode = 2
+text = "`/Ё — открыть. ↑↓ — выбор. Enter — изменить. ←→ — шаг/переключение. Esc — закрыть."
+theme_override_colors/font_color = Color(0.8, 0.8, 0.8, 0.9)
