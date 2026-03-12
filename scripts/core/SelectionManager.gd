@@ -37,6 +37,14 @@ func _unhandled_input(event: InputEvent) -> void:
 	if get_tree().get_nodes_in_group("player_cells").is_empty():
 		return
 
+	# Горячая клавиша "1" для активации щита
+	if event is InputEventKey and event.pressed and not event.echo:
+		var key_event := event as InputEventKey
+		if key_event.keycode == KEY_1:
+			activate_perk("shield")
+			get_viewport().set_input_as_handled()
+			return
+
 	if event is InputEventMouseButton and event.pressed:
 		if event.button_index == MOUSE_BUTTON_LEFT:
 			var camera = get_viewport().get_camera_2d()

@@ -1,9 +1,18 @@
-[gd_scene load_steps=6 format=3]
+[gd_scene load_steps=9 format=3]
 
 [ext_resource type="Script" path="res://scenes/base_cell/cell.gd" id="1_cell"]
 [ext_resource type="Script" path="res://scenes/base_cell/modules/shooter.gd" id="2_shooter"]
 [ext_resource type="Script" path="res://scenes/base_cell/modules/ai_module.gd" id="3_ai"]
 [ext_resource type="Script" path="res://scenes/base_cell/modules/mover.gd" id="4_mover"]
+[ext_resource type="Shader" path="res://scenes/base_cell/shield.gdshader" id="5_shader"]
+
+[sub_resource type="ShaderMaterial" id="ShaderMaterial_1"]
+shader = ExtResource("5_shader")
+shader_parameter/line_color = Color(0.2, 1, 0.5, 1)
+shader_parameter/fill_color = Color(0.2, 1, 0.5, 0.15)
+shader_parameter/line_thickness = 0.2
+shader_parameter/scale = 10.0
+shader_parameter/pulse_speed = 2.0
 
 [sub_resource type="CircleShape2D" id="CircleShape2D_1"]
 radius = 32.0
@@ -43,4 +52,5 @@ script = ExtResource("4_mover")
 
 [node name="CollisionShape2D" type="CollisionShape2D" parent="."]
 shape = SubResource("CircleShape2D_1")
+
 

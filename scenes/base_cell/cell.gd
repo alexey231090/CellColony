@@ -95,8 +95,10 @@ func _capture(new_owner: OwnerType) -> void:
 			if sm and sm.has_method("add_perk_energy"):
 				sm.add_perk_energy(reward)
 	
-	# Сбрасываем вклады после смены владельца
+	# Сбрасываем вклады и баффы (щит) после смены владельца
 	contributions.clear()
+	reflect_chance = 0.0
+	reflect_timer = 0.0
 	
 	owner_type = new_owner
 	_update_groups()
@@ -109,6 +111,12 @@ func _draw() -> void:
 	# Расчет эффекта попадания
 	var hit_intensity = clampf(hit_flash_timer / 0.2, 0.0, 1.0)
 	var display_color = base_color.lerp(Color.WHITE, hit_intensity)
+	
+	# Цвет обводки меняется если активен щит
+	var outline_color = display_color.lightened(0.4)
+	if reflect_chance > 0.0:
+		# Ярко-зеленый цвет для щита
+		outline_color = Color(0.2, 1.0, 0.5).lerp(Color.WHITE, hit_intensity)
 	
 	# ==========================================
 	# ЖЕЛЕЙНАЯ ФИЗИКА (Squash and Stretch)
@@ -153,9 +161,31 @@ func _draw() -> void:
 	# Оптимизация: один цвет вместо PackedColorArray
 	draw_colored_polygon(points, fill_color)
 	
-	# 3. Обводка (мембрана)
-	points.append(points[0]) # Замыкаем
-	draw_polyline(points, display_color.lightened(0.4), 2.5, true)
+	# 3. Основная обводка (мембрана)
+	var main_points = points.duplicate()
+	main_points.append(main_points[0]) # Замыкаем
+	draw_polyline(main_points, outline_color, 2.5, true)
+	
+	# 4. Пунктирные линии щита (бегут прямо ПО обводке)
+	if reflect_chance > 0.0:
+		var dash_color = Color(0, 0, 0, 0.5) # Темный пунктир
+		var dash_count = 4 # Количество длинных сегментов
+		var segment_size = 4 # Сколько точек в одном пунктире (из 20 всего)
+		
+		# Рассчитываем стартовый индекс от времени для анимации движения
+		var offset_idx = int(time * 15.0) % num_points
+		
+		for d in range(dash_count):
+			var start_idx = (offset_idx + d * (num_points / dash_count)) % num_points
+			var dash_seg = PackedVector2Array()
+			
+			for step in range(segment_size + 1):
+				var idx = (start_idx + step) % num_points
+				dash_seg.append(points[idx])
+			
+			# Рисуем сегмент пунктира ПОВЕРХ основной линии
+			# Используем чуть большую толщину, чтобы он перекрывал зеленую линию
+			draw_polyline(dash_seg, dash_color, 3.2, true)
 	
 	# 4. Ядро (Nucleus) - плавает около центра
 	var nucleus_pos = Vector2(cos(local_time * 1.5), sin(local_time * 2.1)) * (current_radius * 0.15)
@@ -177,13 +207,8 @@ func _draw() -> void:
 		org_color.a = 0.7
 		draw_circle(org_pos, current_radius * 0.12, org_color)
 
-	# 6. Щит (Отражение)
-	if reflect_chance > 0.0:
-		var shield_color = Color(0.1, 0.9, 0.3, 0.3 + sin(local_time * 8.0) * 0.15)
-		draw_arc(Vector2.ZERO, current_radius * 1.3, 0, TAU, 32, shield_color, 4.0, true)
-		# Мелкие частицы/гексы щита (простая отрисовка пунктиром)
-		draw_arc(Vector2.ZERO, current_radius * 1.4, time * 2.0, time * 2.0 + PI, 16, shield_color, 2.0, true)
-		draw_arc(Vector2.ZERO, current_radius * 1.4, time * 2.0 + PI * 1.2, time * 2.0 + PI * 2.2, 16, shield_color, 2.0, true)
+	# 6. Щит (Отражение) - визуализация теперь через ShieldOverlay
+	pass
 
 func _get_cell_color() -> Color:
 	match owner_type:

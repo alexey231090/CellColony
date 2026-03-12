@@ -1,4 +1,4 @@
-[gd_scene load_steps=8 format=3 uid="uid://cixua1bn5oas8"]
+[gd_scene format=3 uid="uid://cixua1bn5oas8"]
 
 [ext_resource type="Script" uid="uid://bsigb2r1q8011" path="res://scenes/main.gd" id="1_main"]
 [ext_resource type="Script" uid="uid://odonncolli0p" path="res://scripts/core/SelectionManager.gd" id="2_sm"]
@@ -6,28 +6,28 @@
 [ext_resource type="Script" uid="uid://cf35f2y81m0gb" path="res://scripts/core/CameraFollow.gd" id="4_cam"]
 [ext_resource type="Script" uid="uid://wtdsrlqfg7i5" path="res://scripts/core/fps_counter.gd" id="5_fps"]
 [ext_resource type="PackedScene" path="res://scenes/ui/perks_ui.tscn" id="6_perks"]
-[ext_resource type="Script" path="res://scripts/core/AIFactionManager.gd" id="7_ai_mgr"]
+[ext_resource type="Script" uid="uid://bqfqu5xcs4owa" path="res://scripts/core/AIFactionManager.gd" id="7_ai_mgr"]
 [ext_resource type="PackedScene" path="res://scenes/ui/dev_console.tscn" id="8_console"]
 
-[node name="Main" type="Node2D"]
+[node name="Main" type="Node2D" unique_id=231817894]
 script = ExtResource("1_main")
 
-[node name="AIManager_Red" type="Node" parent="."]
+[node name="AIManager_Red" type="Node" parent="." unique_id=2141526557]
 script = ExtResource("7_ai_mgr")
 faction = 2
 
-[node name="AIManager_Green" type="Node" parent="."]
+[node name="AIManager_Green" type="Node" parent="." unique_id=373589987]
 script = ExtResource("7_ai_mgr")
 faction = 3
 
-[node name="AIManager_Yellow" type="Node" parent="."]
+[node name="AIManager_Yellow" type="Node" parent="." unique_id=517041014]
 script = ExtResource("7_ai_mgr")
 faction = 4
 
-[node name="BackgroundLayer" type="CanvasLayer" parent="."]
+[node name="BackgroundLayer" type="CanvasLayer" parent="." unique_id=1473625379]
 layer = -1
 
-[node name="ColorRect" type="ColorRect" parent="BackgroundLayer"]
+[node name="ColorRect" type="ColorRect" parent="BackgroundLayer" unique_id=1750769579]
 anchors_preset = 15
 anchor_right = 1.0
 anchor_bottom = 1.0
@@ -36,21 +36,23 @@ grow_vertical = 2
 mouse_filter = 2
 color = Color(0.1, 0.1, 0.12, 1)
 
-[node name="SelectionManager" type="Node" parent="."]
+[node name="SelectionManager" type="Node" parent="." unique_id=1804541938]
 script = ExtResource("2_sm")
 
-[node name="Camera2D" type="Camera2D" parent="."]
+[node name="Camera2D" type="Camera2D" parent="." unique_id=2066680617]
 script = ExtResource("4_cam")
 
-[node name="PlayerCell" parent="." instance=ExtResource("3_cell")]
+[node name="PlayerCell" parent="." unique_id=1607251893 instance=ExtResource("3_cell")]
 owner_type = 1
 
-[node name="HUDLayer" type="CanvasLayer" parent="."]
+[node name="HUDLayer" type="CanvasLayer" parent="." unique_id=1558211052]
 layer = 100
 
-[node name="FPSCounter" type="Label" parent="HUDLayer"]
+[node name="FPSCounter" type="Label" parent="HUDLayer" unique_id=1106520099]
 script = ExtResource("5_fps")
 
-[node name="PerksUI" parent="HUDLayer" instance=ExtResource("6_perks")]
+[node name="PerksUI" parent="HUDLayer" unique_id=848343520 instance=ExtResource("6_perks")]
+layout_mode = 3
 
-[node name="DevConsole" parent="HUDLayer" instance=ExtResource("8_console")]
+[node name="DevConsole" parent="HUDLayer" unique_id=1070921993 instance=ExtResource("8_console")]
+layout_mode = 3
