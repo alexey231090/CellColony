@@ -20,6 +20,7 @@ var speed_cooldown: float = 0.0
 @export var SPEED_COOLDOWN_MAX: float = 18.0
 @export var SPEED_ENERGY_COST: float = 15.0
 @export var SPEED_BOOST_DURATION: float = 8.0
+@export var SPEED_BOOST_MULTIPLIER: float = 2.0
 
 func _ready() -> void:
 	add_to_group("selection_manager")
@@ -104,9 +105,14 @@ func activate_perk(perk_name: String) -> void:
 		var player_cells = get_tree().get_nodes_in_group("player_cells")
 		for cell in player_cells:
 			if cell is BaseCell:
-				cell.apply_speed_boost()
+				cell.apply_speed_boost(SPEED_BOOST_DURATION, SPEED_BOOST_MULTIPLIER)
 		
-		print("Активирован перк: ", perk_name)
+		print("Спринт! Длительность: %.1f, Множитель: %.1f, Стоимость: %d, КД: %.1f" % [
+			SPEED_BOOST_DURATION,
+			SPEED_BOOST_MULTIPLIER,
+			SPEED_ENERGY_COST,
+			SPEED_COOLDOWN_MAX
+		])
 		_refresh_pui()
 
 func _clear_active_perk() -> void:

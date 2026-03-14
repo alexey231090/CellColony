@@ -49,7 +49,12 @@ func _physics_process(delta: float) -> void:
 		
 		if d_to_target > stop_distance * parent_cell.scale.x:
 			var dir = (target_position - current_pos).normalized()
-			var target_vel = dir * parent_cell.stats.move_speed
+			# Рассчитываем скорость с учетом баффа ускорения
+			var base_speed = parent_cell.stats.move_speed
+			if parent_cell.speed_boost_timer > 0:
+				base_speed *= parent_cell.current_speed_multiplier
+				
+			var target_vel = dir * base_speed
 			parent_cell.velocity = parent_cell.velocity.lerp(target_vel, acceleration * delta)
 		else:
 			parent_cell.velocity = parent_cell.velocity.lerp(Vector2.ZERO, friction * delta)

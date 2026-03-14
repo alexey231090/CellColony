@@ -5,9 +5,14 @@
 [ext_resource type="PackedScene" path="res://scenes/base_cell/cell.tscn" id="3_cell"]
 [ext_resource type="Script" uid="uid://cf35f2y81m0gb" path="res://scripts/core/CameraFollow.gd" id="4_cam"]
 [ext_resource type="Script" uid="uid://wtdsrlqfg7i5" path="res://scripts/core/fps_counter.gd" id="5_fps"]
+[ext_resource type="Script" uid="uid://bd7rrvofrrdam" path="res://scripts/resources/CellStats.gd" id="6_85g3d"]
 [ext_resource type="PackedScene" path="res://scenes/ui/perks_ui.tscn" id="6_perks"]
 [ext_resource type="Script" uid="uid://bqfqu5xcs4owa" path="res://scripts/core/AIFactionManager.gd" id="7_ai_mgr"]
 [ext_resource type="PackedScene" path="res://scenes/ui/dev_console.tscn" id="8_console"]
+
+[sub_resource type="Resource" id="Resource_85g3d"]
+script = ExtResource("6_85g3d")
+metadata/_custom_type_script = "uid://bd7rrvofrrdam"
 
 [node name="Main" type="Node2D" unique_id=231817894]
 script = ExtResource("1_main")
@@ -38,12 +43,17 @@ color = Color(0.1, 0.1, 0.12, 1)
 
 [node name="SelectionManager" type="Node" parent="." unique_id=1804541938]
 script = ExtResource("2_sm")
+SPEED_COOLDOWN_MAX = 6.8
+SPEED_ENERGY_COST = 1.0
+SPEED_BOOST_DURATION = 10.0
+SPEED_BOOST_MULTIPLIER = 3.0
 
 [node name="Camera2D" type="Camera2D" parent="." unique_id=2066680617]
 script = ExtResource("4_cam")
 
 [node name="PlayerCell" parent="." unique_id=1607251893 instance=ExtResource("3_cell")]
 owner_type = 1
+stats = SubResource("Resource_85g3d")
 
 [node name="HUDLayer" type="CanvasLayer" parent="." unique_id=1558211052]
 layer = 100

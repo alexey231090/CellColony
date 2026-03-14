@@ -12,5 +12,9 @@ class_name CellStats
 @export var projectile_speed: float = 400.0
 @export var move_speed: float = 50.0
 
+@export_group("Perks")
+@export var speed_boost_duration: float = 5.0 # Длительность ускорения
+@export var speed_boost_multiplier: float = 2.0 # Множитель скорости
+
 @export_group("Visuals")
 @export var size_multiplier: float = 0.05 # Как сильно энергия влияет на размер

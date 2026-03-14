@@ -19,6 +19,10 @@ var hit_impact_wobble: float = 0.0
 var reflect_chance: float = 0.0
 var reflect_timer: float = 0.0
 
+# Ускорение (новый перк)
+var speed_boost_timer: float = 0.0
+var current_speed_multiplier: float = 1.0
+
 # Сглаживание желейной физики
 var visual_stretch: float = 0.0
 var visual_angle: float = 0.0
@@ -36,7 +40,6 @@ func _ready() -> void:
 	add_to_group("cells")
 	_update_groups()
 	_update_visuals()
-	stats.max_energy = 30.0
 	
 	if energy_label:
 		# Оформляем цифры красиво прямо из кода, чтобы они хорошо читались
@@ -95,10 +98,11 @@ func _capture(new_owner: OwnerType) -> void:
 			if sm and sm.has_method("add_perk_energy"):
 				sm.add_perk_energy(reward)
 	
-	# Сбрасываем вклады и баффы (щит) после смены владельца
+	# Сбрасываем вклады и баффы (щит, ускорение) после смены владельца
 	contributions.clear()
 	reflect_chance = 0.0
 	reflect_timer = 0.0
+	speed_boost_timer = 0.0
 	
 	owner_type = new_owner
 	_update_groups()
@@ -138,6 +142,9 @@ func _draw() -> void:
 	
 	# 1. Ламповое мягкое свечение (Glow)
 	var glow_color = display_color
+	if speed_boost_timer > 0:
+		glow_color = Color(0.2, 0.5, 1.0) # Синее свечение для спринта
+		
 	# Мягкая пульсация прозрачности свечения
 	glow_color.a = 0.15 + sin(local_time * 2.5) * 0.05 
 	draw_circle(Vector2.ZERO, current_radius * 1.5, glow_color)
@@ -168,7 +175,7 @@ func _draw() -> void:
 	
 	# 4. Пунктирные линии щита (бегут прямо ПО обводке)
 	if reflect_chance > 0.0:
-		var dash_color = Color(0, 0, 0, 0.5) # Темный пунктир
+		var dash_color = Color(0.088, 0.06, 0.216, 0.502) # Темный пунктир
 		var dash_count = 4 # Количество длинных сегментов
 		var segment_size = 4 # Сколько точек в одном пунктире (из 20 всего)
 		
@@ -229,6 +236,13 @@ func _process(delta: float) -> void:
 		if reflect_timer <= 0.0:
 			reflect_chance = 0.0
 			queue_redraw()
+			
+	# Обработка таймера ускорения
+	if speed_boost_timer > 0.0:
+		speed_boost_timer -= delta
+		if speed_boost_timer <= 0.0:
+			speed_boost_timer = 0.0
+			queue_redraw()
 
 	# Сглаживание желейной физики
 	var speed = velocity.length()
@@ -276,6 +290,11 @@ func command_move(target_pos: Vector2) -> void:
 		shooter.target_node = null
 	var mover = get_node_or_null("MoverModule")
 	if mover: mover.set_target(target_pos)
+
+func apply_speed_boost(duration: float, multiplier: float) -> void:
+	speed_boost_timer = duration
+	current_speed_multiplier = multiplier
+	queue_redraw()
 
 func _update_visuals() -> void:
 	queue_redraw()
