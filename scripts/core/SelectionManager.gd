@@ -17,8 +17,9 @@ var shield_cooldown: float = 0.0
 
 # Кулдауны и стоимость Ускорения
 var speed_cooldown: float = 0.0
-@export var SPEED_COOLDOWN_MAX: float = 15.0
+@export var SPEED_COOLDOWN_MAX: float = 18.0
 @export var SPEED_ENERGY_COST: float = 15.0
+@export var SPEED_BOOST_DURATION: float = 8.0
 
 func _ready() -> void:
 	add_to_group("selection_manager")
