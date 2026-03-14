@@ -8,6 +8,10 @@ var projectile_color: Color = Color.WHITE
 var owner_type: BaseCell.OwnerType = BaseCell.OwnerType.NEUTRAL
 var target_node: Node2D = null
 
+var is_virus: bool = false
+var virus_duration: float = 0.0
+var virus_outbreak_id: int = 0
+
 # Жизненный цикл снаряда
 var max_lifetime: float = 5.0   # Максимальное время жизни в секундах
 var current_lifetime: float = 5.0
@@ -40,6 +44,7 @@ func _draw() -> void:
 	draw_circle(Vector2.ZERO, current_radius * _fade_alpha, head_col)
 	
 	var core_col = Color.WHITE
+	if is_virus: core_col = Color(0.3, 0.0, 0.5) # Темное ядро для вируса
 	core_col.a = _fade_alpha
 	draw_circle(Vector2.ZERO, current_radius * 0.45 * _fade_alpha, core_col)
 
@@ -108,7 +113,10 @@ func _impact(cell: BaseCell) -> void:
 		cell.velocity += direction * push_strength
 	
 	# Наносим урон/лечение
-	cell.take_damage(damage, owner_type)
+	if is_virus:
+		cell.infect(virus_duration, virus_outbreak_id)
+	else:
+		cell.take_damage(damage, owner_type)
 	queue_free()
 
 func _reflect(cell: BaseCell) -> void:

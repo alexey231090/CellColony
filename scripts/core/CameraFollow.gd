@@ -11,10 +11,16 @@ extends Camera2D
 ## Режим наблюдателя
 @export var spectator_move_speed: float = 900.0
 
+## Настройки "заглядывания" вперед
+@export var look_ahead_factor: float = 1.2
+@export var look_ahead_speed: float = 1.5
+@export var look_ahead_max: float = 600.0
+
 var _spectator_mode: bool = false
 var _forced_spectator: bool = false
 var _spectator_label: Label = null
 var _is_first_frame: bool = true
+var _current_look_ahead: Vector2 = Vector2.ZERO
 
 func _ready() -> void:
 	# Создаём уведомление для наблюдателя (CanvasLayer, чтобы не масштабировалось)
@@ -54,17 +60,29 @@ func _process(delta: float) -> void:
 			_is_first_frame = true
 
 		var avg_pos = Vector2.ZERO
+		var avg_vel = Vector2.ZERO
 		var min_pos = player_cells[0].global_position
 		var max_pos = player_cells[0].global_position
 
 		for cell in player_cells:
 			avg_pos += cell.global_position
+			avg_vel += cell.velocity
 			min_pos.x = min(min_pos.x, cell.global_position.x)
 			min_pos.y = min(min_pos.y, cell.global_position.y)
 			max_pos.x = max(max_pos.x, cell.global_position.x)
 			max_pos.y = max(max_pos.y, cell.global_position.y)
 
 		avg_pos /= player_cells.size()
+		avg_vel /= player_cells.size()
+		
+		# Расчет смещения Look-ahead
+		var target_look_ahead = avg_vel * look_ahead_factor
+		if target_look_ahead.length() > look_ahead_max:
+			target_look_ahead = target_look_ahead.normalized() * look_ahead_max
+			
+		_current_look_ahead = _current_look_ahead.lerp(target_look_ahead, look_ahead_speed * delta)
+		
+		var final_pos = avg_pos + _current_look_ahead
 		
 		# Расчет зума
 		var rect_size = max_pos - min_pos + Vector2(padding, padding)
@@ -75,11 +93,11 @@ func _process(delta: float) -> void:
 		
 		# Мгновенная привязка на первом кадре
 		if _is_first_frame:
-			global_position = avg_pos
+			global_position = final_pos
 			zoom = Vector2(target_zoom, target_zoom)
 			_is_first_frame = false
 		else:
-			global_position = global_position.lerp(avg_pos, follow_speed * delta)
+			global_position = global_position.lerp(final_pos, follow_speed * delta)
 			zoom = zoom.lerp(Vector2(target_zoom, target_zoom), zoom_speed * delta)
 	else:
 		# === Режим наблюдателя ===

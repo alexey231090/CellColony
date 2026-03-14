@@ -45,11 +45,12 @@ color = Color(0.1, 0.1, 0.12, 1)
 script = ExtResource("2_sm")
 SPEED_COOLDOWN_MAX = 6.8
 SPEED_ENERGY_COST = 1.0
-SPEED_BOOST_DURATION = 10.0
+SPEED_BOOST_DURATION = 7.0
 SPEED_BOOST_MULTIPLIER = 3.0
 
 [node name="Camera2D" type="Camera2D" parent="." unique_id=2066680617]
 script = ExtResource("4_cam")
+look_ahead_factor = 3.0
 
 [node name="PlayerCell" parent="." unique_id=1607251893 instance=ExtResource("3_cell")]
 owner_type = 1

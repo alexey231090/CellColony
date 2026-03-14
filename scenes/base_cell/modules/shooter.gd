@@ -26,6 +26,8 @@ func _process(delta: float) -> void:
 	if not parent_cell or parent_cell.owner_type == BaseCell.OwnerType.NEUTRAL: 
 		return
 	
+	if parent_cell.is_infected: return # Зараженная клетка не стреляет
+	
 	var final_target = null
 	
 	# 1. Приоритет: Цель, заданная игроком/командой
@@ -62,7 +64,7 @@ func _process(delta: float) -> void:
 		if fire_timer <= 0:
 			if parent_cell.stats.current_energy > parent_cell.stats.attack_cost:
 				shoot(final_target)
-				fire_timer = 1.0 / parent_cell.stats.fire_rate
+				fire_timer = (1.0 / parent_cell.stats.fire_rate) / parent_cell.current_fire_rate_multiplier
 
 func _is_target_valid_for_fire(node: Node2D, parent: BaseCell) -> bool:
 	if not is_instance_valid(node) or node == parent: return false
@@ -113,3 +115,23 @@ func shoot(current_target: Node2D) -> void:
 	
 	var p_color = parent_cell._get_cell_color()
 	proj.projectile_color = p_color
+
+func shoot_virus(current_target: Node2D, duration: float, outbreak_id: int) -> void:
+	var parent_cell = get_parent() as BaseCell
+	if not parent_cell: return
+	
+	var proj = projectile_scene.instantiate() as Projectile
+	get_tree().root.add_child(proj)
+	
+	var shoot_dir = (current_target.global_position - global_position).normalized()
+	var spawn_dist = parent_cell.radius * parent_cell.scale.x + 15.0
+	
+	proj.global_position = global_position + shoot_dir * spawn_dist
+	proj.direction = shoot_dir
+	proj.speed = parent_cell.stats.projectile_speed * 1.5 # Вирус летит быстрее
+	proj.is_virus = true
+	proj.virus_duration = duration
+	proj.virus_outbreak_id = outbreak_id
+	proj.owner_type = parent_cell.owner_type
+	proj.target_node = current_target
+	proj.projectile_color = Color(0.2, 0.0, 0.3) # Очень темный/фиолетовый снаряд

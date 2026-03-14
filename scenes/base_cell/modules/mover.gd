@@ -16,6 +16,11 @@ func _physics_process(delta: float) -> void:
 	var parent_cell = get_parent() as BaseCell
 	if not parent_cell: return
 	
+	if parent_cell.is_infected:
+		# Если заражена — только трение и отталкивание от других, сама не плывет
+		parent_cell.velocity = parent_cell.velocity.lerp(Vector2.ZERO, friction * delta)
+		# Но отталкивание от соседей оставим ниже (чтобы клетки не слипались в одну точку)
+	
 	# Кешируем позицию и радиус родителя
 	var my_pos = parent_cell.global_position
 	var my_scaled_radius = parent_cell.radius * parent_cell.scale.x

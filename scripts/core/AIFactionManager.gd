@@ -21,7 +21,17 @@ var current_target_node: BaseCell = null
 var current_goal_pos: Vector2 = Vector2.ZERO
 var goal_lock_timer: float = 0.0
 
+# === ПЕРКИ ИИ ===
+@export var ai_perk_energy: float = 0.0
+
+var _ai_shield_cd: float = 0.0
+var _ai_speed_cd: float = 0.0
+var _ai_rapid_fire_cd: float = 0.0
+var _ai_virus_cd: float = 0.0
+var virus_outbreak_counter: int = 0
+
 func _ready() -> void:
+	add_to_group("ai_faction_managers")
 	# Небольшой разброс, чтобы фракции не думали одновременно
 	decision_timer = randf_range(0.0, decision_interval)
 	call_deferred("_init_base")
@@ -36,10 +46,20 @@ func _process(delta: float) -> void:
 	if faction == BaseCell.OwnerType.NEUTRAL or faction == BaseCell.OwnerType.PLAYER:
 		return
 		
+	# Охлаждение перков
+	if _ai_shield_cd > 0: _ai_shield_cd = max(0.0, _ai_shield_cd - delta)
+	if _ai_speed_cd > 0: _ai_speed_cd = max(0.0, _ai_speed_cd - delta)
+	if _ai_rapid_fire_cd > 0: _ai_rapid_fire_cd = max(0.0, _ai_rapid_fire_cd - delta)
+	if _ai_virus_cd > 0: _ai_virus_cd = max(0.0, _ai_virus_cd - delta)
+		
 	decision_timer -= delta
 	if decision_timer <= 0:
 		decision_timer = decision_interval
 		_tick_ai()
+		_evaluate_and_use_perks(delta)
+
+func add_perk_energy(amount: float) -> void:
+	ai_perk_energy += amount
 
 func _tick_ai() -> void:
 	var my_cells: Array[BaseCell] = _get_my_cells()
@@ -227,3 +247,101 @@ func _get_my_cells() -> Array[BaseCell]:
 		if n is BaseCell and n.owner_type == faction:
 			result.append(n)
 	return result
+
+func _evaluate_and_use_perks(_delta: float) -> void:
+	var sm = get_tree().get_first_node_in_group("selection_manager")
+	if not sm: return
+	
+	var my_cells = _get_my_cells()
+	if my_cells.is_empty(): return
+	
+	# 1. ЩИТ (Приоритет: спасение)
+	if _ai_shield_cd <= 0 and ai_perk_energy >= sm.SHIELD_ENERGY_COST:
+		var target_shieldee: BaseCell = null
+		for cell in my_cells:
+			# Если клетка под огнем и ранена
+			if cell.stats.current_energy < cell.stats.max_energy * 0.45 and (Time.get_ticks_msec() / 1000.0 - cell.last_damage_time) < 1.5:
+				if cell.reflect_chance < 0.1: # Еще нет щита
+					target_shieldee = cell
+					break
+				
+		if target_shieldee:
+			ai_perk_energy -= sm.SHIELD_ENERGY_COST
+			_ai_shield_cd = max(5.0, sm.SHIELD_COOLDOWN_MAX)
+			
+			# Применяем щит по области (чуть больше радиус для ИИ, чтобы это было заметно)
+			var a_radius = sm.SHIELD_SELECT_RADIUS * 1.5
+			for cell in my_cells:
+				if cell.global_position.distance_to(target_shieldee.global_position) <= a_radius + (cell.radius * cell.scale.x):
+					cell.reflect_chance = 0.5
+					cell.reflect_timer = 10.0
+					cell.queue_redraw()
+
+	# 2. ВИРУС (Приоритет: толпа врагов)
+	if _ai_virus_cd <= 0 and ai_perk_energy >= sm.VIRUS_ENERGY_COST:
+		var all_cells = _get_all_cells()
+		var best_virus_target: BaseCell = null
+		var max_enemies_around = 0
+		
+		for enemy in all_cells:
+			if enemy.owner_type != faction and enemy.owner_type != BaseCell.OwnerType.NEUTRAL:
+				var enemies_around = 0
+				for other_enemy in all_cells:
+					if other_enemy.owner_type == enemy.owner_type and other_enemy != enemy:
+						if enemy.global_position.distance_to(other_enemy.global_position) < sm.VIRUS_SPREAD_RADIUS:
+							enemies_around += 1
+				if enemies_around >= 2:
+					if enemies_around > max_enemies_around:
+						max_enemies_around = enemies_around
+						best_virus_target = enemy
+		
+		if best_virus_target:
+			var nearest: BaseCell = null
+			var n_dist = 999999.0
+			for p in my_cells:
+				var d = p.global_position.distance_to(best_virus_target.global_position)
+				if d < n_dist:
+					n_dist = d
+					nearest = p
+					
+			if nearest:
+				var shooter = nearest.get_node_or_null("ShooterModule")
+				if shooter:
+					virus_outbreak_counter += 1
+					shooter.shoot_virus(best_virus_target, sm.VIRUS_DURATION, virus_outbreak_counter)
+					ai_perk_energy -= sm.VIRUS_ENERGY_COST
+					_ai_virus_cd = max(5.0, sm.VIRUS_COOLDOWN_MAX)
+
+	# 3. СКОРОСТРЕЛЬНОСТЬ (Приоритет: добивание/атака)
+	if _ai_rapid_fire_cd <= 0 and ai_perk_energy >= sm.RAPID_FIRE_ENERGY_COST:
+		if current_target_node and is_instance_valid(current_target_node) and current_target_node.owner_type != BaseCell.OwnerType.NEUTRAL:
+			if current_target_node.stats.current_energy < current_target_node.stats.max_energy * 0.4:
+				# Проверяем, не включен ли уже перк (чтобы не спамить)
+				var already_raging = false
+				for c in my_cells:
+					if c.rapid_fire_timer > 1.0:
+						already_raging = true
+						break
+				
+				if not already_raging:
+					ai_perk_energy -= sm.RAPID_FIRE_ENERGY_COST
+					_ai_rapid_fire_cd = max(5.0, sm.RAPID_FIRE_COOLDOWN_MAX)
+					for c in my_cells:
+						c.apply_rapid_fire(sm.RAPID_FIRE_DURATION, sm.RAPID_FIRE_MULTIPLIER)
+
+	# 4. УСКОРЕНИЕ (Приоритет: догнать цель)
+	if _ai_speed_cd <= 0 and ai_perk_energy >= sm.SPEED_ENERGY_COST:
+		var center = _get_center(my_cells)
+		if current_goal_pos != Vector2.ZERO and center.distance_to(current_goal_pos) > 1200.0:
+			# Не ускоряемся, если уже летим на спринте
+			var already_sprinting = false
+			for c in my_cells:
+				if c.speed_boost_timer > 1.0:
+					already_sprinting = true
+					break
+			
+			if not already_sprinting:
+				ai_perk_energy -= sm.SPEED_ENERGY_COST
+				_ai_speed_cd = max(5.0, sm.SPEED_COOLDOWN_MAX)
+				for c in my_cells:
+					c.apply_speed_boost(sm.SPEED_BOOST_DURATION, sm.SPEED_BOOST_MULTIPLIER)

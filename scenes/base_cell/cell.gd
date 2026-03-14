@@ -23,6 +23,17 @@ var reflect_timer: float = 0.0
 var speed_boost_timer: float = 0.0
 var current_speed_multiplier: float = 1.0
 
+# Скорострельность (новый перк)
+var rapid_fire_timer: float = 0.0
+var current_fire_rate_multiplier: float = 1.0
+
+# Вирус (новый перк)
+var is_infected: bool = false
+var infection_timer: float = 0.0
+var _spread_timer: float = 0.0
+var _visual_infection_factor: float = 0.0 # Для плавного потемнения
+var last_outbreak_id: int = -1 # ID последней волны вируса, которой болела клетка
+
 # Сглаживание желейной физики
 var visual_stretch: float = 0.0
 var visual_angle: float = 0.0
@@ -73,6 +84,8 @@ func _update_groups() -> void:
 
 func take_damage(amount: float, attacker_owner: OwnerType) -> void:
 	if owner_type == attacker_owner:
+		# Запрещено лечить зараженную клетку
+		if is_infected: return
 		stats.current_energy = min(stats.max_energy, stats.current_energy + amount)
 	else:
 		stats.current_energy -= amount
@@ -97,12 +110,27 @@ func _capture(new_owner: OwnerType) -> void:
 			var sm = get_tree().get_first_node_in_group("selection_manager")
 			if sm and sm.has_method("add_perk_energy"):
 				sm.add_perk_energy(reward)
+	elif new_owner != OwnerType.NEUTRAL:
+		# Начисляем энергию ИИ фракции
+		var reward = contributions.get(new_owner, 0.0)
+		if reward > 0:
+			var ai_managers = get_tree().get_nodes_in_group("ai_faction_managers")
+			for ai in ai_managers:
+				if ai.faction == new_owner and ai.has_method("add_perk_energy"):
+					ai.add_perk_energy(reward)
+					break
 	
 	# Сбрасываем вклады и баффы (щит, ускорение) после смены владельца
 	contributions.clear()
 	reflect_chance = 0.0
 	reflect_timer = 0.0
 	speed_boost_timer = 0.0
+	rapid_fire_timer = 0.0
+	current_fire_rate_multiplier = 1.0
+	is_infected = false
+	infection_timer = 0.0
+	_visual_infection_factor = 0.0
+	last_outbreak_id = -1
 	
 	owner_type = new_owner
 	_update_groups()
@@ -116,11 +144,26 @@ func _draw() -> void:
 	var hit_intensity = clampf(hit_flash_timer / 0.2, 0.0, 1.0)
 	var display_color = base_color.lerp(Color.WHITE, hit_intensity)
 	
-	# Цвет обводки меняется если активен щит
+	# Плавное потемнение при заражении
+	if _visual_infection_factor > 0.01:
+		var dark_color = Color(0.1, 0.05, 0.15)
+		display_color = display_color.lerp(dark_color, _visual_infection_factor)
+	
+	# Цвет обводки меняется если активен щит или скорострельность или спринт
 	var outline_color = display_color.lightened(0.4)
 	if reflect_chance > 0.0:
 		# Ярко-зеленый цвет для щита
 		outline_color = Color(0.2, 1.0, 0.5).lerp(Color.WHITE, hit_intensity)
+	elif rapid_fire_timer > 0:
+		# Пульсирующий оранжевый контур для скорострельности
+		var pulse = (sin(time * 15.0) + 1.0) / 2.0
+		var orange = Color(1.0, 0.5, 0.0)
+		outline_color = display_color.lerp(orange, 0.4 + pulse * 0.6)
+	elif speed_boost_timer > 0:
+		# Яркий неоново-синий (изумрудно-голубой) контур для спринта
+		var pulse = (sin(time * 20.0) + 1.0) / 2.0
+		var cyan = Color(0.0, 0.8, 1.0)
+		outline_color = display_color.lerp(cyan, 0.6 + pulse * 0.4)
 	
 	# ==========================================
 	# ЖЕЛЕЙНАЯ ФИЗИКА (Squash and Stretch)
@@ -144,6 +187,8 @@ func _draw() -> void:
 	var glow_color = display_color
 	if speed_boost_timer > 0:
 		glow_color = Color(0.2, 0.5, 1.0) # Синее свечение для спринта
+	elif rapid_fire_timer > 0:
+		glow_color = Color(1.0, 0.4, 0.1) # Оранжевое свечение для скорострельности
 		
 	# Мягкая пульсация прозрачности свечения
 	glow_color.a = 0.15 + sin(local_time * 2.5) * 0.05 
@@ -173,39 +218,95 @@ func _draw() -> void:
 	main_points.append(main_points[0]) # Замыкаем
 	draw_polyline(main_points, outline_color, 2.5, true)
 	
-	# 4. Пунктирные линии щита (бегут прямо ПО обводке)
+	# 4. ЭНЕРГЕТИЧЕСКИЙ КУПОЛ ЩИТА (Крутой эффект силового поля)
 	if reflect_chance > 0.0:
-		var dash_color = Color(0.088, 0.06, 0.216, 0.502) # Темный пунктир
-		var dash_count = 4 # Количество длинных сегментов
-		var segment_size = 4 # Сколько точек в одном пунктире (из 20 всего)
+		var shield_radius = current_radius * 1.3
+		var shield_color = Color(0.2, 1.0, 0.5) # Ярко-зеленый (неоновый)
 		
-		# Рассчитываем стартовый индекс от времени для анимации движения
-		var offset_idx = int(time * 15.0) % num_points
+		# Мягкое излучение щита
+		shield_color.a = 0.15 + sin(time * 8.0) * 0.05
+		draw_circle(Vector2.ZERO, shield_radius * 1.1, shield_color)
 		
-		for d in range(dash_count):
-			var start_idx = (offset_idx + d * (num_points / dash_count)) % num_points
-			var dash_seg = PackedVector2Array()
+		# Внешняя граница щита (силовое поле с высокочастотной рябью)
+		var shield_pts = PackedVector2Array()
+		var shield_points_count = 32
+		var ripple_speed = time * 12.0
+		for i in range(shield_points_count):
+			var angle = (i / float(shield_points_count)) * TAU
+			# Двойная рябь: крупная медленная и мелкая быстрая
+			var s_wobble = sin(angle * 4.0 - ripple_speed) * 1.5 + sin(angle * 12.0 + ripple_speed * 1.5) * 1.0
+			# Добавляем хаос при попадании
+			if hit_impact_wobble > 0.1:
+				s_wobble += sin(angle * 20.0 - time * 30.0) * (hit_impact_wobble * 0.5)
+			shield_pts.append(Vector2(cos(angle), sin(angle)) * (shield_radius + s_wobble))
+		shield_pts.append(shield_pts[0])
+		
+		shield_color.a = 0.7 + sin(time * 15.0) * 0.2 # Интенсивное мерцание контура
+		draw_polyline(shield_pts, shield_color, 2.5, true)
+		
+		# Внутренние "заряды" (переливания энергии внутри купола)
+		var inner_color = Color(0.6, 1.0, 0.8, 0.3)
+		var charge_count = 3
+		for i in range(charge_count):
+			var charge_angle = time * (3.0 + i) + (i * TAU / float(charge_count))
+			var arc_start = charge_angle
+			var arc_end = charge_angle + 0.6
+			var arc_pts = PackedVector2Array()
+			for j in range(5):
+				var a = lerp(arc_start, arc_end, j / 4.0)
+				arc_pts.append(Vector2(cos(a), sin(a)) * (shield_radius - 3.0))
+			draw_polyline(arc_pts, inner_color, 3.0, true)
 			
-			for step in range(segment_size + 1):
-				var idx = (start_idx + step) % num_points
-				dash_seg.append(points[idx])
-			
-			# Рисуем сегмент пунктира ПОВЕРХ основной линии
-			# Используем чуть большую толщину, чтобы он перекрывал зеленую линию
-			draw_polyline(dash_seg, dash_color, 3.2, true)
+		# Сетка сот (Honeycomb Grid) - Эффект голографической брони
+		var hex_radius_size = current_radius * 0.25
+		var hex_w = hex_radius_size * 1.732 # sqrt(3)
+		var hex_h = hex_radius_size * 2.0
+		# Анимация "стекания" сот вниз
+		var scroll_offset = fmod(time * 35.0, hex_h * 1.5)
+		
+		# Покрываем площадь щита гексагонами
+		var grid_count = 4
+		for q in range(-grid_count, grid_count + 1):
+			for r in range(-grid_count, grid_count + 1):
+				var cx = (q + r / 2.0) * hex_w
+				var cy = r * hex_h * 0.75 + scroll_offset
+				var h_center = Vector2(cx, cy)
+				
+				var dist_to_center = h_center.length()
+				if dist_to_center < shield_radius * 0.95:
+					var hex_pts = PackedVector2Array()
+					for h_idx in range(6):
+						# Поворот на 30 градусов (PI/6) чтобы соты стояли "на углу"
+						var h_angle = (h_idx / 6.0) * TAU + (PI / 6.0)
+						# Радиус 0.85 создает красивые отступы между сотами
+						hex_pts.append(h_center + Vector2(cos(h_angle), sin(h_angle)) * (hex_radius_size * 0.85)) 
+					hex_pts.append(hex_pts[0])
+					
+					# Улучшенная видимость сот
+					var alpha_base = clampf(1.1 - (dist_to_center / shield_radius), 0.0, 1.0)
+					# Увеличиваем базовую прозрачность (от 0.2 до 0.6) для лучшей видимости
+					var alpha = (0.4 + sin(time * 6.0 + q * 1.3 + r * 1.7) * 0.2) * alpha_base
+					var h_color = shield_color
+					h_color.a = clampf(alpha, 0.0, 1.0)
+					draw_polyline(hex_pts, h_color, 2.5, true) # Сделали линии жирнее (2.5 вместо 1.5)
 	
 	# 4. Ядро (Nucleus) - плавает около центра
 	var nucleus_pos = Vector2(cos(local_time * 1.5), sin(local_time * 2.1)) * (current_radius * 0.15)
 	var nucleus_color = display_color.lightened(0.6)
+	if rapid_fire_timer > 0:
+		nucleus_color = Color(1.0, 0.6, 0.1) # Раскаленное оранжевое ядро
 	nucleus_color.a = 0.85
 	draw_circle(nucleus_pos, current_radius * 0.4, nucleus_color)
 	# Блик на ядре
 	var highlight_pos = nucleus_pos + Vector2(-current_radius * 0.1, -current_radius * 0.1)
 	draw_circle(highlight_pos, current_radius * 0.1, Color.WHITE)
 	
-	# 5. Органеллы (маленькие точки внутри), которые медленно кружатся
+	# 5. Органеллы (маленькие точки внутри), которые медленно кружатся (или быстро при спринте)
 	for i in range(3):
 		var org_speed = 1.0 + i * 0.2
+		if speed_boost_timer > 0:
+			org_speed *= 4.0 # Завихрение энергии внутри
+			
 		var org_angle = local_time * org_speed + (i * TAU / 3.0)
 		# орбита чуть дышит
 		var org_dist = current_radius * 0.6 + sin(local_time * 3.0 + i) * 3.0
@@ -243,10 +344,39 @@ func _process(delta: float) -> void:
 		if speed_boost_timer <= 0.0:
 			speed_boost_timer = 0.0
 			queue_redraw()
+			
+	# Обработка таймера скорострельности
+	if rapid_fire_timer > 0.0:
+		rapid_fire_timer -= delta
+		if rapid_fire_timer <= 0.0:
+			rapid_fire_timer = 0.0
+			current_fire_rate_multiplier = 1.0
+			queue_redraw()
+
+	# Обработка таймера вируса
+	if is_infected:
+		infection_timer -= delta
+		_spread_timer -= delta
+		
+		# Распространение вируса раз в секунду
+		if _spread_timer <= 0:
+			_spread_timer = 1.0
+			_spread_infection()
+			
+		if infection_timer <= 0:
+			is_infected = false
+			
+		_visual_infection_factor = lerp(_visual_infection_factor, 1.0, delta * 2.0)
+	else:
+		_visual_infection_factor = lerp(_visual_infection_factor, 0.0, delta * 3.0)
 
 	# Сглаживание желейной физики
 	var speed = velocity.length()
-	var target_stretch = clampf(speed / 250.0, 0.0, 0.4)
+	var max_stretch = 0.4
+	if speed_boost_timer > 0:
+		max_stretch = 0.75 # При ускорении клетка становится более "стреловидной"
+		
+	var target_stretch = clampf(speed / 250.0, 0.0, max_stretch)
 	visual_stretch = lerp(visual_stretch, target_stretch, delta * 12.0)
 	
 	if speed > 5.0:
@@ -278,12 +408,14 @@ func _physics_process(_delta: float) -> void:
 	move_and_slide()
 
 func command_attack(target_pos: Vector2, target_node: Node2D = null) -> void:
+	if is_infected: return # Зараженная клетка не слушает команд
 	var shooter = get_node_or_null("ShooterModule")
 	if shooter: shooter.set_target(target_pos, target_node)
 	var mover = get_node_or_null("MoverModule")
 	if mover: mover.set_target(target_pos)
 
 func command_move(target_pos: Vector2) -> void:
+	if is_infected: return # Зараженная клетка не слушает команд
 	var shooter = get_node_or_null("ShooterModule")
 	if shooter:
 		shooter.is_active = false
@@ -295,6 +427,44 @@ func apply_speed_boost(duration: float, multiplier: float) -> void:
 	speed_boost_timer = duration
 	current_speed_multiplier = multiplier
 	queue_redraw()
+
+func apply_rapid_fire(duration: float, multiplier: float) -> void:
+	if is_infected: return
+	rapid_fire_timer = duration
+	current_fire_rate_multiplier = multiplier
+	queue_redraw()
+
+func infect(duration: float = -1.0, outbreak_id: int = -1) -> void:
+	# Если мы уже болеем этой конкретной волной или уже переболели ей — игнорируем
+	if outbreak_id != -1 and (is_infected or last_outbreak_id == outbreak_id):
+		return
+		
+	is_infected = true
+	if outbreak_id != -1:
+		last_outbreak_id = outbreak_id
+	
+	# Если длительность не передана, берем из настроек SelectionManager
+	if duration < 0:
+		var sm = get_tree().get_first_node_in_group("selection_manager")
+		if sm: infection_timer = sm.VIRUS_DURATION
+		else: infection_timer = 6.0
+	else:
+		infection_timer = duration
+		
+	_spread_timer = 1.0
+	queue_redraw()
+
+func _spread_infection() -> void:
+	var sm = get_tree().get_first_node_in_group("selection_manager")
+	var range = 200.0
+	if sm: range = sm.VIRUS_SPREAD_RADIUS
+	
+	var all_cells = get_tree().get_nodes_in_group("cells")
+	for cell in all_cells:
+		if cell != self and cell is BaseCell and cell.owner_type == owner_type:
+			if not cell.is_infected and cell.last_outbreak_id != last_outbreak_id:
+				if global_position.distance_to(cell.global_position) <= range:
+					cell.infect(-1.0, last_outbreak_id) # Передаем ID текущей волны
 
 func _update_visuals() -> void:
 	queue_redraw()
