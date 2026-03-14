@@ -7,13 +7,18 @@ var CLICK_FEEDBACK_SCENE = preload("res://scenes/ui/click_feedback.tscn")
 var TARGET_HIGHLIGHT_SCENE = preload("res://scenes/ui/target_highlight.tscn")
 var SHIELD_PERK_EFFECT_SCENE = preload("res://scenes/ui/shield_perk_effect.tscn")
 
-var perk_energy: float = 0.0 # Пул энергии игрока для перков
+@export var perk_energy: float = 0.0 # Пул энергии игрока для перков
 var active_perk: String = ""
 
-# Кулдауны и стоимость
+# Кулдауны и стоимость Щита
 var shield_cooldown: float = 0.0
-const SHIELD_COOLDOWN_MAX: float = 12.0
-const SHIELD_ENERGY_COST: float = 20.0
+@export var SHIELD_COOLDOWN_MAX: float = 12.0
+@export var SHIELD_ENERGY_COST: float = 20.0
+
+# Кулдауны и стоимость Ускорения
+var speed_cooldown: float = 0.0
+@export var SPEED_COOLDOWN_MAX: float = 15.0
+@export var SPEED_ENERGY_COST: float = 15.0
 
 func _ready() -> void:
 	add_to_group("selection_manager")
@@ -25,12 +30,20 @@ func add_perk_energy(amount: float) -> void:
 func _process(delta: float) -> void:
 	if shield_cooldown > 0:
 		shield_cooldown = max(0.0, shield_cooldown - delta)
-		_refresh_pui()
+		
+	if speed_cooldown > 0:
+		speed_cooldown = max(0.0, speed_cooldown - delta)
+		
+	_refresh_pui()
 
 func _refresh_pui() -> void:
 	var pui = get_tree().get_first_node_in_group("perks_ui")
 	if pui and pui.has_method("update_perk_status"):
-		pui.update_perk_status(perk_energy, shield_cooldown / SHIELD_COOLDOWN_MAX)
+		pui.update_perk_status(
+			perk_energy, 
+			shield_cooldown / SHIELD_COOLDOWN_MAX,
+			speed_cooldown / SPEED_COOLDOWN_MAX
+		)
 
 func _unhandled_input(event: InputEvent) -> void:
 	# В режиме наблюдателя нет смысла в командах
@@ -42,6 +55,11 @@ func _unhandled_input(event: InputEvent) -> void:
 		var key_event := event as InputEventKey
 		if key_event.keycode == KEY_1:
 			activate_perk("shield")
+			get_viewport().set_input_as_handled()
+			return
+		# Горячая клавиша "2" для активации ускорения
+		if key_event.keycode == KEY_2:
+			activate_perk("speed")
 			get_viewport().set_input_as_handled()
 			return
 
@@ -66,15 +84,29 @@ func activate_perk(perk_name: String) -> void:
 		if perk_energy < SHIELD_ENERGY_COST or shield_cooldown > 0:
 			print("Нет энергии или КД")
 			return
-
-	active_perk = perk_name
-	
-	# Подсвечиваем кнопку в UI
-	var pui = get_tree().get_first_node_in_group("perks_ui")
-	if pui and pui.has_method("set_button_highlight"):
-		pui.set_button_highlight(perk_name, true)
+		# Щит требует выбора цели, поэтому ставим active_perk
+		active_perk = perk_name
+		var pui = get_tree().get_first_node_in_group("perks_ui")
+		if pui and pui.has_method("set_button_highlight"):
+			pui.set_button_highlight(perk_name, true)
+		print("Активирован перк: ", perk_name)
 		
-	print("Активирован перк: ", perk_name)
+	elif perk_name == "speed":
+		if perk_energy < SPEED_ENERGY_COST or speed_cooldown > 0:
+			print("Нет энергии или КД для ускорения")
+			return
+		
+		# Ускорение применяется мгновенно ко всем клеткам
+		perk_energy -= SPEED_ENERGY_COST
+		speed_cooldown = SPEED_COOLDOWN_MAX
+		
+		var player_cells = get_tree().get_nodes_in_group("player_cells")
+		for cell in player_cells:
+			if cell is BaseCell:
+				cell.apply_speed_boost()
+		
+		print("Активирован перк: ", perk_name)
+		_refresh_pui()
 
 func _clear_active_perk() -> void:
 	if active_perk != "":
