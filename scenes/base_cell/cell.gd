@@ -10,6 +10,7 @@ enum OwnerType { NEUTRAL, PLAYER, ENEMY_RED, ENEMY_GREEN, ENEMY_YELLOW }
 
 @onready var energy_label: Label = $EnergyLabel
 @onready var contr_label: Label = $ContrLabel
+@onready var shield_overlay: ColorRect = $ShieldOverlay
 
 # Визуальные эффекты при попадании
 var hit_flash_timer: float = 0.0
@@ -51,6 +52,9 @@ func _ready() -> void:
 	add_to_group("cells")
 	_update_groups()
 	_update_visuals()
+	
+	if shield_overlay and shield_overlay.material:
+		shield_overlay.material = shield_overlay.material.duplicate()
 	
 	if energy_label:
 		# Оформляем цифры красиво прямо из кода, чтобы они хорошо читались
@@ -152,8 +156,10 @@ func _draw() -> void:
 	# Цвет обводки меняется если активен щит или скорострельность или спринт
 	var outline_color = display_color.lightened(0.4)
 	if reflect_chance > 0.0:
-		# Ярко-зеленый цвет для щита
-		outline_color = Color(0.2, 1.0, 0.5).lerp(Color.WHITE, hit_intensity)
+		# Цвет обводки совпадает с цветом щита
+		var s_color = _get_cell_color().lightened(0.5)
+		s_color.s = 1.0
+		outline_color = s_color.lerp(Color.WHITE, hit_intensity)
 	elif rapid_fire_timer > 0:
 		# Пульсирующий оранжевый контур для скорострельности
 		var pulse = (sin(time * 15.0) + 1.0) / 2.0
@@ -218,77 +224,12 @@ func _draw() -> void:
 	main_points.append(main_points[0]) # Замыкаем
 	draw_polyline(main_points, outline_color, 2.5, true)
 	
-	# 4. ЭНЕРГЕТИЧЕСКИЙ КУПОЛ ЩИТА (Крутой эффект силового поля)
+	# 4. ЭНЕРГЕТИЧЕСКИЙ КУПОЛ ЩИТА - визуализация через ShieldOverlay (Шейдер)
+	# Больше не рисуем его тут программно, это ОЧЕНЬ медленно!
 	if reflect_chance > 0.0:
-		var shield_radius = current_radius * 1.3
-		var shield_color = Color(0.2, 1.0, 0.5) # Ярко-зеленый (неоновый)
-		
-		# Мягкое излучение щита
-		shield_color.a = 0.15 + sin(time * 8.0) * 0.05
-		draw_circle(Vector2.ZERO, shield_radius * 1.1, shield_color)
-		
-		# Внешняя граница щита (силовое поле с высокочастотной рябью)
-		var shield_pts = PackedVector2Array()
-		var shield_points_count = 32
-		var ripple_speed = time * 12.0
-		for i in range(shield_points_count):
-			var angle = (i / float(shield_points_count)) * TAU
-			# Двойная рябь: крупная медленная и мелкая быстрая
-			var s_wobble = sin(angle * 4.0 - ripple_speed) * 1.5 + sin(angle * 12.0 + ripple_speed * 1.5) * 1.0
-			# Добавляем хаос при попадании
-			if hit_impact_wobble > 0.1:
-				s_wobble += sin(angle * 20.0 - time * 30.0) * (hit_impact_wobble * 0.5)
-			shield_pts.append(Vector2(cos(angle), sin(angle)) * (shield_radius + s_wobble))
-		shield_pts.append(shield_pts[0])
-		
-		shield_color.a = 0.7 + sin(time * 15.0) * 0.2 # Интенсивное мерцание контура
-		draw_polyline(shield_pts, shield_color, 2.5, true)
-		
-		# Внутренние "заряды" (переливания энергии внутри купола)
-		var inner_color = Color(0.6, 1.0, 0.8, 0.3)
-		var charge_count = 3
-		for i in range(charge_count):
-			var charge_angle = time * (3.0 + i) + (i * TAU / float(charge_count))
-			var arc_start = charge_angle
-			var arc_end = charge_angle + 0.6
-			var arc_pts = PackedVector2Array()
-			for j in range(5):
-				var a = lerp(arc_start, arc_end, j / 4.0)
-				arc_pts.append(Vector2(cos(a), sin(a)) * (shield_radius - 3.0))
-			draw_polyline(arc_pts, inner_color, 3.0, true)
-			
-		# Сетка сот (Honeycomb Grid) - Эффект голографической брони
-		var hex_radius_size = current_radius * 0.25
-		var hex_w = hex_radius_size * 1.732 # sqrt(3)
-		var hex_h = hex_radius_size * 2.0
-		# Анимация "стекания" сот вниз
-		var scroll_offset = fmod(time * 35.0, hex_h * 1.5)
-		
-		# Покрываем площадь щита гексагонами
-		var grid_count = 4
-		for q in range(-grid_count, grid_count + 1):
-			for r in range(-grid_count, grid_count + 1):
-				var cx = (q + r / 2.0) * hex_w
-				var cy = r * hex_h * 0.75 + scroll_offset
-				var h_center = Vector2(cx, cy)
-				
-				var dist_to_center = h_center.length()
-				if dist_to_center < shield_radius * 0.95:
-					var hex_pts = PackedVector2Array()
-					for h_idx in range(6):
-						# Поворот на 30 градусов (PI/6) чтобы соты стояли "на углу"
-						var h_angle = (h_idx / 6.0) * TAU + (PI / 6.0)
-						# Радиус 0.85 создает красивые отступы между сотами
-						hex_pts.append(h_center + Vector2(cos(h_angle), sin(h_angle)) * (hex_radius_size * 0.85)) 
-					hex_pts.append(hex_pts[0])
-					
-					# Улучшенная видимость сот
-					var alpha_base = clampf(1.1 - (dist_to_center / shield_radius), 0.0, 1.0)
-					# Увеличиваем базовую прозрачность (от 0.2 до 0.6) для лучшей видимости
-					var alpha = (0.4 + sin(time * 6.0 + q * 1.3 + r * 1.7) * 0.2) * alpha_base
-					var h_color = shield_color
-					h_color.a = clampf(alpha, 0.0, 1.0)
-					draw_polyline(hex_pts, h_color, 2.5, true) # Сделали линии жирнее (2.5 вместо 1.5)
+		_update_shield_overlay()
+	else:
+		if shield_overlay.visible: shield_overlay.visible = false
 	
 	# 4. Ядро (Nucleus) - плавает около центра
 	var nucleus_pos = Vector2(cos(local_time * 1.5), sin(local_time * 2.1)) * (current_radius * 0.15)
@@ -315,8 +256,7 @@ func _draw() -> void:
 		org_color.a = 0.7
 		draw_circle(org_pos, current_radius * 0.12, org_color)
 
-	# 6. Щит (Отражение) - визуализация теперь через ShieldOverlay
-	pass
+	# 6. Щит (Отражение) - визуализация интегрирована в блок 4
 
 func _get_cell_color() -> Color:
 	match owner_type:
@@ -465,6 +405,23 @@ func _spread_infection() -> void:
 			if not cell.is_infected and cell.last_outbreak_id != last_outbreak_id:
 				if global_position.distance_to(cell.global_position) <= range:
 					cell.infect(-1.0, last_outbreak_id) # Передаем ID текущей волны
+
+func _update_shield_overlay() -> void:
+	if not shield_overlay: return
+	if not shield_overlay.visible: shield_overlay.visible = true
+	
+	# Подгоняем размер под текущий радиус клетки
+	var s = radius * 2.6 # Чуть больше клетки
+	shield_overlay.size = Vector2(s, s)
+	shield_overlay.position = -Vector2(s, s) / 2.0
+	
+	# Передаем цвет фракции в шейдер
+	var s_color = _get_cell_color().lightened(0.5)
+	s_color.s = 1.0
+	shield_overlay.material.set_shader_parameter("line_color", s_color)
+	var f_color = s_color
+	f_color.a = 0.15
+	shield_overlay.material.set_shader_parameter("fill_color", f_color)
 
 func _update_visuals() -> void:
 	queue_redraw()

@@ -227,26 +227,31 @@ func _get_map_rect() -> Rect2:
 	return Rect2(base_pos - fallback_half, fallback_half * 2.0)
 
 func _get_my_cells() -> Array[BaseCell]:
-	var group = ""
-	match faction:
-		BaseCell.OwnerType.ENEMY_RED:    group = "enemy_red_cells"
-		BaseCell.OwnerType.ENEMY_GREEN:  group = "enemy_green_cells"
-		BaseCell.OwnerType.ENEMY_YELLOW: group = "enemy_yellow_cells"
-	if group == "": return []
-	var raw := get_tree().get_nodes_in_group(group)
-	var result: Array[BaseCell] = []
-	result.resize(0)
-	for n in raw:
+	var group = _get_group_for_owner(faction)
+	var nodes = get_tree().get_nodes_in_group(group)
+	var cells: Array[BaseCell] = []
+	for n in nodes:
 		if n is BaseCell:
-			result.append(n)
-	if not result.is_empty():
-		return result
-	
-	var all_raw := get_tree().get_nodes_in_group("cells")
-	for n in all_raw:
-		if n is BaseCell and n.owner_type == faction:
-			result.append(n)
-	return result
+			cells.append(n)
+	return cells
+
+func _get_nearest_cell(cells: Array[BaseCell], pos: Vector2) -> BaseCell:
+	var nearest: BaseCell = null
+	var min_dist_sq = INF
+	for c in cells:
+		var d_sq = c.global_position.distance_squared_to(pos)
+		if d_sq < min_dist_sq:
+			min_dist_sq = d_sq
+			nearest = c
+	return nearest
+
+func _get_group_for_owner(owner_t: BaseCell.OwnerType) -> String:
+	match owner_t:
+		BaseCell.OwnerType.PLAYER:       return "player_cells"
+		BaseCell.OwnerType.ENEMY_RED:    return "enemy_red_cells"
+		BaseCell.OwnerType.ENEMY_GREEN:  return "enemy_green_cells"
+		BaseCell.OwnerType.ENEMY_YELLOW: return "enemy_yellow_cells"
+	return "cells"
 
 func _evaluate_and_use_perks(_delta: float) -> void:
 	var sm = get_tree().get_first_node_in_group("selection_manager")
@@ -277,40 +282,23 @@ func _evaluate_and_use_perks(_delta: float) -> void:
 					cell.reflect_timer = 10.0
 					cell.queue_redraw()
 
-	# 2. ВИРУС (Приоритет: толпа врагов)
+	# 2. ВИРУС (Приоритет: текущая цель и её соседи)
 	if _ai_virus_cd <= 0 and ai_perk_energy >= sm.VIRUS_ENERGY_COST:
-		var all_cells = _get_all_cells()
-		var best_virus_target: BaseCell = null
-		var max_enemies_around = 0
-		
-		for enemy in all_cells:
-			if enemy.owner_type != faction and enemy.owner_type != BaseCell.OwnerType.NEUTRAL:
-				var enemies_around = 0
-				for other_enemy in all_cells:
-					if other_enemy.owner_type == enemy.owner_type and other_enemy != enemy:
-						if enemy.global_position.distance_to(other_enemy.global_position) < sm.VIRUS_SPREAD_RADIUS:
-							enemies_around += 1
-				if enemies_around >= 2:
-					if enemies_around > max_enemies_around:
-						max_enemies_around = enemies_around
-						best_virus_target = enemy
-		
-		if best_virus_target:
-			var nearest: BaseCell = null
-			var n_dist = 999999.0
-			for p in my_cells:
-				var d = p.global_position.distance_to(best_virus_target.global_position)
-				if d < n_dist:
-					n_dist = d
-					nearest = p
-					
-			if nearest:
-				var shooter = nearest.get_node_or_null("ShooterModule")
-				if shooter:
-					virus_outbreak_counter += 1
-					shooter.shoot_virus(best_virus_target, sm.VIRUS_DURATION, virus_outbreak_counter)
-					ai_perk_energy -= sm.VIRUS_ENERGY_COST
-					_ai_virus_cd = max(5.0, sm.VIRUS_COOLDOWN_MAX)
+		# Оптимизация: не ищем по всей карте, а бьем в текущую цель если там есть толпа
+		if current_target_node and is_instance_valid(current_target_node) and current_target_node.owner_type != BaseCell.OwnerType.NEUTRAL:
+			var target_faction_group = _get_group_for_owner(current_target_node.owner_type)
+			var enemies = get_tree().get_nodes_in_group(target_faction_group)
+			
+			if enemies.size() >= 3: # Бьем если у врага солидная кучка
+				# Ищем нашу ближайшую клетку к цели
+				var nearest = _get_nearest_cell(my_cells, current_target_node.global_position)
+				if nearest:
+					var shooter = nearest.get_node_or_null("ShooterModule")
+					if shooter:
+						virus_outbreak_counter += 1
+						shooter.shoot_virus(current_target_node, sm.VIRUS_DURATION, virus_outbreak_counter)
+						ai_perk_energy -= sm.VIRUS_ENERGY_COST
+						_ai_virus_cd = max(5.0, sm.VIRUS_COOLDOWN_MAX)
 
 	# 3. СКОРОСТРЕЛЬНОСТЬ (Приоритет: добивание/атака)
 	if _ai_rapid_fire_cd <= 0 and ai_perk_energy >= sm.RAPID_FIRE_ENERGY_COST:

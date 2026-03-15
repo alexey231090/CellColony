@@ -9,6 +9,14 @@
 [ext_resource type="PackedScene" path="res://scenes/ui/perks_ui.tscn" id="6_perks"]
 [ext_resource type="Script" uid="uid://bqfqu5xcs4owa" path="res://scripts/core/AIFactionManager.gd" id="7_ai_mgr"]
 [ext_resource type="PackedScene" path="res://scenes/ui/dev_console.tscn" id="8_console"]
+[ext_resource type="Shader" path="res://scenes/environment/background.gdshader" id="9_bg_shader"]
+
+[sub_resource type="ShaderMaterial" id="ShaderMaterial_bg"]
+shader = ExtResource("9_bg_shader")
+shader_parameter/color1 = Color(0.02, 0.05, 0.1, 1.0)
+shader_parameter/color2 = Color(0.05, 0.15, 0.25, 1.0)
+shader_parameter/speed = 0.5
+shader_parameter/scale = 3.0
 
 [sub_resource type="Resource" id="Resource_85g3d"]
 script = ExtResource("6_85g3d")
@@ -33,6 +41,7 @@ faction = 4
 layer = -1
 
 [node name="ColorRect" type="ColorRect" parent="BackgroundLayer" unique_id=1750769579]
+material = SubResource("ShaderMaterial_bg")
 anchors_preset = 15
 anchor_right = 1.0
 anchor_bottom = 1.0
