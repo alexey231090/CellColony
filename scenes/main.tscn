@@ -9,14 +9,15 @@
 [ext_resource type="PackedScene" path="res://scenes/ui/perks_ui.tscn" id="6_perks"]
 [ext_resource type="Script" uid="uid://bqfqu5xcs4owa" path="res://scripts/core/AIFactionManager.gd" id="7_ai_mgr"]
 [ext_resource type="PackedScene" path="res://scenes/ui/dev_console.tscn" id="8_console"]
-[ext_resource type="Shader" path="res://scenes/environment/background.gdshader" id="9_bg_shader"]
+[ext_resource type="Shader" uid="uid://dumm2ibcfyxao" path="res://scenes/environment/background.gdshader" id="9_bg_shader"]
 
 [sub_resource type="ShaderMaterial" id="ShaderMaterial_bg"]
 shader = ExtResource("9_bg_shader")
-shader_parameter/color1 = Color(0.02, 0.05, 0.1, 1.0)
-shader_parameter/color2 = Color(0.05, 0.15, 0.25, 1.0)
+shader_parameter/color1 = Color(0.02, 0.05, 0.1, 1)
+shader_parameter/color2 = Color(0.05, 0.15, 0.25, 1)
 shader_parameter/speed = 0.5
 shader_parameter/scale = 3.0
+shader_parameter/cam_offset = Vector2(0, 0)
 
 [sub_resource type="Resource" id="Resource_85g3d"]
 script = ExtResource("6_85g3d")
@@ -28,14 +29,23 @@ script = ExtResource("1_main")
 [node name="AIManager_Red" type="Node" parent="." unique_id=2141526557]
 script = ExtResource("7_ai_mgr")
 faction = 2
+attack_range = 1000.0
+expand_range = 1500.0
+score_distance_scale = 300.0
 
 [node name="AIManager_Green" type="Node" parent="." unique_id=373589987]
 script = ExtResource("7_ai_mgr")
 faction = 3
+attack_range = 1000.0
+expand_range = 1500.0
+score_distance_scale = 300.0
 
 [node name="AIManager_Yellow" type="Node" parent="." unique_id=517041014]
 script = ExtResource("7_ai_mgr")
 faction = 4
+attack_range = 1000.0
+expand_range = 1500.0
+score_distance_scale = 300.0
 
 [node name="BackgroundLayer" type="CanvasLayer" parent="." unique_id=1473625379]
 layer = -1
@@ -76,3 +86,23 @@ layout_mode = 3
 
 [node name="DevConsole" parent="HUDLayer" unique_id=1070921993 instance=ExtResource("8_console")]
 layout_mode = 3
+
+[node name="BackgroundManual" type="Node2D" parent="." unique_id=1995090335]
+
+[node name="ColorRect" type="ColorRect" parent="BackgroundManual" unique_id=992166195]
+offset_left = 1280.9999
+offset_top = -3589.0002
+offset_right = 1320.9999
+offset_bottom = -3549.0002
+rotation = -0.87631214
+scale = Vector2(119.929855, 105.94348)
+color = Color(0.15, 0.15, 0.16, 1)
+
+[node name="ColorRect2" type="ColorRect" parent="BackgroundManual" unique_id=841948032]
+offset_left = -3894.0
+offset_top = 1452.0001
+offset_right = -3854.0
+offset_bottom = 1492.0001
+rotation = 0.68659186
+scale = Vector2(108.39654, 185.07283)
+color = Color(0.15, 0.15, 0.16, 1)

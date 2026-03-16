@@ -190,15 +190,12 @@ func _draw() -> void:
 	var current_radius = radius * breathe_factor + (hit_intensity * 5.0)
 	
 	# 1. Ламповое мягкое свечение (Glow)
-	var glow_color = display_color
-	if speed_boost_timer > 0:
-		glow_color = Color(0.2, 0.5, 1.0) # Синее свечение для спринта
-	elif rapid_fire_timer > 0:
-		glow_color = Color(1.0, 0.4, 0.1) # Оранжевое свечение для скорострельности
-		
-	# Мягкая пульсация прозрачности свечения
-	glow_color.a = 0.15 + sin(local_time * 2.5) * 0.05 
-	draw_circle(Vector2.ZERO, current_radius * 1.5, glow_color)
+	# ОПТИМИЗАЦИЯ: Свечение для Спринта и Щита теперь в Шейдере!
+	# Оставляем тут только свечение для скорострельности
+	if rapid_fire_timer > 0:
+		var glow_color = Color(1.0, 0.4, 0.1)
+		glow_color.a = 0.15 + sin(local_time * 2.5) * 0.05 
+		draw_circle(Vector2.ZERO, current_radius * 1.5, glow_color)
 	
 	# 2. Основное тело клетки (волнистая мембрана)
 	var num_points: int = 20 # Оптимизация: 20 вместо 32, визуально незаметно
@@ -224,9 +221,8 @@ func _draw() -> void:
 	main_points.append(main_points[0]) # Замыкаем
 	draw_polyline(main_points, outline_color, 2.5, true)
 	
-	# 4. ЭНЕРГЕТИЧЕСКИЙ КУПОЛ ЩИТА - визуализация через ShieldOverlay (Шейдер)
-	# Больше не рисуем его тут программно, это ОЧЕНЬ медленно!
-	if reflect_chance > 0.0:
+	# 4. ЭНЕРГЕТИЧЕСКИЙ КУПОЛ (ЩИТ / СПРИНТ) - визуализация через ShieldOverlay (Шейдер)
+	if reflect_chance > 0.0 or speed_boost_timer > 0.0:
 		_update_shield_overlay()
 	else:
 		if shield_overlay.visible: shield_overlay.visible = false
@@ -411,17 +407,28 @@ func _update_shield_overlay() -> void:
 	if not shield_overlay.visible: shield_overlay.visible = true
 	
 	# Подгоняем размер под текущий радиус клетки
-	var s = radius * 2.6 # Чуть больше клетки
+	var s = radius * 3.0 # Сделали чуть больше для ауры
 	shield_overlay.size = Vector2(s, s)
 	shield_overlay.position = -Vector2(s, s) / 2.0
 	
-	# Передаем цвет фракции в шейдер
-	var s_color = _get_cell_color().lightened(0.5)
-	s_color.s = 1.0
-	shield_overlay.material.set_shader_parameter("line_color", s_color)
-	var f_color = s_color
-	f_color.a = 0.15
-	shield_overlay.material.set_shader_parameter("fill_color", f_color)
+	var mat = shield_overlay.material as ShaderMaterial
+	if not mat: return
+	
+	if reflect_chance > 0.0:
+		# РЕЖИМ ЩИТА
+		var s_color = _get_cell_color().lightened(0.5)
+		s_color.s = 1.0
+		mat.set_shader_parameter("sprint_mode", false)
+		mat.set_shader_parameter("shield_color", s_color)
+		mat.set_shader_parameter("intensity", 1.0)
+	elif speed_boost_timer > 0.0:
+		# РЕЖИМ СПРИНТА (Оптимизированные полоски скорости)
+		var c_color = Color(0.0, 0.8, 1.0) # Неоново-синий
+		mat.set_shader_parameter("sprint_mode", true)
+		mat.set_shader_parameter("shield_color", c_color)
+		mat.set_shader_parameter("intensity", 1.8) # Чуть поярче
+		mat.set_shader_parameter("aura_intensity", 1.0)
+		mat.set_shader_parameter("sprint_angle", visual_angle) # Полоски летят вдоль движения
 
 func _update_visuals() -> void:
 	queue_redraw()

@@ -18,53 +18,46 @@ var current_lifetime: float = 5.0
 var fade_start_time: float = 1.0 # За какое время до конца начинать исчезать
 var _fade_alpha: float = 1.0     # Текущая прозрачность (0..1)
 
+func _ready() -> void:
+	rotation = direction.angle()
+	# Рисуем фигуру 1 раз при старте
+	queue_redraw()
+
 func _draw() -> void:
-	# Направление хвоста (противоположно движению)
-	var trail_dir = -direction.normalized() if direction != Vector2.ZERO else Vector2.ZERO
-	var time = Time.get_ticks_msec() / 1000.0
 	var current_radius = 5.5
 	
 	# Свечение (Glow)
 	var glow_color = projectile_color
-	glow_color.a = 0.25 * _fade_alpha
-	draw_circle(Vector2.ZERO, current_radius * 2.0 * _fade_alpha, glow_color)
+	glow_color.a = 0.25
+	draw_circle(Vector2.ZERO, current_radius * 2.0, glow_color)
 	
-	# Каплевидный хвост (оптимизированный до 3 кругов)
+	# Хвост: рисуем статичный хвост по оси -X (т.к. мы уже повернули Area2D)
 	for i in range(3):
 		var factor = 1.0 - (float(i) / 3.0)
-		var tail_wobble = trail_dir.rotated(PI/2) * sin(time * 30.0 - i) * 1.5
-		var t_pos = trail_dir * (i * 5.0) + tail_wobble
+		# Хвост направлен строго влево (-X), так как X — это direction
+		var t_pos = Vector2(-1.0, 0) * (i * 6.0)
 		var t_col = projectile_color
-		t_col.a = factor * 0.7 * _fade_alpha
-		draw_circle(t_pos, current_radius * factor * _fade_alpha, t_col)
+		t_col.a = factor * 0.7
+		draw_circle(t_pos, current_radius * factor, t_col)
 	
 	# Голова кометы
-	var head_col = projectile_color
-	head_col.a = _fade_alpha
-	draw_circle(Vector2.ZERO, current_radius * _fade_alpha, head_col)
+	draw_circle(Vector2.ZERO, current_radius, projectile_color)
 	
 	var core_col = Color.WHITE
-	if is_virus: core_col = Color(0.3, 0.0, 0.5) # Темное ядро для вируса
-	core_col.a = _fade_alpha
-	draw_circle(Vector2.ZERO, current_radius * 0.45 * _fade_alpha, core_col)
-
-var _proj_redraw_timer: float = 0.0
+	if is_virus: core_col = Color(0.3, 0.0, 0.5)
+	draw_circle(Vector2.ZERO, current_radius * 0.45, core_col)
 
 func _process(delta: float) -> void:
+	# Используем простую физику прямого полета
 	position += direction * speed * delta
 	
 	# Уменьшаем время жизни
 	current_lifetime -= delta
 	
-	# Плавное растворение в конце
+	# Плавное растворение в конце средствами GPU (modulate)
 	if current_lifetime <= fade_start_time:
-		_fade_alpha = max(0.0, current_lifetime / fade_start_time)
-	
-	# Оптимизация: перерисовка снарядов ~30fps
-	_proj_redraw_timer += delta
-	if _proj_redraw_timer >= 0.033:
-		_proj_redraw_timer = 0.0
-		queue_redraw()
+		var alpha = max(0.0, current_lifetime / fade_start_time)
+		modulate.a = alpha # Бесплатная прозрачность на уровне рендерера
 	
 	# Удаление если время вышло
 	if current_lifetime <= 0:
@@ -122,12 +115,14 @@ func _impact(cell: BaseCell) -> void:
 func _reflect(cell: BaseCell) -> void:
 	# Меняем направление (чуть с разбросом для красоты)
 	direction = -direction.rotated(randf_range(-0.2, 0.2))
+	rotation = direction.angle() # Обновляем поворот хвоста
 	# Скорость немного возрастает при отскоке!
 	speed *= 1.2
 	# Снаряд теперь принадлежит отражающему!
 	owner_type = cell.owner_type
 	projectile_color = cell._get_cell_color()
 	target_node = null # Сбрасываем цель, пусть летит прямо
+	queue_redraw() # Перерисовываем цветом нового владельца
 
 	# Эффект отскока
 	var impact = impact_effect_scene.instantiate()

@@ -19,20 +19,25 @@ const FACTION_BASES: Array = [
 
 func _process(_delta: float) -> void:
 	if bg_rect and bg_rect.material and camera:
+		# Если камера свободная (наблюдатель), отключаем параллакс, 
+		# чтобы фон не "ездил" когда камера стоит у стены.
+		if camera.is_forced_spectator() or get_tree().get_nodes_in_group("player_cells").is_empty():
+			return
+			
 		# Передаем позицию камеры в шейдер для параллакса.
-		# Сделали параллакс почти незаметным (0.15 вместо 0.7)
 		bg_rect.material.set_shader_parameter("cam_offset", camera.global_position * 0.15)
 
 func _ready() -> void:
 	# 0. Генерируем биологические стенки (границы карты)
 	_generate_borders()
 	
-	# Ограничиваем камеру, чтобы она не уплывала за границы карты
+	# Ограничиваем камеру. Теперь она может заходить в "серую зону" на 2500px дальше карты.
 	if camera:
-		camera.limit_left = -int(map_size.x / 2.0)
-		camera.limit_right = int(map_size.x / 2.0)
-		camera.limit_top = -int(map_size.y / 2.0)
-		camera.limit_bottom = int(map_size.y / 2.0)
+		var margin = 2500.0
+		camera.limit_left = -int(map_size.x / 2.0 + margin)
+		camera.limit_right = int(map_size.x / 2.0 + margin)
+		camera.limit_top = -int(map_size.y / 2.0 + margin)
+		camera.limit_bottom = int(map_size.y / 2.0 + margin)
 	
 	# 1. Спавним игрока из сцены
 	var player_cell = get_node_or_null("PlayerCell")
@@ -63,9 +68,11 @@ func _ready() -> void:
 	var attempts := 0
 	while spawned < num_neutral_cells and attempts < num_neutral_cells * 5:
 		attempts += 1
+		# Добавляем отступ от краев (margin = 400), чтобы не спавниться в неровных стенах
+		var safe_margin = 400.0
 		var pos = Vector2(
-			randf_range(-map_size.x / 2.0, map_size.x / 2.0),
-			randf_range(-map_size.y / 2.0, map_size.y / 2.0)
+			randf_range(-map_size.x / 2.0 + safe_margin, map_size.x / 2.0 - safe_margin),
+			randf_range(-map_size.y / 2.0 + safe_margin, map_size.y / 2.0 - safe_margin)
 		)
 		# Не спавним прямо на базах
 		var too_close := false
@@ -103,70 +110,69 @@ func _generate_borders() -> void:
 	
 	var hx = map_size.x / 2.0
 	var hy = map_size.y / 2.0
-	var thickness = 2000.0 # Толщина внешней "темной материи"
-	var segments = 60 # Точность 
+	var thickness = 3000.0 # Увеличили толщину, чтобы точно не было дырок
+	var segments = 100 # Увеличили точность для плавности
 	
 	# Шум для неровных органических краев
 	var noise = FastNoiseLite.new()
 	noise.noise_type = FastNoiseLite.TYPE_SIMPLEX
-	noise.frequency = 0.003
+	noise.frequency = 0.002 # Сделали шум "крупнее" (плавнее)
 	
-	var wall_color = Color(0.12, 0.08, 0.05) # Органический темно-коричневый цвет (ткань за стенкой)
-	var edge_color = Color(0.1, 0.4, 0.25, 0.8) # Светящаяся органическая слизь
+	var wall_color = Color(0.15, 0.15, 0.16) # Нейтральный темно-серый
+	var edge_color = Color(0.35, 0.38, 0.4, 0.8) # Приглушенный серо-бежевый тон слизи
 	
 	# Анонимная функция для генерации одной стороны
 	var _build_side = func(start: Vector2, end: Vector2, out_dir: Vector2, side_idx: int):
 		var pts = PackedVector2Array()
 		var line_pts = PackedVector2Array()
+		var tangent = (end - start).normalized()
 		
-		# Генерируем 60 точек вдоль отрезка с шумом
+		# Генерируем точки вдоль отрезка с мягким шумом
 		for i in range(segments + 1):
 			var t = float(i) / segments
 			var p = start.lerp(end, t)
-			# Смещаем точку по нормали(направлению наружу) через функции шума
-			# side_idx нужно чтоб шум на каждом крае был разным (оффсет)
 			var n = noise.get_noise_2d(p.x + side_idx * 5000.0, p.y + side_idx * 5000.0)
-			# Amplitude: до 200px неровностей
-			var edge_p = p + out_dir * (n * 250.0)
+			# Снизили амплитуду с 250 до 160 для плавности
+			var edge_p = p + out_dir * (n * 160.0)
 			
 			pts.append(edge_p)
 			line_pts.append(edge_p)
 			
-		# Добавляем толщину снаружи для коллайдера/полигона(чтоб не было дырок)
-		pts.append(end + out_dir * thickness)
-		pts.append(start + out_dir * thickness)
+		# Добавляем "уши" за границы углов, чтобы перекрыть дырки (добавляем tangent * thickness)
+		pts.append(end + out_dir * thickness + tangent * thickness)
+		pts.append(start + out_dir * thickness - tangent * thickness)
 		
-		# 1. Физическая стенка (шоб не выползали)
+		# 1. Физическая стенка
 		var coll = CollisionPolygon2D.new()
 		coll.polygon = pts
 		border_node.add_child(coll)
 		
-		# 2. Визуальная "темная масса" снаружи
+		# 2. Визуальная масса
 		var poly = Polygon2D.new()
 		poly.polygon = pts
 		poly.color = wall_color
-		poly.z_index = -5 # Самый низ, позади фона и клеток
+		poly.z_index = -5
 		border_node.add_child(poly)
 		
-		# 3. Красивая неровная биологическая линия(мембрана)
+		# 3. Биологическая мембрана (более плавная за счет segments и частоты шума)
 		var line = Line2D.new()
 		line.points = line_pts
-		line.width = 45.0
+		line.width = 50.0 # Чуть шире для мягкости
 		line.default_color = edge_color
 		line.joint_mode = Line2D.LINE_JOINT_ROUND
 		line.begin_cap_mode = Line2D.LINE_CAP_ROUND
 		line.end_cap_mode = Line2D.LINE_CAP_ROUND
-		line.z_index = -3 # Над фоном
+		line.z_index = -3
 		border_node.add_child(line)
 		
-		# Внутренний блик мембраны для объема (Juice)
+		# Внутренний блик
 		var hl_line = Line2D.new()
 		hl_line.points = line_pts
-		hl_line.width = 12.0
-		hl_line.default_color = Color(0.5, 0.9, 0.6, 0.6)
+		hl_line.width = 15.0
+		hl_line.default_color = Color(0.6, 0.65, 0.7, 0.4) # Бежево-серый блик
 		hl_line.joint_mode = Line2D.LINE_JOINT_ROUND
 		hl_line.z_index = -2
-		hl_line.position = -out_dir * 10.0 # Смещаем внутрь
+		hl_line.position = -out_dir * 8.0
 		border_node.add_child(hl_line)
 
 	# Генерируем 4 стороны (Top, Right, Bottom, Left)
