@@ -39,6 +39,9 @@ var last_outbreak_id: int = -1 # ID последней волны вируса, 
 var visual_stretch: float = 0.0
 var visual_angle: float = 0.0
 
+# Новая механика перков (Щит, Спринт и т.д.)
+var assigned_perk: String = ""
+
 # Система вклада (для перков)
 var contributions: Dictionary = {} # OwnerType -> float
 var last_damage_time: float = 0.0
@@ -253,6 +256,57 @@ func _draw() -> void:
 		draw_circle(org_pos, current_radius * 0.12, org_color)
 
 	# 6. Щит (Отражение) - визуализация интегрирована в блок 4
+
+	# 7. Визуализация назначенного перка (иконка "маячок" на клетке)
+	if assigned_perk != "" and owner_type == OwnerType.PLAYER:
+		var sm = get_tree().get_first_node_in_group("selection_manager")
+		if sm:
+			var cooldown_ratio = sm.get_perk_cooldown_ratio(assigned_perk)
+			var energy_cost = sm.get_perk_energy_cost(assigned_perk)
+			var has_energy = sm.perk_energy >= energy_cost
+			
+			var perk_pos = Vector2(0, -current_radius * 0.4) # Внутри клетки, чуть выше центра
+			var icon_radius = 12.0
+			
+			# Фон иконки (подложка)
+			draw_circle(perk_pos, icon_radius + 2.0, Color(0, 0, 0, 0.4))
+			
+			var perk_color = Color.WHITE
+			match assigned_perk:
+				"shield": perk_color = Color(0.2, 0.8, 1.0) # Голубой
+				"speed": perk_color = Color(0.0, 1.0, 0.5) 
+				"rapid_fire": perk_color = Color(1.0, 0.5, 0.0)
+				"virus": perk_color = Color(0.7, 0.0, 1.0)
+			
+			# Состояние доступности (яркость)
+			if cooldown_ratio > 0:
+				perk_color = Color(0.3, 0.3, 0.3) # Серый если КД
+			elif not has_energy:
+				perk_color.a = 0.3 # Полупрозрачный если нет энергии
+			
+			# Рисуем саму иконку (ЩИТ - пятиугольником вниз)
+			if assigned_perk == "shield":
+				var s_pts = PackedVector2Array([
+					perk_pos + Vector2(-8, -6),
+					perk_pos + Vector2(8, -6),
+					perk_pos + Vector2(8, 2),
+					perk_pos + Vector2(0, 8),
+					perk_pos + Vector2(-8, 2)
+				])
+				draw_colored_polygon(s_pts, perk_color)
+			else:
+				draw_circle(perk_pos, 6.0, perk_color)
+			
+			# РАДИАЛЬНЫЙ ИНДИКАТОР КУЛДАУНА
+			if cooldown_ratio > 0:
+				var arc_points = 16
+				var start_angle = -PI/2
+				var end_angle = start_angle + (TAU * cooldown_ratio)
+				draw_arc(perk_pos, icon_radius + 1.0, start_angle, end_angle, arc_points, Color(0.8, 0.8, 0.8, 0.8), 2.5)
+			elif has_energy:
+				# Легкое сияние готовности
+				var pulse = (sin(time * 4.0) + 1.0) * 0.5
+				draw_arc(perk_pos, icon_radius + 1.0, 0, TAU, 24, perk_color.lightened(0.3), 1.0 + pulse)
 
 func _get_cell_color() -> Color:
 	match owner_type:

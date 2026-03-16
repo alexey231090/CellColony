@@ -21,7 +21,7 @@ var speed_cooldown: float = 0.0
 @export var SPEED_ENERGY_COST: float = 15.0
 @export var SPEED_BOOST_DURATION: float = 8.0
 @export var SPEED_BOOST_MULTIPLIER: float = 2.0
-@export var SHIELD_SELECT_RADIUS: float = 100.0
+@export var SHIELD_SELECT_RADIUS: float = 350.0
 
 @export var RAPID_FIRE_ENERGY_COST: float = 25.0
 @export var RAPID_FIRE_COOLDOWN_MAX: float = 15.0
@@ -35,11 +35,27 @@ var speed_cooldown: float = 0.0
 
 var rapid_fire_cooldown: float = 0.0
 var virus_cooldown: float = 0.0
+
 var virus_outbreak_counter: int = 0 # Уникальный ID для каждой активации вируса
 var cursor_visual: Node2D = null
 
+# Состояние перетаскивания (Drag to Aim)
+var is_dragging_perk: bool = false
+var drag_cell: BaseCell = null
+var drag_target_pos: Vector2 = Vector2.ZERO
+var drag_preview: Node2D = null
+var aim_line: Line2D = null
+
 func _ready() -> void:
 	add_to_group("selection_manager")
+	_init_aim_line()
+
+func _init_aim_line() -> void:
+	aim_line = Line2D.new()
+	aim_line.width = 3.0
+	aim_line.default_color = Color(0.2, 0.8, 1.0, 0.3)
+	aim_line.hide()
+	add_child(aim_line)
 
 func add_perk_energy(amount: float) -> void:
 	perk_energy += amount
@@ -60,6 +76,40 @@ func _process(delta: float) -> void:
 		
 	_refresh_pui()
 	_update_cursor_visual()
+	_update_drag_preview()
+
+func _update_drag_preview() -> void:
+	if is_dragging_perk and drag_cell and is_instance_valid(drag_cell):
+		if not drag_preview:
+			var script = load("res://scripts/core/PerkCursorVisual.gd")
+			drag_preview = Node2D.new()
+			drag_preview.set_script(script)
+			add_child(drag_preview)
+			drag_preview.set_radius(SHIELD_SELECT_RADIUS)
+		
+		var camera = get_viewport().get_camera_2d()
+		if camera:
+			var mouse_pos = camera.get_global_mouse_position()
+			var cell_pos = drag_cell.global_position
+			var dir = (mouse_pos - cell_pos).normalized()
+			# Смещаем центр щита так, чтобы край касался центра клетки
+			drag_target_pos = cell_pos + dir * SHIELD_SELECT_RADIUS
+			drag_preview.global_position = drag_target_pos
+			drag_preview.show()
+			
+			# Рисуем линию прицеливания
+			if aim_line:
+				aim_line.clear_points()
+				# Линия в локальных координатах SelectionManager должна быть в мировых для простоты
+				# Но SelectionManager — дочерняя нода Main (0,0), так что мировые = локальные
+				aim_line.add_point(cell_pos)
+				aim_line.add_point(drag_target_pos)
+				aim_line.show()
+	else:
+		if drag_preview:
+			drag_preview.hide()
+		if aim_line:
+			aim_line.hide()
 
 func _update_cursor_visual() -> void:
 	if active_perk == "shield":
@@ -127,15 +177,128 @@ func _unhandled_input(event: InputEvent) -> void:
 			get_viewport().set_input_as_handled()
 			return
 
-	if event is InputEventMouseButton and event.pressed:
+	if event is InputEventMouseButton:
+		var camera = get_viewport().get_camera_2d()
+		if not camera: return
+		var world_pos = camera.get_global_mouse_position()
+		
 		if event.button_index == MOUSE_BUTTON_LEFT:
-			var camera = get_viewport().get_camera_2d()
-			if not camera: return
-			var world_pos = camera.get_global_mouse_position()
-			_handle_selection(world_pos)
-		elif event.button_index == MOUSE_BUTTON_RIGHT:
-			# Отмена перка
+			if event.pressed:
+				# 1. ОБРАБОТКА ДАБЛ-КЛИКА
+				if event.double_click:
+					if _handle_double_click(world_pos):
+						get_viewport().set_input_as_handled()
+						drag_cell = null
+						return
+				
+				# 2. НАЧАЛО ПОТЕНЦИАЛЬНОГО ПЕРЕТАСКИВАНИЯ
+				var cell = _get_cell_at_pos(world_pos)
+				if cell and cell.owner_type == BaseCell.OwnerType.PLAYER and cell.assigned_perk != "":
+					if _is_perk_ready(cell.assigned_perk):
+						drag_cell = cell
+						is_dragging_perk = false
+				
+				# 3. ОБЫЧНОЕ ДЕЙСТВИЕ (Движение / Атака) на первый клик
+				_handle_selection(world_pos)
+				
+			else:
+				# ОТПУСКАНИЕ КНОПКИ
+				if is_dragging_perk:
+					if try_activate_cell_perk(drag_cell, drag_target_pos):
+						get_viewport().set_input_as_handled()
+				
+				is_dragging_perk = false
+				drag_cell = null
+				
+		elif event.button_index == MOUSE_BUTTON_RIGHT and event.pressed:
 			_clear_active_perk()
+			is_dragging_perk = false
+			drag_cell = null
+
+	if event is InputEventMouseMotion and drag_cell:
+		var camera = get_viewport().get_camera_2d()
+		if not camera: return
+		var world_pos = camera.get_global_mouse_position()
+		
+		# Если нажата кнопка и мышка значительно сдвинулась от клетки
+		if drag_cell.global_position.distance_to(world_pos) > 20.0:
+			is_dragging_perk = true
+
+func _is_perk_ready(perk_name: String) -> bool:
+	match perk_name:
+		"shield": return perk_energy >= SHIELD_ENERGY_COST and shield_cooldown <= 0
+		"speed": return perk_energy >= SPEED_ENERGY_COST and speed_cooldown <= 0
+		"rapid_fire": return perk_energy >= RAPID_FIRE_ENERGY_COST and rapid_fire_cooldown <= 0
+		"virus": return perk_energy >= VIRUS_ENERGY_COST and virus_cooldown <= 0
+	return false
+
+func get_perk_cooldown_ratio(perk_name: String) -> float:
+	match perk_name:
+		"shield": return shield_cooldown / SHIELD_COOLDOWN_MAX if SHIELD_COOLDOWN_MAX > 0 else 0.0
+		"speed": return speed_cooldown / SPEED_COOLDOWN_MAX if SPEED_COOLDOWN_MAX > 0 else 0.0
+		"rapid_fire": return rapid_fire_cooldown / RAPID_FIRE_COOLDOWN_MAX if RAPID_FIRE_COOLDOWN_MAX > 0 else 0.0
+		"virus": return virus_cooldown / VIRUS_COOLDOWN_MAX if VIRUS_COOLDOWN_MAX > 0 else 0.0
+	return 0.0
+
+func get_perk_energy_cost(perk_name: String) -> float:
+	match perk_name:
+		"shield": return SHIELD_ENERGY_COST
+		"speed": return SPEED_ENERGY_COST
+		"rapid_fire": return RAPID_FIRE_ENERGY_COST
+		"virus": return VIRUS_ENERGY_COST
+	return 0.0
+
+func _handle_double_click(pos: Vector2) -> bool:
+	var clicked_node: BaseCell = _get_cell_at_pos(pos)
+	if clicked_node and clicked_node.owner_type == BaseCell.OwnerType.PLAYER:
+		if clicked_node.assigned_perk != "":
+			return try_activate_cell_perk(clicked_node)
+	return false
+
+func _get_cell_at_pos(pos: Vector2) -> BaseCell:
+	var all_cells = get_tree().get_nodes_in_group("cells")
+	for cell in all_cells:
+		if cell is BaseCell:
+			var distance = cell.global_position.distance_to(pos)
+			if distance < cell.radius * cell.scale.x:
+				return cell
+	return null
+
+func try_activate_cell_perk(cell: BaseCell, custom_pos: Vector2 = Vector2.ZERO) -> bool:
+	var perk_name = cell.assigned_perk
+	var act_pos = cell.global_position
+	if custom_pos != Vector2.ZERO:
+		act_pos = custom_pos
+	
+	if perk_name == "shield":
+		if perk_energy < SHIELD_ENERGY_COST or shield_cooldown > 0:
+			print("Нет энергии или КД для щита на клетке")
+			return false
+		
+		# Спавним эффект в целевой позиции
+		if SHIELD_PERK_EFFECT_SCENE:
+			var effect = SHIELD_PERK_EFFECT_SCENE.instantiate()
+			get_parent().add_child(effect)
+			effect.global_position = act_pos
+			
+			# Раздаем щит соседним клеткам игрока от ЦЕНТРА ЭФФЕКТА
+			var player_cells = get_tree().get_nodes_in_group("player_cells")
+			for p_cell in player_cells:
+				var dist = p_cell.global_position.distance_to(act_pos)
+				if dist <= SHIELD_SELECT_RADIUS + (p_cell.radius * p_cell.scale.x):
+					p_cell.reflect_chance = 0.5
+					p_cell.reflect_timer = 10.0
+					p_cell.queue_redraw()
+			
+			perk_energy -= SHIELD_ENERGY_COST
+			shield_cooldown = SHIELD_COOLDOWN_MAX
+			_refresh_pui()
+			
+			if active_perk == "shield":
+				_clear_active_perk()
+			return true
+			
+	return false
 
 func activate_perk(perk_name: String) -> void:
 	# Если мы уже выбрали этот же перк - отменяем (тоггл)
@@ -314,23 +477,29 @@ func _handle_selection(pos: Vector2) -> void:
 			circle.target_node = clicked_node
 			circle.show()
 
-		for p_cell in player_cells:
-			if p_cell is BaseCell:
-				p_cell.command_attack(clicked_node.global_position, clicked_node)
+		# ИСПРАВЛЕНИЕ: Если кликнули по СВОЕЙ клетке (например, для перка),
+		# не заставляем всю остальную колонию бросать дела и целиться в неё.
+		if clicked_node.owner_type != BaseCell.OwnerType.PLAYER:
+			for p_cell in player_cells:
+				if p_cell is BaseCell:
+					p_cell.command_attack(clicked_node.global_position, clicked_node)
+					
+			# Визуальный отклик (атака/лечение) - только для не-своих при одиночном клике
+			if CLICK_FEEDBACK_SCENE:
+				var feedback = CLICK_FEEDBACK_SCENE.instantiate()
+				get_parent().add_child(feedback)
+				var is_attack = clicked_node.owner_type != BaseCell.OwnerType.PLAYER
+				feedback.setup(player_cells, clicked_node.global_position, is_attack)
 				
-		# Визуальный отклик (атака/лечение)
-		if CLICK_FEEDBACK_SCENE:
-			var feedback = CLICK_FEEDBACK_SCENE.instantiate()
-			get_parent().add_child(feedback)
-			var is_attack = clicked_node.owner_type != BaseCell.OwnerType.PLAYER
-			feedback.setup(player_cells, clicked_node.global_position, is_attack)
-			
-		# Временное выделение атакуемой/нейтральной цели на 3 секунды
-		if TARGET_HIGHLIGHT_SCENE and clicked_node.owner_type != BaseCell.OwnerType.PLAYER:
-			var highlight = TARGET_HIGHLIGHT_SCENE.instantiate()
-			get_parent().add_child(highlight)
-			var ht_color = Color(0.9, 0.3, 0.3) if clicked_node.owner_type != BaseCell.OwnerType.NEUTRAL else Color(0.8, 0.8, 0.8)
-			highlight.setup(clicked_node, ht_color)
+			# Временное выделение атакуемой/нейтральной цели на 3 секунды
+			if TARGET_HIGHLIGHT_SCENE and clicked_node.owner_type != BaseCell.OwnerType.NEUTRAL:
+				var highlight = TARGET_HIGHLIGHT_SCENE.instantiate()
+				get_parent().add_child(highlight)
+				var ht_color = Color(0.9, 0.3, 0.3) if clicked_node.owner_type != BaseCell.OwnerType.NEUTRAL else Color(0.8, 0.8, 0.8)
+				highlight.setup(clicked_node, ht_color)
+		else:
+			# Если кликнули по своей, просто покажем круг выбора на ней (опционально)
+			pass
 	else:
 		# ЦЕЛИ НЕТ — ПЛЫВЕМ ВСЕЙ КОЛОНИЕЙ ТУДА
 		if circle:
