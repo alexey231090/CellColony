@@ -92,18 +92,25 @@ func _update_drag_preview() -> void:
 			var mouse_pos = camera.get_global_mouse_position()
 			var cell_pos = drag_cell.global_position
 			var dir = (mouse_pos - cell_pos).normalized()
-			# Смещаем центр щита так, чтобы край касался центра клетки
-			drag_target_pos = cell_pos + dir * SHIELD_SELECT_RADIUS
-			drag_preview.global_position = drag_target_pos
-			drag_preview.show()
-			
-			# Рисуем линию прицеливания
+			# Рисуем линию или стрелку прицеливания
 			if aim_line:
 				aim_line.clear_points()
-				# Линия в локальных координатах SelectionManager должна быть в мировых для простоты
-				# Но SelectionManager — дочерняя нода Main (0,0), так что мировые = локальные
 				aim_line.add_point(cell_pos)
-				aim_line.add_point(drag_target_pos)
+				
+				# Если это спринт - меняем цвет на "скоростной" зеленый/неоновый
+				if drag_cell.assigned_perk == "speed":
+					aim_line.default_color = Color(0.0, 1.0, 0.5, 0.7)
+					drag_preview.set_radius(40.0) # Для рывка круг превью меньше
+					# Для рывка тянем линию прямо до мышки, без ограничения радиусом щита
+					drag_target_pos = mouse_pos
+					aim_line.add_point(mouse_pos)
+				else:
+					aim_line.default_color = Color(0.2, 0.8, 1.0, 0.3)
+					drag_preview.set_radius(SHIELD_SELECT_RADIUS)
+					drag_target_pos = cell_pos + dir * SHIELD_SELECT_RADIUS
+					aim_line.add_point(drag_target_pos)
+					
+				drag_preview.global_position = drag_target_pos
 				aim_line.show()
 	else:
 		if drag_preview:
@@ -297,6 +304,41 @@ func try_activate_cell_perk(cell: BaseCell, custom_pos: Vector2 = Vector2.ZERO) 
 			if active_perk == "shield":
 				_clear_active_perk()
 			return true
+			
+	elif perk_name == "speed":
+		if perk_energy < SPEED_ENERGY_COST or speed_cooldown > 0:
+			print("Нет энергии или КД для спринта на клетке")
+			return false
+			
+		var player_cells = get_tree().get_nodes_in_group("player_cells")
+		
+		if custom_pos != Vector2.ZERO:
+			# РЕЖИМ РЫВКА (Super Dash)
+			var mouse_pos = custom_pos
+			var cell_pos = cell.global_position
+			var dash_dir = (mouse_pos - cell_pos).normalized()
+			
+			# Применяем очень быстрый, но короткий буст
+			for p_cell in player_cells:
+				if p_cell is BaseCell:
+					p_cell.apply_speed_boost(1.0, 6.0) # 1.0 сек, скорость х6
+					# Форсируем движение в сторону рывка (задаем цель далеко впереди)
+					p_cell.command_move(p_cell.global_position + dash_dir * 2000.0)
+					# Даем резкий "пинок" (импульс)
+					p_cell.velocity += dash_dir * 1200.0
+						
+			print("СВЕРХЗВУКОВОЙ РЫВОК в направлении: ", dash_dir)
+		else:
+			# ОБЫЧНЫЙ СПРИНТ
+			for p_cell in player_cells:
+				if p_cell is BaseCell:
+					p_cell.apply_speed_boost(7.0, 2.0) # 7 сек, скорость х2
+			print("Обычный спринт (7 сек)")
+			
+		perk_energy -= SPEED_ENERGY_COST
+		speed_cooldown = SPEED_COOLDOWN_MAX
+		_refresh_pui()
+		return true
 			
 	return false
 

@@ -284,7 +284,7 @@ func _draw() -> void:
 			elif not has_energy:
 				perk_color.a = 0.3 # Полупрозрачный если нет энергии
 			
-			# Рисуем саму иконку (ЩИТ - пятиугольником вниз)
+			# Рисуем саму иконку
 			if assigned_perk == "shield":
 				var s_pts = PackedVector2Array([
 					perk_pos + Vector2(-8, -6),
@@ -294,6 +294,17 @@ func _draw() -> void:
 					perk_pos + Vector2(-8, 2)
 				])
 				draw_colored_polygon(s_pts, perk_color)
+			elif assigned_perk == "speed":
+				# Молния (зигзаг)
+				var l_pts = PackedVector2Array([
+					perk_pos + Vector2(2, -8),
+					perk_pos + Vector2(-6, 0),
+					perk_pos + Vector2(0, 0),
+					perk_pos + Vector2(-2, 8),
+					perk_pos + Vector2(6, 0),
+					perk_pos + Vector2(0, 0)
+				])
+				draw_colored_polygon(l_pts, perk_color)
 			else:
 				draw_circle(perk_pos, 6.0, perk_color)
 			

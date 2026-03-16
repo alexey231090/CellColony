@@ -46,7 +46,7 @@ func _ready() -> void:
 		player_cell.position = player_base.pos
 		player_cell.owner_type = BaseCell.OwnerType.PLAYER
 		player_cell.stats.current_energy = 20
-		player_cell.assigned_perk = "shield"
+		player_cell.assigned_perk = "speed"
 
 	# 2. Спавним 3 AI-фракции с базой и стартовыми клетками
 	for i in range(1, 4):
