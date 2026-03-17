@@ -10,6 +10,7 @@
 [ext_resource type="Script" uid="uid://bqfqu5xcs4owa" path="res://scripts/core/AIFactionManager.gd" id="7_ai_mgr"]
 [ext_resource type="PackedScene" path="res://scenes/ui/dev_console.tscn" id="8_console"]
 [ext_resource type="Shader" uid="uid://dumm2ibcfyxao" path="res://scenes/environment/background.gdshader" id="9_bg_shader"]
+[ext_resource type="Script" path="res://scripts/core/PerkButtonManager.gd" id="10_pbm"]
 
 [sub_resource type="ShaderMaterial" id="ShaderMaterial_bg"]
 shader = ExtResource("9_bg_shader")
@@ -66,6 +67,9 @@ SPEED_COOLDOWN_MAX = 6.8
 SPEED_ENERGY_COST = 1.0
 SPEED_BOOST_DURATION = 7.0
 SPEED_BOOST_MULTIPLIER = 3.0
+
+[node name="PerkButtonManager" type="Node2D" parent="." unique_id=3001234567]
+script = ExtResource("10_pbm")
 
 [node name="Camera2D" type="Camera2D" parent="." unique_id=2066680617]
 script = ExtResource("4_cam")

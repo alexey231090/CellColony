@@ -88,10 +88,10 @@ void fragment() {
 		float edge = smoothstep(0.48 - line_thickness, 0.5, d);
 		
 		vec4 final_color = mix(vec4(0.0), shield_color, edge);
-		final_color += (shield_color * rim * 1.5);
-		final_color += (shield_color * 0.2 * (1.0 - rim)); // Внутренняя заливка
+		final_color += (shield_color * rim * 1.4); // Возвращаем яркий ободок
+		final_color += (shield_color * 0.05 * (1.0 - rim)); // Делаем внутреннюю часть почти прозрачной
 		
 		COLOR = final_color;
-		COLOR.a *= mask * clamp(0.4 + rim * 0.8, 0.0, 1.0) * intensity;
+		COLOR.a *= mask * clamp(0.1 + rim * 0.9, 0.0, 1.0) * intensity;
 	}
 }

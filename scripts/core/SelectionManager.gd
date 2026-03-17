@@ -191,45 +191,12 @@ func _unhandled_input(event: InputEvent) -> void:
 		
 		if event.button_index == MOUSE_BUTTON_LEFT:
 			if event.pressed:
-				# 1. ОБРАБОТКА ДАБЛ-КЛИКА
-				if event.double_click:
-					if _handle_double_click(world_pos):
-						get_viewport().set_input_as_handled()
-						drag_cell = null
-						return
-				
-				# 2. НАЧАЛО ПОТЕНЦИАЛЬНОГО ПЕРЕТАСКИВАНИЯ
-				var cell = _get_cell_at_pos(world_pos)
-				if cell and cell.owner_type == BaseCell.OwnerType.PLAYER and cell.assigned_perk != "":
-					if _is_perk_ready(cell.assigned_perk):
-						drag_cell = cell
-						is_dragging_perk = false
-				
-				# 3. ОБЫЧНОЕ ДЕЙСТВИЕ (Движение / Атака) на первый клик
+				# Обычное действие (Движение / Атака)
 				_handle_selection(world_pos)
-				
-			else:
-				# ОТПУСКАНИЕ КНОПКИ
-				if is_dragging_perk:
-					if try_activate_cell_perk(drag_cell, drag_target_pos):
-						get_viewport().set_input_as_handled()
-				
-				is_dragging_perk = false
-				drag_cell = null
 				
 		elif event.button_index == MOUSE_BUTTON_RIGHT and event.pressed:
 			_clear_active_perk()
-			is_dragging_perk = false
-			drag_cell = null
 
-	if event is InputEventMouseMotion and drag_cell:
-		var camera = get_viewport().get_camera_2d()
-		if not camera: return
-		var world_pos = camera.get_global_mouse_position()
-		
-		# Если нажата кнопка и мышка значительно сдвинулась от клетки
-		if drag_cell.global_position.distance_to(world_pos) > 20.0:
-			is_dragging_perk = true
 
 func _is_perk_ready(perk_name: String) -> bool:
 	match perk_name:
@@ -291,6 +258,7 @@ func try_activate_cell_perk(cell: BaseCell, custom_pos: Vector2 = Vector2.ZERO) 
 			# Раздаем щит соседним клеткам игрока от ЦЕНТРА ЭФФЕКТА
 			var player_cells = get_tree().get_nodes_in_group("player_cells")
 			for p_cell in player_cells:
+				if p_cell is BaseCell and p_cell.is_infected: continue
 				var dist = p_cell.global_position.distance_to(act_pos)
 				if dist <= SHIELD_SELECT_RADIUS + (p_cell.radius * p_cell.scale.x):
 					p_cell.reflect_chance = 0.5
@@ -448,7 +416,7 @@ func _handle_selection(pos: Vector2) -> void:
 			
 			
 			for cell in player_cells:
-				if cell is BaseCell:
+				if cell is BaseCell and not cell.is_infected:
 					var dist = cell.global_position.distance_to(pos)
 					# Учитываем и радиус захвата, и радиус самой клетки
 					if dist < SHIELD_SELECT_RADIUS + (cell.radius * cell.scale.x):

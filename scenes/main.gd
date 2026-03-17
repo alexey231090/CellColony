@@ -47,6 +47,13 @@ func _ready() -> void:
 		player_cell.owner_type = BaseCell.OwnerType.PLAYER
 		player_cell.stats.current_energy = 20
 		player_cell.assigned_perk = "speed"
+	
+	# Вторая стартовая клетка игрока — для перка Щит
+	var shield_cell = _spawn_cell(
+		player_base.pos + Vector2(160, 80),
+		BaseCell.OwnerType.PLAYER, 15.0
+	)
+	shield_cell.assigned_perk = "shield"
 
 	# 2. Спавним 3 AI-фракции с базой и стартовыми клетками
 	for i in range(1, 4):

@@ -264,8 +264,8 @@ func _evaluate_and_use_perks(_delta: float) -> void:
 	if _ai_shield_cd <= 0 and ai_perk_energy >= sm.SHIELD_ENERGY_COST:
 		var target_shieldee: BaseCell = null
 		for cell in my_cells:
-			# Если клетка под огнем и ранена
-			if cell.stats.current_energy < cell.stats.max_energy * 0.45 and (Time.get_ticks_msec() / 1000.0 - cell.last_damage_time) < 1.5:
+			# Если клетка под огнем и ранена (и не заражена)
+			if not cell.is_infected and cell.stats.current_energy < cell.stats.max_energy * 0.45 and (Time.get_ticks_msec() / 1000.0 - cell.last_damage_time) < 1.5:
 				if cell.reflect_chance < 0.1: # Еще нет щита
 					target_shieldee = cell
 					break
@@ -277,6 +277,7 @@ func _evaluate_and_use_perks(_delta: float) -> void:
 			# Применяем щит по области (чуть больше радиус для ИИ, чтобы это было заметно)
 			var a_radius = sm.SHIELD_SELECT_RADIUS * 1.5
 			for cell in my_cells:
+				if cell.is_infected: continue
 				if cell.global_position.distance_to(target_shieldee.global_position) <= a_radius + (cell.radius * cell.scale.x):
 					cell.reflect_chance = 0.5
 					cell.reflect_timer = 10.0

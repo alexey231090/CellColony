@@ -153,7 +153,7 @@ func _draw() -> void:
 	
 	# Плавное потемнение при заражении
 	if _visual_infection_factor > 0.01:
-		var dark_color = Color(0.1, 0.05, 0.15)
+		var dark_color = display_color.darkened(0.7)
 		display_color = display_color.lerp(dark_color, _visual_infection_factor)
 	
 	# Цвет обводки меняется если активен щит или скорострельность или спринт
@@ -219,6 +219,33 @@ func _draw() -> void:
 	# Оптимизация: один цвет вместо PackedColorArray
 	draw_colored_polygon(points, fill_color)
 	
+	# Отрисовка вен (вирус)
+	if _visual_infection_factor > 0.01:
+		var vein_color = display_color.darkened(0.9) # Почти черные, с легким оттенком фракции
+		vein_color.a = _visual_infection_factor * 0.8
+		var seed_val = int(global_position.x * 13.0 + global_position.y * 37.0) 
+		if last_outbreak_id != -1: seed_val += last_outbreak_id * 1024
+		
+		# Детерменированный RNG для стабильного рисунка вен
+		var v_rng = RandomNumberGenerator.new()
+		v_rng.seed = seed_val
+		
+		for v in range(4): # 4 ломаные вены от края к центру
+			var v_pts = PackedVector2Array()
+			# Точка на краю (случайный угол)
+			var start_ang = v_rng.randf_range(0.0, TAU)
+			var c_pos = Vector2(cos(start_ang), sin(start_ang)) * (current_radius * 0.9)
+			v_pts.append(c_pos)
+			
+			var segs = 4
+			for seg in range(segs):
+				# направляем к центру + небольшое шумовое искривление
+				var to_center = -c_pos.normalized().rotated(v_rng.randf_range(-0.6, 0.6))
+				c_pos += to_center * (current_radius * 0.8 / segs)
+				v_pts.append(c_pos)
+			
+			draw_polyline(v_pts, vein_color, 2.0 + v_rng.randf_range(0.0, 1.5), true)
+	
 	# 3. Основная обводка (мембрана)
 	var main_points = points.duplicate()
 	main_points.append(main_points[0]) # Замыкаем
@@ -257,67 +284,7 @@ func _draw() -> void:
 
 	# 6. Щит (Отражение) - визуализация интегрирована в блок 4
 
-	# 7. Визуализация назначенного перка (иконка "маячок" на клетке)
-	if assigned_perk != "" and owner_type == OwnerType.PLAYER:
-		var sm = get_tree().get_first_node_in_group("selection_manager")
-		if sm:
-			var cooldown_ratio = sm.get_perk_cooldown_ratio(assigned_perk)
-			var energy_cost = sm.get_perk_energy_cost(assigned_perk)
-			var has_energy = sm.perk_energy >= energy_cost
-			
-			var perk_pos = Vector2(0, -current_radius * 0.4) # Внутри клетки, чуть выше центра
-			var icon_radius = 12.0
-			
-			# Фон иконки (подложка)
-			draw_circle(perk_pos, icon_radius + 2.0, Color(0, 0, 0, 0.4))
-			
-			var perk_color = Color.WHITE
-			match assigned_perk:
-				"shield": perk_color = Color(0.2, 0.8, 1.0) # Голубой
-				"speed": perk_color = Color(0.0, 1.0, 0.5) 
-				"rapid_fire": perk_color = Color(1.0, 0.5, 0.0)
-				"virus": perk_color = Color(0.7, 0.0, 1.0)
-			
-			# Состояние доступности (яркость)
-			if cooldown_ratio > 0:
-				perk_color = Color(0.3, 0.3, 0.3) # Серый если КД
-			elif not has_energy:
-				perk_color.a = 0.3 # Полупрозрачный если нет энергии
-			
-			# Рисуем саму иконку
-			if assigned_perk == "shield":
-				var s_pts = PackedVector2Array([
-					perk_pos + Vector2(-8, -6),
-					perk_pos + Vector2(8, -6),
-					perk_pos + Vector2(8, 2),
-					perk_pos + Vector2(0, 8),
-					perk_pos + Vector2(-8, 2)
-				])
-				draw_colored_polygon(s_pts, perk_color)
-			elif assigned_perk == "speed":
-				# Молния (зигзаг)
-				var l_pts = PackedVector2Array([
-					perk_pos + Vector2(2, -8),
-					perk_pos + Vector2(-6, 0),
-					perk_pos + Vector2(0, 0),
-					perk_pos + Vector2(-2, 8),
-					perk_pos + Vector2(6, 0),
-					perk_pos + Vector2(0, 0)
-				])
-				draw_colored_polygon(l_pts, perk_color)
-			else:
-				draw_circle(perk_pos, 6.0, perk_color)
-			
-			# РАДИАЛЬНЫЙ ИНДИКАТОР КУЛДАУНА
-			if cooldown_ratio > 0:
-				var arc_points = 16
-				var start_angle = -PI/2
-				var end_angle = start_angle + (TAU * cooldown_ratio)
-				draw_arc(perk_pos, icon_radius + 1.0, start_angle, end_angle, arc_points, Color(0.8, 0.8, 0.8, 0.8), 2.5)
-			elif has_energy:
-				# Легкое сияние готовности
-				var pulse = (sin(time * 4.0) + 1.0) * 0.5
-				draw_arc(perk_pos, icon_radius + 1.0, 0, TAU, 24, perk_color.lightened(0.3), 1.0 + pulse)
+	# 7. Иконки перков теперь рисует PerkButtonManager (плавающие)
 
 func _get_cell_color() -> Color:
 	match owner_type:
@@ -425,6 +392,7 @@ func command_move(target_pos: Vector2) -> void:
 	if mover: mover.set_target(target_pos)
 
 func apply_speed_boost(duration: float, multiplier: float) -> void:
+	if is_infected: return
 	speed_boost_timer = duration
 	current_speed_multiplier = multiplier
 	queue_redraw()
@@ -441,6 +409,17 @@ func infect(duration: float = -1.0, outbreak_id: int = -1) -> void:
 		return
 		
 	is_infected = true
+	
+	# Сброс баффов при заражении
+	reflect_chance = 0.0
+	reflect_timer = 0.0
+	speed_boost_timer = 0.0
+	current_speed_multiplier = 1.0
+	rapid_fire_timer = 0.0
+	current_fire_rate_multiplier = 1.0
+	if shield_overlay and shield_overlay.visible:
+		shield_overlay.visible = false
+	
 	if outbreak_id != -1:
 		last_outbreak_id = outbreak_id
 	
