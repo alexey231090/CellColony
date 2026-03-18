@@ -436,18 +436,23 @@ func infect(duration: float = -1.0, outbreak_id: int = -1) -> void:
 
 func _spread_infection() -> void:
 	var sm = get_tree().get_first_node_in_group("selection_manager")
-	var range = 200.0
-	if sm: range = sm.VIRUS_SPREAD_RADIUS
+	var spread_range = 200.0
+	if sm: spread_range = sm.VIRUS_SPREAD_RADIUS
 	
 	var all_cells = get_tree().get_nodes_in_group("cells")
 	for cell in all_cells:
 		if cell != self and cell is BaseCell and cell.owner_type == owner_type:
 			if not cell.is_infected and cell.last_outbreak_id != last_outbreak_id:
-				if global_position.distance_to(cell.global_position) <= range:
+				if global_position.distance_to(cell.global_position) <= spread_range:
 					cell.infect(-1.0, last_outbreak_id) # Передаем ID текущей волны
 
 func _update_shield_overlay() -> void:
 	if not shield_overlay: return
+	
+	if is_infected:
+		shield_overlay.visible = false
+		return
+		
 	if not shield_overlay.visible: shield_overlay.visible = true
 	
 	# Подгоняем размер под текущий радиус клетки

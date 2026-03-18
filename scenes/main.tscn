@@ -6,7 +6,6 @@
 [ext_resource type="Script" uid="uid://cf35f2y81m0gb" path="res://scripts/core/CameraFollow.gd" id="4_cam"]
 [ext_resource type="Script" uid="uid://wtdsrlqfg7i5" path="res://scripts/core/fps_counter.gd" id="5_fps"]
 [ext_resource type="Script" uid="uid://bd7rrvofrrdam" path="res://scripts/resources/CellStats.gd" id="6_85g3d"]
-[ext_resource type="PackedScene" path="res://scenes/ui/perks_ui.tscn" id="6_perks"]
 [ext_resource type="Script" uid="uid://bqfqu5xcs4owa" path="res://scripts/core/AIFactionManager.gd" id="7_ai_mgr"]
 [ext_resource type="PackedScene" path="res://scenes/ui/dev_console.tscn" id="8_console"]
 [ext_resource type="Shader" uid="uid://dumm2ibcfyxao" path="res://scenes/environment/background.gdshader" id="9_bg_shader"]
@@ -84,9 +83,6 @@ layer = 100
 
 [node name="FPSCounter" type="Label" parent="HUDLayer" unique_id=1106520099]
 script = ExtResource("5_fps")
-
-[node name="PerksUI" parent="HUDLayer" unique_id=848343520 instance=ExtResource("6_perks")]
-layout_mode = 3
 
 [node name="DevConsole" parent="HUDLayer" unique_id=1070921993 instance=ExtResource("8_console")]
 layout_mode = 3

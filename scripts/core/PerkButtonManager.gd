@@ -5,19 +5,21 @@ class_name PerkButtonManager
 ## и жесткими коллизиями. Стратегия: Минимум статического UI.
 
 # --- Константы Дизайна ---
-const ICON_SCREEN_RADIUS: float = 24.0    # Увеличил размер (был 16)
-const COLLISION_RADIUS: float = 40.0      # Увеличил дистанцию (был 20)
-const SEEK_INTERVAL: float = 0.05         # Чаще проверяем кандидатов
-const STABILITY_TIME: float = 0.5         # Время "удержания" перед сменой хозяина
+const ICON_SCREEN_RADIUS: float = 24.0
+const COLLISION_RADIUS: float = 56.0      # Для 4-х кнопок
+const SEEK_INTERVAL: float = 0.05
+const STABILITY_TIME: float = 0.5
 const DRAG_THRESHOLD: float = 25.0
+const HYSTERESIS_RATIO: float = 1.5
+const DEAD_ZONE_DISTANCE: float = 80.0
 
 # --- Физика (Liquid Motion) ---
-const SPRING_STIFFNESS: float = 120.0     # Снизил (был 240) - более мягкое движение
-const SPRING_DAMPING: float = 18.0        # Высокое сопротивление (плавность)
-const CENTER_LERP_SPEED: float = 4.0      # Медленное сглаживание центра
-const DRIFT_SPEED: float = 0.6
-const DRIFT_STRENGTH: float = 10.0
-const REPULSION_FORCE: float = 2500.0     # Усилил расталкивание для больших кнопок
+const SPRING_STIFFNESS: float = 120.0
+const SPRING_DAMPING: float = 18.0
+const CENTER_LERP_SPEED: float = 4.0
+const DRIFT_SPEED: float = 1.0
+const DRIFT_STRENGTH: float = 8.0
+const REPULSION_FORCE: float = 3500.0     # Усилили для 3-х кнопок
 
 # --- Класс Иконки ---
 class FloatingIcon:
@@ -48,16 +50,14 @@ func _ready() -> void:
 	add_to_group("perk_button_manager")
 	z_index = 105 # Поверх щитов (100)
 	
-	_aim_line = Line2D.new()
-	_aim_line.width = 5.0
-	_aim_line.default_color = Color(0.2, 0.9, 1.0, 0.4)
-	_aim_line.hide()
-	add_child(_aim_line)
-	
-	for id in ["shield", "speed"]:
+	var ids = ["shield", "speed", "rapid_fire", "virus"]
+	for i in range(ids.size()):
+		var id = ids[i]
 		var icon = FloatingIcon.new()
 		icon.perk_name = id
-		icon.noise_offset = randf() * 100.0
+		# Квадратное/Крестовое распределение
+		var angle = (TAU / ids.size()) * i - PI/2.0
+		icon.pos = get_viewport().get_visible_rect().size / 2.0 + Vector2.RIGHT.rotated(angle) * 120.0
 		icons.append(icon)
 
 func _process(delta: float) -> void:
@@ -70,7 +70,6 @@ func _process(delta: float) -> void:
 		_update_targets_logic(delta)
 
 	_update_physics(delta)
-	_update_aim_line()
 	queue_redraw()
 
 func _update_colony_center(delta: float) -> void:
@@ -107,8 +106,48 @@ func _update_targets_logic(delta: float) -> void:
 		var ideal_candidate: BaseCell = valid_cells[0]
 		if i == 1 and valid_cells.size() > 1:
 			ideal_candidate = valid_cells[1]
-			
-		_process_stable_assignment(icon, ideal_candidate, SEEK_INTERVAL)
+		
+		# Проверяем, занята ли идеальная клетка другой кнопкой
+		var best_candidate = _find_best_available_cell(ideal_candidate, valid_cells, icon)
+		_process_stable_assignment(icon, best_candidate, SEEK_INTERVAL)
+
+func _find_best_available_cell(ideal: BaseCell, valid_cells: Array[BaseCell], current_icon: FloatingIcon) -> BaseCell:
+	## Находит лучшую доступную клетку для иконки.
+	## Если идеальная клетка занята другой кнопкой, выбирает следующую ближайшую.
+	## Использует гистерезис: не переходит на новую клетку, если текущая близко.
+	
+	# Если идеальная клетка свободна - используем её
+	var ideal_occupied = false
+	for other_icon in icons:
+		if other_icon != current_icon and other_icon.host_cell == ideal:
+			ideal_occupied = true
+			break
+	
+	if not ideal_occupied:
+		return ideal
+	
+	# Если текущая клетка существует и близко к идеальной - остаемся на ней (гистерезис)
+	if is_instance_valid(current_icon.host_cell):
+		var dist_to_ideal = current_icon.host_cell.global_position.distance_squared_to(ideal.global_position)
+		var dist_to_current = 0.0  # Расстояние от текущей к себе = 0
+		var threshold = (COLLISION_RADIUS * HYSTERESIS_RATIO) * (COLLISION_RADIUS * HYSTERESIS_RATIO)
+		
+		if dist_to_ideal < threshold:
+			return current_icon.host_cell
+	
+	# Ищем первую свободную клетку из отсортированного списка
+	for cell in valid_cells:
+		var is_occupied = false
+		for other_icon in icons:
+			if other_icon != current_icon and other_icon.host_cell == cell:
+				is_occupied = true
+				break
+		
+		if not is_occupied:
+			return cell
+	
+	# Fallback: вернуть идеальную (на случай, если все клетки заняты)
+	return ideal
 
 func _process_stable_assignment(icon: FloatingIcon, ideal: BaseCell, dt: float) -> void:
 	# 1. Если текущий хозяин битый или умер - меняем мгновенно
@@ -174,8 +213,14 @@ func _update_physics(delta: float) -> void:
 			
 			var push_vec = icon.pos - other.pos
 			var dist = push_vec.length()
-			if dist < min_dist and dist > 0.1:
-				# Экспоненциальное отталкивание
+			
+			# Мертвая зона: если слишком близко, увеличиваем отталкивание
+			if dist < DEAD_ZONE_DISTANCE and dist > 0.1:
+				# Усиленное отталкивание в мертвой зоне
+				var dead_zone_force = REPULSION_FORCE * 3.0
+				acc += push_vec.normalized() * dead_zone_force
+			elif dist < min_dist and dist > 0.1:
+				# Обычное отталкивание
 				var ratio = 1.0 - (dist / min_dist)
 				var force = ratio * ratio * REPULSION_FORCE * 2.0
 				acc += push_vec.normalized() * force
@@ -191,31 +236,47 @@ func _update_physics(delta: float) -> void:
 		icon.velocity += acc * delta
 		icon.pos += icon.velocity * delta
 
-func _update_aim_line() -> void:
-	if _is_dragging and _drag_icon:
-		_aim_line.clear_points()
-		_aim_line.add_point(_drag_icon.pos)
-		_aim_line.add_point(get_global_mouse_position())
-		_aim_line.show()
-	else:
-		_aim_line.hide()
-
 func _draw() -> void:
 	var camera = get_viewport().get_camera_2d()
 	var zoom = camera.zoom.x if camera else 1.0
 	var r = ICON_SCREEN_RADIUS / zoom
+
+	var sm = get_tree().get_first_node_in_group("selection_manager")
+	
+	# 1. При перетаскивании - рисуем линию прицеливания и РАДИУС
+	if _is_dragging and _drag_icon and sm:
+		var target_pos = get_global_mouse_position()
+		var d_pos = to_local(_drag_icon.pos)
+		var t_pos_loc = to_local(target_pos)
+		
+		# Линия прицеливания (Линия от иконки до мыши)
+		draw_line(d_pos, t_pos_loc, Color(0.2, 0.9, 1.0, 0.3), 4.0/zoom)
+		
+		# Зона воздействия (Круг радиуса)
+		var aoe_radius = 0.0
+		var aoe_col = Color(1, 1, 1, 0.15)
+		
+		if _drag_icon.perk_name == "shield":
+			aoe_radius = sm.SHIELD_SELECT_RADIUS
+			aoe_col = Color(0.2, 0.8, 1.0, 0.15)
+		elif _drag_icon.perk_name == "virus":
+			aoe_radius = sm.VIRUS_SPREAD_RADIUS
+			aoe_col = Color(0.8, 0.1, 0.1, 0.15)
+			
+		if aoe_radius > 0:
+			draw_circle(t_pos_loc, aoe_radius, aoe_col)
+			draw_arc(t_pos_loc, aoe_radius, 0, TAU, 64, Color(aoe_col.r, aoe_col.g, aoe_col.b, 0.4), 2.0/zoom)
 
 	for icon in icons:
 		if not is_instance_valid(icon.host_cell) or icon.pos == Vector2.ZERO: continue
 		
 		var d_pos = to_local(icon.pos)
 		
-		# Трос (сделал чуть заметнее)
+		# Трос (связь с клеткой)
 		var host_local = to_local(icon.host_cell.global_position)
 		draw_line(d_pos, host_local, Color(1, 1, 1, 0.1), 1.5/zoom)
 		draw_circle(host_local, 4.0/zoom, Color(1, 1, 1, 0.3))
 
-		var sm = get_tree().get_first_node_in_group("selection_manager")
 		if not sm: continue
 		
 		var cd = sm.get_perk_cooldown_ratio(icon.perk_name) as float
@@ -225,7 +286,15 @@ func _draw() -> void:
 		_draw_button(d_pos, r, icon.perk_name, is_ready, cd, zoom)
 
 func _draw_button(pos: Vector2, r: float, perk: String, is_ready: bool, cd: float, zoom: float) -> void:
-	var col = Color(0.2, 0.8, 1.0) if perk == "shield" else Color(0.0, 1.0, 0.5)
+	var col = Color(0.2, 0.8, 1.0) # Синий для щита
+	if perk == "virus":
+		col = Color(0.9, 0.1, 0.1) # Красный для вируса
+	elif perk == "rapid_fire":
+		col = Color(1.0, 0.5, 0.1) # Оранжевый для скорострельности
+	elif perk == "speed":
+		col = Color(1.0, 0.9, 0.1) # Желтоватый для спринта
+	else:
+		col = Color(0.0, 1.0, 0.5) # Зеленый (дефолт)
 	
 	# Тень/Обводка
 	draw_circle(pos, r * 1.25, Color(0, 0, 0, 0.7))
@@ -239,19 +308,51 @@ func _draw_button(pos: Vector2, r: float, perk: String, is_ready: bool, cd: floa
 		draw_arc(pos, r + 3.0/zoom, -PI/2, -PI/2 + TAU * cd, 32, Color(1, 1, 1, 0.5), 5.0/zoom, true)
 
 	var icon_col = col if cd <= 0.0 else Color(0.5, 0.5, 0.5)
-	_draw_symbol(pos, r * 0.6, perk, icon_col)
+	_draw_symbol(pos, r * 0.6, perk, icon_col, zoom)
 
-func _draw_symbol(pos: Vector2, s: float, type: String, col: Color) -> void:
+func _draw_symbol(pos: Vector2, s: float, type: String, col: Color, zoom: float) -> void:
 	if type == "shield":
 		var pts = PackedVector2Array([
 			pos + Vector2(-s, -s*0.85), pos + Vector2(s, -s*0.85),
 			pos + Vector2(s, s*0.25), pos + Vector2(0, s), pos + Vector2(-s, s*0.25)
 		])
 		draw_colored_polygon(pts, col)
+	elif type == "virus":
+		# Символ вируса: Череп (упрощенный)
+		# 1. Основной круг головы
+		draw_circle(pos + Vector2(0, -s*0.2), s*0.7, col)
+		# 2. Челюсть
+		var jaw = PackedVector2Array([
+			pos + Vector2(-s*0.4, s*0.2), pos + Vector2(s*0.4, s*0.2),
+			pos + Vector2(s*0.3, s*0.8), pos + Vector2(-s*0.3, s*0.8)
+		])
+		draw_colored_polygon(jaw, col)
+		# 3. Глазницы (фоновый цвет или прозрачный)
+		var bg = Color(0, 0, 0, 0.4)
+		draw_circle(pos + Vector2(-s*0.3, -s*0.2), s*0.15, bg)
+		draw_circle(pos + Vector2(s*0.3, -s*0.2), s*0.15, bg)
+		# 4. Зубы (линии)
+		draw_line(pos + Vector2(-s*0.1, s*0.4), pos + Vector2(-s*0.1, s*0.7), bg, 1.5/zoom)
+		draw_line(pos + Vector2(s*0.1, s*0.4), pos + Vector2(s*0.1, s*0.7), bg, 1.5/zoom)
+	elif type == "rapid_fire":
+		# Символ скорострельности: три стрелки/пули вверх
+		for offset in [-s*0.6, 0, s*0.6]:
+			var pts = PackedVector2Array([
+				pos + Vector2(offset, -s*0.8), 
+				pos + Vector2(offset + s*0.3, s*0.2), 
+				pos + Vector2(offset - s*0.3, s*0.2)
+			])
+			draw_colored_polygon(pts, col)
+		draw_rect(Rect2(pos.x - s*0.8, pos.y + s*0.3, s*1.6, s*0.2), col)
 	else:
+		# Молния
 		var pts = PackedVector2Array([
-			pos + Vector2(s*0.45, -s), pos + Vector2(-s*0.7, 0), pos + Vector2(0, 0),
-			pos + Vector2(-s*0.45, s), pos + Vector2(s*0.7, 0), pos + Vector2(0, 0)
+			pos + Vector2(s*0.3, -s),      # Верхний правый угол
+			pos + Vector2(-s*0.5, s*0.2), # Сгиб слева сверху
+			pos + Vector2(s*0.1, s*0.2),  # Вход в центр справа
+			pos + Vector2(-s*0.3, s),     # Нижний левый угол
+			pos + Vector2(s*0.5, -s*0.2), # Сгиб справа снизу
+			pos + Vector2(-s*0.1, -s*0.2) # Вход в центр слева
 		])
 		draw_colored_polygon(pts, col)
 

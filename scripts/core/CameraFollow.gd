@@ -135,9 +135,9 @@ func _unhandled_input(event: InputEvent) -> void:
 		elif event.button_index == MOUSE_BUTTON_WHEEL_DOWN:
 			zoom = (zoom * 0.89).clamp(Vector2(min_zoom, min_zoom), Vector2(max_zoom, max_zoom))
 
-func set_forced_spectator(enabled: bool) -> void:
-	_forced_spectator = enabled
-	if enabled:
+func set_forced_spectator(p_enabled: bool) -> void:
+	_forced_spectator = p_enabled
+	if p_enabled:
 		_spectator_mode = true
 		_is_first_frame = false
 		if _spectator_label:

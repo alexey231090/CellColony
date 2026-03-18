@@ -55,6 +55,20 @@ func _ready() -> void:
 	)
 	shield_cell.assigned_perk = "shield"
 
+	# Третья стартовая клетка игрока — для перка Скорострельность
+	var rapid_cell = _spawn_cell(
+		player_base.pos + Vector2(-160, 80),
+		BaseCell.OwnerType.PLAYER, 12.0
+	)
+	rapid_cell.assigned_perk = "rapid_fire"
+
+	# Четвертая стартовая клетка игрока — для перка Вирус
+	var virus_cell = _spawn_cell(
+		player_base.pos + Vector2(0, 160),
+		BaseCell.OwnerType.PLAYER, 10.0
+	)
+	virus_cell.assigned_perk = "virus"
+
 	# 2. Спавним 3 AI-фракции с базой и стартовыми клетками
 	for i in range(1, 4):
 		var faction_data = FACTION_BASES[i]

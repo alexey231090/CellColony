@@ -59,7 +59,6 @@ func _init_aim_line() -> void:
 
 func add_perk_energy(amount: float) -> void:
 	perk_energy += amount
-	_refresh_pui()
 
 func _process(delta: float) -> void:
 	if shield_cooldown > 0:
@@ -74,7 +73,6 @@ func _process(delta: float) -> void:
 	if virus_cooldown > 0:
 		virus_cooldown = max(0.0, virus_cooldown - delta)
 		
-	_refresh_pui()
 	_update_cursor_visual()
 	_update_drag_preview()
 
@@ -134,27 +132,6 @@ func _update_cursor_visual() -> void:
 	else:
 		if cursor_visual:
 			cursor_visual.hide()
-
-func _refresh_pui() -> void:
-	var pui = get_tree().get_first_node_in_group("perks_ui")
-	if pui and pui.has_method("update_perk_status"):
-		var speed_ratio = 0.0
-		if SPEED_COOLDOWN_MAX > 0:
-			speed_ratio = speed_cooldown / SPEED_COOLDOWN_MAX
-			
-		var shield_ratio = 0.0
-		if SHIELD_COOLDOWN_MAX > 0:
-			shield_ratio = shield_cooldown / SHIELD_COOLDOWN_MAX
-
-		var rapid_ratio = 0.0
-		if RAPID_FIRE_COOLDOWN_MAX > 0:
-			rapid_ratio = rapid_fire_cooldown / RAPID_FIRE_COOLDOWN_MAX
-			
-		var virus_ratio = 0.0
-		if VIRUS_COOLDOWN_MAX > 0:
-			virus_ratio = virus_cooldown / VIRUS_COOLDOWN_MAX
-			
-		pui.update_perk_status(perk_energy, shield_ratio, speed_ratio, rapid_ratio, virus_ratio)
 
 func _unhandled_input(event: InputEvent) -> void:
 	# В режиме наблюдателя нет смысла в командах
@@ -239,6 +216,9 @@ func _get_cell_at_pos(pos: Vector2) -> BaseCell:
 	return null
 
 func try_activate_cell_perk(cell: BaseCell, custom_pos: Vector2 = Vector2.ZERO) -> bool:
+	if not is_instance_valid(cell) or cell.is_infected:
+		return false
+		
 	var perk_name = cell.assigned_perk
 	var act_pos = cell.global_position
 	if custom_pos != Vector2.ZERO:
@@ -267,7 +247,6 @@ func try_activate_cell_perk(cell: BaseCell, custom_pos: Vector2 = Vector2.ZERO) 
 			
 			perk_energy -= SHIELD_ENERGY_COST
 			shield_cooldown = SHIELD_COOLDOWN_MAX
-			_refresh_pui()
 			
 			if active_perk == "shield":
 				_clear_active_perk()
@@ -288,7 +267,7 @@ func try_activate_cell_perk(cell: BaseCell, custom_pos: Vector2 = Vector2.ZERO) 
 			
 			# Применяем очень быстрый, но короткий буст
 			for p_cell in player_cells:
-				if p_cell is BaseCell:
+				if p_cell is BaseCell and not p_cell.is_infected:
 					p_cell.apply_speed_boost(1.0, 6.0) # 1.0 сек, скорость х6
 					# Форсируем движение в сторону рывка (задаем цель далеко впереди)
 					p_cell.command_move(p_cell.global_position + dash_dir * 2000.0)
@@ -305,8 +284,59 @@ func try_activate_cell_perk(cell: BaseCell, custom_pos: Vector2 = Vector2.ZERO) 
 			
 		perk_energy -= SPEED_ENERGY_COST
 		speed_cooldown = SPEED_COOLDOWN_MAX
-		_refresh_pui()
 		return true
+			
+	elif perk_name == "rapid_fire":
+		if perk_energy < RAPID_FIRE_ENERGY_COST or rapid_fire_cooldown > 0:
+			print("Нет энергии или КД для скорострельности на клетке")
+			return false
+			
+		var player_cells = get_tree().get_nodes_in_group("player_cells")
+		for p_cell in player_cells:
+			if p_cell is BaseCell and not p_cell.is_infected:
+				p_cell.apply_rapid_fire(RAPID_FIRE_DURATION, RAPID_FIRE_MULTIPLIER)
+		
+		perk_energy -= RAPID_FIRE_ENERGY_COST
+		rapid_fire_cooldown = RAPID_FIRE_COOLDOWN_MAX
+		return true
+
+	elif perk_name == "virus":
+		if perk_energy < VIRUS_ENERGY_COST or virus_cooldown > 0:
+			print("Нет энергии или КД для вируса на клетке")
+			return false
+			
+		var target_cell: BaseCell = null
+		
+		# ПРИЦЕЛЬНЫЙ ОГОНЬ (Drag)
+		if custom_pos != Vector2.ZERO:
+			target_cell = _get_cell_at_pos(custom_pos)
+			# Проверка: цель должна быть ВРАГОМ (не игрок, не нейтрал)
+			if target_cell and (target_cell.owner_type == BaseCell.OwnerType.PLAYER or target_cell.owner_type == BaseCell.OwnerType.NEUTRAL):
+				target_cell = null
+				
+		# АВТО-АТАКА (Click / если мимо цели при Drag)
+		if not target_cell:
+			var enemies = get_tree().get_nodes_in_group("cells")
+			var min_dist = SHIELD_SELECT_RADIUS * 1.5 # Радиус поиска для авто-атаки
+			for c in enemies:
+				if c is BaseCell and c.owner_type != BaseCell.OwnerType.PLAYER and c.owner_type != BaseCell.OwnerType.NEUTRAL:
+					var dist = cell.global_position.distance_to(c.global_position)
+					if dist < min_dist:
+						min_dist = dist
+						target_cell = c
+		
+		if target_cell:
+			var shooter = cell.get_node_or_null("ShooterModule")
+			if shooter:
+				virus_outbreak_counter += 1
+				shooter.shoot_virus(target_cell, VIRUS_DURATION, virus_outbreak_counter)
+				perk_energy -= VIRUS_ENERGY_COST
+				virus_cooldown = VIRUS_COOLDOWN_MAX
+				print("ВИРУС запущен из ", cell.name, " в ", target_cell.name)
+				return true
+		else:
+			print("Вирус: Нет вражеской цели в радиусе!")
+			return false
 			
 	return false
 
@@ -323,9 +353,6 @@ func activate_perk(perk_name: String) -> void:
 			return
 		# Щит требует выбора цели, поэтому ставим active_perk
 		active_perk = perk_name
-		var pui = get_tree().get_first_node_in_group("perks_ui")
-		if pui and pui.has_method("set_button_highlight"):
-			pui.set_button_highlight(perk_name, true)
 		print("Активирован перк: ", perk_name)
 		
 	elif perk_name == "virus":
@@ -334,9 +361,6 @@ func activate_perk(perk_name: String) -> void:
 			return
 		# Вирус требует выбора цели (врага)
 		active_perk = perk_name
-		var pui = get_tree().get_first_node_in_group("perks_ui")
-		if pui and pui.has_method("set_button_highlight"):
-			pui.set_button_highlight(perk_name, true)
 		print("Активирован перк: ", perk_name)
 		
 	elif perk_name == "speed":
@@ -350,7 +374,7 @@ func activate_perk(perk_name: String) -> void:
 		
 		var player_cells = get_tree().get_nodes_in_group("player_cells")
 		for cell in player_cells:
-			if cell is BaseCell:
+			if cell is BaseCell and not cell.is_infected:
 				cell.apply_speed_boost(SPEED_BOOST_DURATION, SPEED_BOOST_MULTIPLIER)
 		
 		print("Спринт! Длительность: %.1f, Множитель: %.1f, Стоимость: %d, КД: %.1f" % [
@@ -359,8 +383,6 @@ func activate_perk(perk_name: String) -> void:
 			SPEED_ENERGY_COST,
 			SPEED_COOLDOWN_MAX
 		])
-		_refresh_pui()
-		
 	elif perk_name == "rapid_fire":
 		if perk_energy < RAPID_FIRE_ENERGY_COST or rapid_fire_cooldown > 0:
 			print("Нет энергии или КД для скорострельности")
@@ -372,7 +394,7 @@ func activate_perk(perk_name: String) -> void:
 		
 		var player_cells = get_tree().get_nodes_in_group("player_cells")
 		for cell in player_cells:
-			if cell is BaseCell:
+			if cell is BaseCell and not cell.is_infected:
 				cell.apply_rapid_fire(RAPID_FIRE_DURATION, RAPID_FIRE_MULTIPLIER)
 		
 		print("Яростный огонь! Длительность: %.1f, Множитель: %.1f, Стоимость: %d, КД: %.1f" % [
@@ -381,15 +403,9 @@ func activate_perk(perk_name: String) -> void:
 			RAPID_FIRE_ENERGY_COST,
 			RAPID_FIRE_COOLDOWN_MAX
 		])
-		_refresh_pui()
 
 func _clear_active_perk() -> void:
 	if active_perk != "":
-		# Убираем подсветку в UI
-		var pui = get_tree().get_first_node_in_group("perks_ui")
-		if pui and pui.has_method("set_button_highlight"):
-			pui.set_button_highlight(active_perk, false)
-			
 		active_perk = ""
 		Input.set_custom_mouse_cursor(null)
 
@@ -434,7 +450,6 @@ func _handle_selection(pos: Vector2) -> void:
 					# Снимаем ресурсы и ставим КД
 					perk_energy -= SHIELD_ENERGY_COST
 					shield_cooldown = SHIELD_COOLDOWN_MAX
-					_refresh_pui()
 
 				_clear_active_perk()
 			else:
@@ -474,7 +489,6 @@ func _handle_selection(pos: Vector2) -> void:
 						shooter.shoot_virus(target_cell, VIRUS_DURATION, virus_outbreak_counter)
 						perk_energy -= VIRUS_ENERGY_COST
 						virus_cooldown = VIRUS_COOLDOWN_MAX
-						_refresh_pui()
 				_clear_active_perk()
 			else:
 				_clear_active_perk()

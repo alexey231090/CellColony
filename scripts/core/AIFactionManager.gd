@@ -28,7 +28,6 @@ var _ai_shield_cd: float = 0.0
 var _ai_speed_cd: float = 0.0
 var _ai_rapid_fire_cd: float = 0.0
 var _ai_virus_cd: float = 0.0
-var virus_outbreak_counter: int = 0
 
 func _ready() -> void:
 	add_to_group("ai_faction_managers")
@@ -296,8 +295,8 @@ func _evaluate_and_use_perks(_delta: float) -> void:
 				if nearest:
 					var shooter = nearest.get_node_or_null("ShooterModule")
 					if shooter:
-						virus_outbreak_counter += 1
-						shooter.shoot_virus(current_target_node, sm.VIRUS_DURATION, virus_outbreak_counter)
+						sm.virus_outbreak_counter += 1
+						shooter.shoot_virus(current_target_node, sm.VIRUS_DURATION, sm.virus_outbreak_counter)
 						ai_perk_energy -= sm.VIRUS_ENERGY_COST
 						_ai_virus_cd = max(5.0, sm.VIRUS_COOLDOWN_MAX)
 
@@ -316,7 +315,8 @@ func _evaluate_and_use_perks(_delta: float) -> void:
 					ai_perk_energy -= sm.RAPID_FIRE_ENERGY_COST
 					_ai_rapid_fire_cd = max(5.0, sm.RAPID_FIRE_COOLDOWN_MAX)
 					for c in my_cells:
-						c.apply_rapid_fire(sm.RAPID_FIRE_DURATION, sm.RAPID_FIRE_MULTIPLIER)
+						if c is BaseCell and not c.is_infected:
+							c.apply_rapid_fire(sm.RAPID_FIRE_DURATION, sm.RAPID_FIRE_MULTIPLIER)
 
 	# 4. УСКОРЕНИЕ (Приоритет: догнать цель)
 	if _ai_speed_cd <= 0 and ai_perk_energy >= sm.SPEED_ENERGY_COST:
@@ -333,4 +333,5 @@ func _evaluate_and_use_perks(_delta: float) -> void:
 				ai_perk_energy -= sm.SPEED_ENERGY_COST
 				_ai_speed_cd = max(5.0, sm.SPEED_COOLDOWN_MAX)
 				for c in my_cells:
-					c.apply_speed_boost(sm.SPEED_BOOST_DURATION, sm.SPEED_BOOST_MULTIPLIER)
+					if c is BaseCell and not c.is_infected:
+						c.apply_speed_boost(sm.SPEED_BOOST_DURATION, sm.SPEED_BOOST_MULTIPLIER)
