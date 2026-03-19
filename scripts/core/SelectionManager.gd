@@ -317,7 +317,7 @@ func try_activate_cell_perk(cell: BaseCell, custom_pos: Vector2 = Vector2.ZERO) 
 		# АВТО-АТАКА (Click / если мимо цели при Drag)
 		if not target_cell:
 			var enemies = get_tree().get_nodes_in_group("cells")
-			var min_dist = SHIELD_SELECT_RADIUS * 1.5 # Радиус поиска для авто-атаки
+			var min_dist = 1200.0 # Увеличен радиус поиска для авто-атаки вируса
 			for c in enemies:
 				if c is BaseCell and c.owner_type != BaseCell.OwnerType.PLAYER and c.owner_type != BaseCell.OwnerType.NEUTRAL:
 					var dist = cell.global_position.distance_to(c.global_position)

@@ -11,6 +11,9 @@ var target_node: Node2D = null
 var is_virus: bool = false
 var virus_duration: float = 0.0
 var virus_outbreak_id: int = 0
+var trail_points: Array[Vector2] = []
+var trail_timer: float = 0.0
+const MAX_TRAIL_POINTS: int = 15
 
 # Жизненный цикл снаряда
 var max_lifetime: float = 5.0   # Максимальное время жизни в секундах
@@ -41,11 +44,43 @@ func _draw() -> void:
 		draw_circle(t_pos, current_radius * factor, t_col)
 	
 	# Голова кометы
-	draw_circle(Vector2.ZERO, current_radius, projectile_color)
+	var final_radius = current_radius
+	if is_virus:
+		final_radius *= 1.4 # Вирус крупнее
+		# Доп. свечение для вируса
+		var v_glow = projectile_color
+		v_glow.a = 0.4
+		draw_circle(Vector2.ZERO, final_radius * 1.5, v_glow)
+		
+	draw_circle(Vector2.ZERO, final_radius, projectile_color)
 	
 	var core_col = Color.WHITE
-	if is_virus: core_col = Color(0.3, 0.0, 0.5)
-	draw_circle(Vector2.ZERO, current_radius * 0.45, core_col)
+	if is_virus: core_col = Color(0.1, 0.0, 0.2)
+	draw_circle(Vector2.ZERO, final_radius * 0.4, core_col)
+	
+	# РИСУЕМ ШЛЕЙФ (если есть точки)
+	if not trail_points.is_empty():
+		# Шлейф рисуем вне трансформации вращения, 
+		# либо учитываем, что draw_circle(Vector2.ZERO) это центр.
+		# Чтобы шлейф не вращался вместе с головой при изменении направления, 
+		# лучше рисовать его в глобальных координатах через DrawPolyline, 
+		# предварительно переведя в локальные.
+		var local_points = PackedVector2Array()
+		for i in range(trail_points.size()):
+			# Перевод из глобальной позиции в локальную относительно снаряда
+			# Но т.к. мы внутри _draw и есть вращение, нужно отменить вращение или 
+			# рисовать без draw_set_transform.
+			# Проще всего: вычитать global_position и поворачивать на -rotation
+			var p = (trail_points[i] - global_position).rotated(-rotation)
+			local_points.append(p)
+		
+		# Рисуем шлейф как серию кругов или линию
+		for i in range(local_points.size()):
+			var p = local_points[i]
+			var life_factor = 1.0 - float(i) / MAX_TRAIL_POINTS
+			var t_col = projectile_color
+			t_col.a = life_factor * 0.5
+			draw_circle(p, final_radius * life_factor * 0.7, t_col)
 
 func _process(delta: float) -> void:
 	# Используем простую физику прямого полета
@@ -62,6 +97,16 @@ func _process(delta: float) -> void:
 	# Удаление если время вышло
 	if current_lifetime <= 0:
 		queue_free()
+	
+	# Обновление шлейфа
+	if is_virus:
+		trail_timer += delta
+		if trail_timer >= 0.016: # 60 раз в секунду
+			trail_timer = 0.0
+			trail_points.push_front(global_position)
+			if trail_points.size() > MAX_TRAIL_POINTS:
+				trail_points.pop_back()
+			queue_redraw()
 
 func _on_body_entered(body: Node2D) -> void:
 	# Теперь body — это сама клетка (CharacterBody2D)

@@ -128,10 +128,10 @@ func shoot_virus(current_target: Node2D, duration: float, outbreak_id: int) -> v
 	
 	proj.global_position = global_position + shoot_dir * spawn_dist
 	proj.direction = shoot_dir
-	proj.speed = parent_cell.stats.projectile_speed * 1.5 # Вирус летит быстрее
+	proj.speed = parent_cell.stats.projectile_speed * 2.0 # Вирус летит значительно быстрее
 	proj.is_virus = true
 	proj.virus_duration = duration
 	proj.virus_outbreak_id = outbreak_id
 	proj.owner_type = parent_cell.owner_type
 	proj.target_node = current_target
-	proj.projectile_color = Color(0.2, 0.0, 0.3) # Очень темный/фиолетовый снаряд
+	proj.projectile_color = Color(0.8, 0.1, 1.0) # Яркий неоновый/пурпурный (заметный!)

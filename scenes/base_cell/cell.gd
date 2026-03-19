@@ -350,7 +350,10 @@ func _process(delta: float) -> void:
 	if speed > 5.0:
 		visual_angle = lerp_angle(visual_angle, velocity.angle(), delta * 8.0)
 
-	if owner_type != OwnerType.NEUTRAL:
+	if is_infected:
+		# Истощение энергии при заражении
+		stats.current_energy = max(0.0, stats.current_energy - stats.energy_gain_rate * delta)
+	elif owner_type != OwnerType.NEUTRAL:
 		stats.current_energy = min(stats.max_energy, stats.current_energy + stats.energy_gain_rate * delta)
 	
 	_update_size()
