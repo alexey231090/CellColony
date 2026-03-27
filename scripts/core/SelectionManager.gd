@@ -8,12 +8,13 @@ var TARGET_HIGHLIGHT_SCENE = preload("res://scenes/ui/target_highlight.tscn")
 var SHIELD_PERK_EFFECT_SCENE = preload("res://scenes/ui/shield_perk_effect.tscn")
 
 @export var perk_energy: float = 0.0 # Пул энергии игрока для перков
+@export var MAX_PERK_ENERGY: float = 100.0 # Максимальная энергия
 var active_perk: String = ""
 
 # Кулдауны и стоимость Щита
 var shield_cooldown: float = 0.0
 @export var SHIELD_COOLDOWN_MAX: float = 12.0
-@export var SHIELD_ENERGY_COST: float = 20.0
+@export var SHIELD_ENERGY_COST: float = 25.0
 
 # Кулдауны и стоимость Ускорения
 var speed_cooldown: float = 0.0
@@ -23,7 +24,7 @@ var speed_cooldown: float = 0.0
 @export var SPEED_BOOST_MULTIPLIER: float = 2.0
 @export var SHIELD_SELECT_RADIUS: float = 350.0
 
-@export var RAPID_FIRE_ENERGY_COST: float = 25.0
+@export var RAPID_FIRE_ENERGY_COST: float = 20.0
 @export var RAPID_FIRE_COOLDOWN_MAX: float = 15.0
 @export var RAPID_FIRE_DURATION: float = 4.0
 @export var RAPID_FIRE_MULTIPLIER: float = 3.0
@@ -59,6 +60,8 @@ func _init_aim_line() -> void:
 
 func add_perk_energy(amount: float) -> void:
 	perk_energy += amount
+	# Ограничиваем максимумом
+	perk_energy = min(perk_energy, MAX_PERK_ENERGY)
 
 func _process(delta: float) -> void:
 	if shield_cooldown > 0:
@@ -172,7 +175,10 @@ func _unhandled_input(event: InputEvent) -> void:
 				_handle_selection(world_pos)
 				
 		elif event.button_index == MOUSE_BUTTON_RIGHT and event.pressed:
-			_clear_active_perk()
+			# ПКМ теперь обрабатывается RadialPerkMenu
+			# Отменяем активный перк только если меню не открыто
+			if active_perk != "":
+				_clear_active_perk()
 
 
 func _is_perk_ready(perk_name: String) -> bool:
@@ -341,27 +347,22 @@ func try_activate_cell_perk(cell: BaseCell, custom_pos: Vector2 = Vector2.ZERO) 
 	return false
 
 func activate_perk(perk_name: String) -> void:
-	# Если мы уже выбрали этот же перк - отменяем (тоггл)
-	if active_perk == perk_name:
-		_clear_active_perk()
-		return
-
 	# Проверка на наличие ресурсов и КД
 	if perk_name == "shield":
 		if perk_energy < SHIELD_ENERGY_COST or shield_cooldown > 0:
 			print("Нет энергии или КД")
 			return
-		# Щит требует выбора цели, поэтому ставим active_perk
-		active_perk = perk_name
-		print("Активирован перк: ", perk_name)
+		
+		# Щит активируется на центральной клетке и передаётся соседям
+		_activate_shield_chain()
 		
 	elif perk_name == "virus":
 		if perk_energy < VIRUS_ENERGY_COST or virus_cooldown > 0:
 			print("Нет энергии или КД для вируса")
 			return
-		# Вирус требует выбора цели (врага)
-		active_perk = perk_name
-		print("Активирован перк: ", perk_name)
+		
+		# Автоприцеливание на ближайшего врага
+		_activate_virus_auto()
 		
 	elif perk_name == "speed":
 		if perk_energy < SPEED_ENERGY_COST or speed_cooldown > 0:
@@ -404,10 +405,244 @@ func activate_perk(perk_name: String) -> void:
 			RAPID_FIRE_COOLDOWN_MAX
 		])
 
+func _activate_shield_chain() -> void:
+	## Активирует щит на центральной клетке и передаёт соседям
+	var player_cells = get_tree().get_nodes_in_group("player_cells")
+	if player_cells.is_empty():
+		return
+	
+	# Находим центральную клетку (ближайшую к центру колонии)
+	var colony_center = Vector2.ZERO
+	var count = 0
+	for cell in player_cells:
+		if cell is BaseCell:
+			colony_center += cell.global_position
+			count += 1
+	
+	if count > 0:
+		colony_center /= float(count)
+	
+	var center_cell: BaseCell = null
+	var min_dist = INF
+	for cell in player_cells:
+		if cell is BaseCell and not cell.is_infected:
+			var dist = cell.global_position.distance_to(colony_center)
+			if dist < min_dist:
+				min_dist = dist
+				center_cell = cell
+	
+	if not center_cell:
+		return
+	
+	# Спавним эффект на центральной клетке
+	if SHIELD_PERK_EFFECT_SCENE:
+		var effect = SHIELD_PERK_EFFECT_SCENE.instantiate()
+		get_parent().add_child(effect)
+		effect.global_position = center_cell.global_position
+	
+	# Активируем щит на центральной клетке
+	center_cell.reflect_chance = 0.5
+	center_cell.reflect_timer = 10.0
+	center_cell.queue_redraw()
+	
+	# Передаём щит соседним клеткам в радиусе
+	for cell in player_cells:
+		if cell is BaseCell and cell != center_cell and not cell.is_infected:
+			var dist = cell.global_position.distance_to(center_cell.global_position)
+			if dist <= SHIELD_SELECT_RADIUS:
+				cell.reflect_chance = 0.5
+				cell.reflect_timer = 10.0
+				cell.queue_redraw()
+	
+	perk_energy -= SHIELD_ENERGY_COST
+	shield_cooldown = SHIELD_COOLDOWN_MAX
+
+func _activate_virus_auto() -> void:
+	## Автоматический выстрел вируса в ближайшего врага с визуализацией траектории
+	var player_cells = get_tree().get_nodes_in_group("player_cells")
+	if player_cells.is_empty():
+		return
+	
+	# Находим центр колонии
+	var colony_center = Vector2.ZERO
+	var count = 0
+	for cell in player_cells:
+		if cell is BaseCell:
+			colony_center += cell.global_position
+			count += 1
+	
+	if count > 0:
+		colony_center /= float(count)
+	
+	# Поиск ближайшего врага
+	var all_cells = get_tree().get_nodes_in_group("cells")
+	var closest_enemy: BaseCell = null
+	var closest_dist = 1200.0
+	
+	for cell in all_cells:
+		if cell is BaseCell and cell.owner_type != BaseCell.OwnerType.PLAYER and cell.owner_type != BaseCell.OwnerType.NEUTRAL:
+			var dist = cell.global_position.distance_to(colony_center)
+			if dist < closest_dist:
+				closest_dist = dist
+				closest_enemy = cell
+	
+	if not closest_enemy:
+		print("Нет цели!")
+		return
+	
+	# Находим ближайшую клетку для выстрела
+	var shooter_cell: BaseCell = null
+	var min_dist = INF
+	for cell in player_cells:
+		if cell is BaseCell and not cell.is_infected:
+			var dist = cell.global_position.distance_to(closest_enemy.global_position)
+			if dist < min_dist:
+				min_dist = dist
+				shooter_cell = cell
+	
+	if not shooter_cell:
+		return
+	
+	# Создаём линию траектории (в глобальных координатах)
+	var trajectory_line = Line2D.new()
+	trajectory_line.set_script(load("res://scripts/core/VirusTrajectoryLine.gd"))
+	trajectory_line.width = 4.0
+	trajectory_line.default_color = Color(0.9, 0.1, 0.9, 1.0)
+	trajectory_line.z_index = 50
+	trajectory_line.z_as_relative = false  # Глобальный z_index
+	get_tree().root.add_child(trajectory_line)  # Добавляем в root для глобальных координат
+	trajectory_line.add_point(shooter_cell.global_position)
+	trajectory_line.add_point(closest_enemy.global_position)
+	
+	print("Вирус: линия создана от ", shooter_cell.global_position, " до ", closest_enemy.global_position)
+	
+	# Выстреливаем вирус
+	virus_outbreak_counter += 1
+	var outbreak_id = virus_outbreak_counter
+	
+	var projectile_scene = preload("res://scenes/projectile/projectile.tscn")
+	if projectile_scene:
+		var projectile = projectile_scene.instantiate()
+		get_parent().add_child(projectile)
+		projectile.global_position = shooter_cell.global_position
+		
+		projectile.is_virus = true
+		projectile.virus_outbreak_id = outbreak_id
+		projectile.virus_duration = VIRUS_DURATION
+		projectile.owner_type = shooter_cell.owner_type
+		projectile.projectile_color = Color(0.9, 0.1, 0.9)
+		
+		var direction = (closest_enemy.global_position - shooter_cell.global_position).normalized()
+		projectile.direction = direction
+		projectile.speed = 600.0  # Увеличена скорость вируса
+		projectile.target_node = closest_enemy
+		
+		print("Вирус: снаряд создан, цель: ", closest_enemy.global_position, ", скорость: 600")
+	
+	perk_energy -= VIRUS_ENERGY_COST
+	virus_cooldown = VIRUS_COOLDOWN_MAX
+
 func _clear_active_perk() -> void:
 	if active_perk != "":
 		active_perk = ""
 		Input.set_custom_mouse_cursor(null)
+
+func _activate_shield_at_position(world_pos: Vector2) -> void:
+	## Активирует щит в указанной позиции (для джойстика)
+	if perk_energy < SHIELD_ENERGY_COST or shield_cooldown > 0:
+		return
+	
+	# Спавним эффект в целевой позиции
+	if SHIELD_PERK_EFFECT_SCENE:
+		var effect = SHIELD_PERK_EFFECT_SCENE.instantiate()
+		get_parent().add_child(effect)
+		effect.global_position = world_pos
+		
+		# Раздаем щит соседним клеткам игрока от ЦЕНТРА ЭФФЕКТА
+		var player_cells = get_tree().get_nodes_in_group("player_cells")
+		for p_cell in player_cells:
+			if p_cell is BaseCell and p_cell.is_infected: continue
+			var dist = p_cell.global_position.distance_to(world_pos)
+			if dist <= SHIELD_SELECT_RADIUS + (p_cell.radius * p_cell.scale.x):
+				p_cell.reflect_chance = 0.5
+				p_cell.reflect_timer = 10.0
+				p_cell.queue_redraw()
+		
+		perk_energy -= SHIELD_ENERGY_COST
+		shield_cooldown = SHIELD_COOLDOWN_MAX
+		active_perk = ""
+
+func _activate_speed_dash(direction: Vector2) -> void:
+	## Активирует рывок спринта в указанном направлении
+	if perk_energy < SPEED_ENERGY_COST or speed_cooldown > 0:
+		return
+	
+	perk_energy -= SPEED_ENERGY_COST
+	speed_cooldown = SPEED_COOLDOWN_MAX
+	
+	# Рывок: x6 скорость на 1 секунду
+	var player_cells = get_tree().get_nodes_in_group("player_cells")
+	for cell in player_cells:
+		if cell is BaseCell and not cell.is_infected:
+			# Применяем рывок с направлением
+			cell.apply_speed_boost(1.0, 6.0)  # 1 сек, x6 скорость
+			# Добавляем физический импульс в направлении
+			if direction.length() > 0.1:
+				cell.velocity = direction.normalized() * 800.0
+	
+	active_perk = ""
+
+func _activate_virus_at_position(world_pos: Vector2) -> void:
+	## Активирует вирус в указанной позиции (для джойстика)
+	if perk_energy < VIRUS_ENERGY_COST or virus_cooldown > 0:
+		return
+	
+	# Поиск клеток игрока для выстрела
+	var player_cells = get_tree().get_nodes_in_group("player_cells")
+	if player_cells.is_empty():
+		return
+	
+	# Выбираем ближайшую клетку к позиции для выстрела
+	var shooter_cell: BaseCell = null
+	var min_dist = INF
+	
+	for cell in player_cells:
+		if cell is BaseCell and not cell.is_infected:
+			var dist = cell.global_position.distance_to(world_pos)
+			if dist < min_dist:
+				min_dist = dist
+				shooter_cell = cell
+	
+	if not shooter_cell:
+		return
+	
+	# Выстреливаем вирус
+	virus_outbreak_counter += 1
+	var outbreak_id = virus_outbreak_counter
+	
+	# Создаём снаряд вируса
+	var projectile_scene = preload("res://scenes/projectile/projectile.tscn")
+	if projectile_scene:
+		var projectile = projectile_scene.instantiate()
+		get_parent().add_child(projectile)
+		projectile.global_position = shooter_cell.global_position
+		
+		# Устанавливаем параметры вируса напрямую
+		projectile.is_virus = true
+		projectile.virus_outbreak_id = outbreak_id
+		projectile.virus_duration = VIRUS_DURATION
+		projectile.owner_type = shooter_cell.owner_type
+		projectile.projectile_color = Color(0.9, 0.1, 0.9)  # Фиолетовый для вируса
+		
+		# Направление к целевой позиции
+		var direction = (world_pos - shooter_cell.global_position).normalized()
+		projectile.direction = direction
+		projectile.speed = 400.0
+		projectile.target_node = null
+	
+	perk_energy -= VIRUS_ENERGY_COST
+	virus_cooldown = VIRUS_COOLDOWN_MAX
+	active_perk = ""
 
 func _handle_selection(pos: Vector2) -> void:
 	var clicked_node: BaseCell = null

@@ -110,16 +110,16 @@ func take_damage(amount: float, attacker_owner: OwnerType) -> void:
 			_capture(attacker_owner)
 
 func _capture(new_owner: OwnerType) -> void:
-	# Награда за захват: отдаем накопленный вклад новому владельцу
+	# Награда за захват: 50% от максимальной энергии клетки
+	var reward = stats.max_energy * 0.5
+	
 	if new_owner == OwnerType.PLAYER:
-		var reward = contributions.get(OwnerType.PLAYER, 0.0)
 		if reward > 0:
 			var sm = get_tree().get_first_node_in_group("selection_manager")
 			if sm and sm.has_method("add_perk_energy"):
 				sm.add_perk_energy(reward)
 	elif new_owner != OwnerType.NEUTRAL:
 		# Начисляем энергию ИИ фракции
-		var reward = contributions.get(new_owner, 0.0)
 		if reward > 0:
 			var ai_managers = get_tree().get_nodes_in_group("ai_faction_managers")
 			for ai in ai_managers:

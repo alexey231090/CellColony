@@ -1,17 +1,17 @@
 extends Node2D
 class_name PerkButtonManager
-## PerkButtonManager (Liquid & Stable Edition)
-## Крупные кнопки с плавным перетеканием, защитой от дёрганья (Stability Timer)
-## и жесткими коллизиями. Стратегия: Минимум статического UI.
+## PerkButtonManager (Smooth & Smart Edition)
+## Улучшенная система с плавной интерполяцией, умным распределением по клеткам
+## и анимацией перелёта. Кнопки исчезают при смерти их клетки.
 
 # --- Константы Дизайна ---
 const ICON_SCREEN_RADIUS: float = 24.0
-const COLLISION_RADIUS: float = 56.0      # Для 4-х кнопок
+const COLLISION_RADIUS: float = 56.0
 const SEEK_INTERVAL: float = 0.05
 const STABILITY_TIME: float = 0.5
 const DRAG_THRESHOLD: float = 25.0
 const HYSTERESIS_RATIO: float = 1.5
-const DEAD_ZONE_DISTANCE: float = 80.0
+const DEAD_ZONE_DISTANCE: float = 140.0    # Увеличено для лучшего разделения
 
 # --- Физика (Liquid Motion) ---
 const SPRING_STIFFNESS: float = 120.0
@@ -19,7 +19,12 @@ const SPRING_DAMPING: float = 18.0
 const CENTER_LERP_SPEED: float = 4.0
 const DRIFT_SPEED: float = 1.0
 const DRIFT_STRENGTH: float = 8.0
-const REPULSION_FORCE: float = 3500.0     # Усилили для 3-х кнопок
+const REPULSION_FORCE: float = 5000.0      # Усилено для надёжного разделения
+const MAX_VELOCITY: float = 800.0          # Ограничение скорости
+
+# --- Анимация перелёта ---
+const TRANSITION_DURATION: float = 0.4     # Длительность перелёта между клетками
+const TRAIL_LENGTH: int = 8                # Количество точек в шлейфе
 
 # --- Класс Иконки ---
 class FloatingIcon:
@@ -35,6 +40,19 @@ class FloatingIcon:
 	var velocity: Vector2 = Vector2.ZERO
 	var noise_offset: float = 0.0
 	var offset_current: Vector2 = Vector2.ZERO
+	
+	# Плавный переход между клетками
+	var is_transitioning: bool = false
+	var transition_timer: float = 0.0
+	var transition_start_pos: Vector2 = Vector2.ZERO
+	var transition_target_pos: Vector2 = Vector2.ZERO
+	
+	# Trail эффект
+	var trail_positions: Array[Vector2] = []
+	
+	# Видимость (для fade out при смерти клетки)
+	var is_visible: bool = true
+	var fade_alpha: float = 1.0
 
 var icons: Array[FloatingIcon] = []
 var _colony_center: Vector2 = Vector2.ZERO
@@ -89,7 +107,9 @@ func _update_colony_center(delta: float) -> void:
 func _update_targets_logic(delta: float) -> void:
 	var cells_nodes = get_tree().get_nodes_in_group("player_cells")
 	if cells_nodes.is_empty():
-		for icon in icons: icon.host_cell = null
+		for icon in icons:
+			if icon.host_cell != null:
+				_start_fade_out(icon)
 		return
 
 	var valid_cells: Array[BaseCell] = []
@@ -100,59 +120,23 @@ func _update_targets_logic(delta: float) -> void:
 		return a.global_position.distance_squared_to(_colony_center) < b.global_position.distance_squared_to(_colony_center)
 	)
 
+	# Умное распределение: каждая кнопка получает свою клетку из топ-4
 	for i in range(icons.size()):
 		var icon = icons[i]
-		# Идеальный кандидат: 0-я клетка для Shield, 1-я для Speed (если есть)
-		var ideal_candidate: BaseCell = valid_cells[0]
-		if i == 1 and valid_cells.size() > 1:
-			ideal_candidate = valid_cells[1]
 		
-		# Проверяем, занята ли идеальная клетка другой кнопкой
-		var best_candidate = _find_best_available_cell(ideal_candidate, valid_cells, icon)
-		_process_stable_assignment(icon, best_candidate, SEEK_INTERVAL)
-
-func _find_best_available_cell(ideal: BaseCell, valid_cells: Array[BaseCell], current_icon: FloatingIcon) -> BaseCell:
-	## Находит лучшую доступную клетку для иконки.
-	## Если идеальная клетка занята другой кнопкой, выбирает следующую ближайшую.
-	## Использует гистерезис: не переходит на новую клетку, если текущая близко.
-	
-	# Если идеальная клетка свободна - используем её
-	var ideal_occupied = false
-	for other_icon in icons:
-		if other_icon != current_icon and other_icon.host_cell == ideal:
-			ideal_occupied = true
-			break
-	
-	if not ideal_occupied:
-		return ideal
-	
-	# Если текущая клетка существует и близко к идеальной - остаемся на ней (гистерезис)
-	if is_instance_valid(current_icon.host_cell):
-		var dist_to_ideal = current_icon.host_cell.global_position.distance_squared_to(ideal.global_position)
-		var dist_to_current = 0.0  # Расстояние от текущей к себе = 0
-		var threshold = (COLLISION_RADIUS * HYSTERESIS_RATIO) * (COLLISION_RADIUS * HYSTERESIS_RATIO)
+		# Если клеток меньше, чем кнопок - распределяем равномерно
+		var cell_index = i % valid_cells.size()
+		var ideal_candidate: BaseCell = valid_cells[cell_index]
 		
-		if dist_to_ideal < threshold:
-			return current_icon.host_cell
-	
-	# Ищем первую свободную клетку из отсортированного списка
-	for cell in valid_cells:
-		var is_occupied = false
-		for other_icon in icons:
-			if other_icon != current_icon and other_icon.host_cell == cell:
-				is_occupied = true
-				break
-		
-		if not is_occupied:
-			return cell
-	
-	# Fallback: вернуть идеальную (на случай, если все клетки заняты)
-	return ideal
+		_process_stable_assignment(icon, ideal_candidate, SEEK_INTERVAL)
 
 func _process_stable_assignment(icon: FloatingIcon, ideal: BaseCell, dt: float) -> void:
-	# 1. Если текущий хозяин битый или умер - меняем мгновенно
+	# 1. Если текущий хозяин битый или умер - начинаем переход к новой клетке
 	if not is_instance_valid(icon.host_cell) or icon.host_cell.owner_type != 1:
-		icon.host_cell = ideal
+		if is_instance_valid(ideal):
+			_start_transition(icon, ideal)
+		else:
+			_start_fade_out(icon)
 		icon.candidate_cell = null
 		icon.candidate_timer = 0.0
 		return
@@ -169,10 +153,28 @@ func _process_stable_assignment(icon: FloatingIcon, ideal: BaseCell, dt: float) 
 		icon.candidate_timer = 0.0
 	else:
 		icon.candidate_timer += dt
-		# Если новый кандидат лучше уже 0.5 сек - переключаемся
+		# Если новый кандидат лучше уже 0.5 сек - начинаем плавный переход
 		if icon.candidate_timer >= STABILITY_TIME:
-			icon.host_cell = ideal
+			_start_transition(icon, ideal)
 			icon.candidate_timer = 0.0
+
+func _start_transition(icon: FloatingIcon, new_cell: BaseCell) -> void:
+	## Запускает плавный переход кнопки к новой клетке
+	if not is_instance_valid(new_cell): return
+	
+	icon.is_transitioning = true
+	icon.transition_timer = 0.0
+	icon.transition_start_pos = icon.pos
+	icon.transition_target_pos = new_cell.global_position
+	icon.host_cell = new_cell
+	icon.velocity = Vector2.ZERO  # Сбрасываем скорость для плавного перехода
+	icon.is_visible = true
+	icon.fade_alpha = 1.0
+
+func _start_fade_out(icon: FloatingIcon) -> void:
+	## Запускает исчезновение кнопки
+	icon.host_cell = null
+	icon.is_visible = false
 
 func _update_physics(delta: float) -> void:
 	var camera = get_viewport().get_camera_2d()
@@ -182,15 +184,40 @@ func _update_physics(delta: float) -> void:
 
 	for i in range(icons.size()):
 		var icon = icons[i]
+		
+		# Обновление trail эффекта
+		_update_trail(icon)
+		
+		# Если кнопка невидима - пропускаем физику
+		if not icon.is_visible:
+			icon.fade_alpha = max(0.0, icon.fade_alpha - delta * 3.0)
+			continue
+		
+		# Режим плавного перехода между клетками
+		if icon.is_transitioning:
+			icon.transition_timer += delta
+			var progress = min(1.0, icon.transition_timer / TRANSITION_DURATION)
+			
+			# Ease-out интерполяция для плавности
+			var eased = 1.0 - pow(1.0 - progress, 3.0)
+			icon.pos = icon.transition_start_pos.lerp(icon.transition_target_pos, eased)
+			
+			# Завершение перехода
+			if progress >= 1.0:
+				icon.is_transitioning = false
+				icon.transition_timer = 0.0
+			
+			continue  # Пропускаем обычную физику во время перехода
+		
+		# Обычная физика (когда не в режиме перехода)
 		if not is_instance_valid(icon.host_cell): continue
 		
-		# А) Расположение (Offset)
-		var target_offset = Vector2(0, -1)
-		if icons.size() > 1 and icons[0].host_cell == icons[1].host_cell:
-			target_offset = Vector2(-0.85 if i == 0 else 0.85, -0.6).normalized()
+		# А) Расположение (Offset) - угловое распределение для предсказуемости
+		var angle_offset = (TAU / icons.size()) * i - PI/2.0  # Начинаем сверху
+		var target_offset = Vector2.RIGHT.rotated(angle_offset)
 		
 		icon.offset_current = icon.offset_current.lerp(target_offset, delta * 3.0)
-		var target_pos = icon.host_cell.global_position + icon.offset_current * (icon.host_cell.radius * 1.4)
+		var target_pos = icon.host_cell.global_position + icon.offset_current * (icon.host_cell.radius * 1.6)
 		
 		if icon.pos == Vector2.ZERO: icon.pos = target_pos
 		
@@ -205,24 +232,23 @@ func _update_physics(delta: float) -> void:
 		) * DRIFT_STRENGTH
 		acc += drift * 15.0
 		
-		# Г) Коллизии и Отталкивание
+		# Г) Улучшенная система отталкивания с зонами приоритета
 		for j in range(icons.size()):
 			if i == j: continue
 			var other = icons[j]
-			if not is_instance_valid(other.host_cell): continue
+			if not is_instance_valid(other.host_cell) or other.is_transitioning: continue
 			
 			var push_vec = icon.pos - other.pos
 			var dist = push_vec.length()
 			
-			# Мертвая зона: если слишком близко, увеличиваем отталкивание
+			# Мертвая зона: усиленное отталкивание
 			if dist < DEAD_ZONE_DISTANCE and dist > 0.1:
-				# Усиленное отталкивание в мертвой зоне
-				var dead_zone_force = REPULSION_FORCE * 3.0
+				var dead_zone_force = REPULSION_FORCE * 4.0
 				acc += push_vec.normalized() * dead_zone_force
 			elif dist < min_dist and dist > 0.1:
 				# Обычное отталкивание
 				var ratio = 1.0 - (dist / min_dist)
-				var force = ratio * ratio * REPULSION_FORCE * 2.0
+				var force = ratio * ratio * REPULSION_FORCE * 2.5
 				acc += push_vec.normalized() * force
 				
 				# Жесткая коллизия
@@ -230,11 +256,23 @@ func _update_physics(delta: float) -> void:
 				if dist < hard_radius:
 					var overlap = hard_radius - dist
 					icon.pos += push_vec.normalized() * overlap * 0.7
-					other.pos -= push_vec.normalized() * overlap * 0.7
+					if not other.is_transitioning:
+						other.pos -= push_vec.normalized() * overlap * 0.7
 
-		# Интеграция
+		# Интеграция с ограничением скорости
 		icon.velocity += acc * delta
+		
+		# Ограничение максимальной скорости
+		if icon.velocity.length() > MAX_VELOCITY:
+			icon.velocity = icon.velocity.normalized() * MAX_VELOCITY
+		
 		icon.pos += icon.velocity * delta
+
+func _update_trail(icon: FloatingIcon) -> void:
+	## Обновляет шлейф за кнопкой
+	icon.trail_positions.push_front(icon.pos)
+	if icon.trail_positions.size() > TRAIL_LENGTH:
+		icon.trail_positions.resize(TRAIL_LENGTH)
 
 func _draw() -> void:
 	var camera = get_viewport().get_camera_2d()
@@ -268,14 +306,27 @@ func _draw() -> void:
 			draw_arc(t_pos_loc, aoe_radius, 0, TAU, 64, Color(aoe_col.r, aoe_col.g, aoe_col.b, 0.4), 2.0/zoom)
 
 	for icon in icons:
-		if not is_instance_valid(icon.host_cell) or icon.pos == Vector2.ZERO: continue
+		# Пропускаем невидимые кнопки
+		if not icon.is_visible and icon.fade_alpha <= 0.0: continue
+		if not is_instance_valid(icon.host_cell) and not icon.is_transitioning: continue
+		if icon.pos == Vector2.ZERO: continue
 		
 		var d_pos = to_local(icon.pos)
+		var alpha_mult = icon.fade_alpha if not icon.is_visible else 1.0
 		
-		# Трос (связь с клеткой)
-		var host_local = to_local(icon.host_cell.global_position)
-		draw_line(d_pos, host_local, Color(1, 1, 1, 0.1), 1.5/zoom)
-		draw_circle(host_local, 4.0/zoom, Color(1, 1, 1, 0.3))
+		# Trail эффект во время перехода
+		if icon.is_transitioning and icon.trail_positions.size() > 1:
+			for t in range(1, icon.trail_positions.size()):
+				var trail_alpha = (1.0 - float(t) / TRAIL_LENGTH) * 0.3 * alpha_mult
+				var trail_pos = to_local(icon.trail_positions[t])
+				var trail_size = r * (1.0 - float(t) / TRAIL_LENGTH) * 0.5
+				draw_circle(trail_pos, trail_size, Color(1, 1, 1, trail_alpha))
+		
+		# Трос (связь с клеткой) - только если не в переходе
+		if is_instance_valid(icon.host_cell) and not icon.is_transitioning:
+			var host_local = to_local(icon.host_cell.global_position)
+			draw_line(d_pos, host_local, Color(1, 1, 1, 0.1 * alpha_mult), 1.5/zoom)
+			draw_circle(host_local, 4.0/zoom, Color(1, 1, 1, 0.3 * alpha_mult))
 
 		if not sm: continue
 		
@@ -283,9 +334,9 @@ func _draw() -> void:
 		var energy_cost = sm.get_perk_energy_cost(icon.perk_name)
 		var is_ready = (cd <= 0.0 and sm.perk_energy >= energy_cost)
 		
-		_draw_button(d_pos, r, icon.perk_name, is_ready, cd, zoom)
+		_draw_button(d_pos, r, icon.perk_name, is_ready, cd, zoom, alpha_mult)
 
-func _draw_button(pos: Vector2, r: float, perk: String, is_ready: bool, cd: float, zoom: float) -> void:
+func _draw_button(pos: Vector2, r: float, perk: String, is_ready: bool, cd: float, zoom: float, alpha: float = 1.0) -> void:
 	var col = Color(0.2, 0.8, 1.0) # Синий для щита
 	if perk == "virus":
 		col = Color(0.9, 0.1, 0.1) # Красный для вируса
@@ -296,18 +347,20 @@ func _draw_button(pos: Vector2, r: float, perk: String, is_ready: bool, cd: floa
 	else:
 		col = Color(0.0, 1.0, 0.5) # Зеленый (дефолт)
 	
-	# Тень/Обводка
-	draw_circle(pos, r * 1.25, Color(0, 0, 0, 0.7))
+	# Тень/Обводка с учётом прозрачности
+	draw_circle(pos, r * 1.25, Color(0, 0, 0, 0.7 * alpha))
 	
 	if is_ready:
 		var pulse = (sin(Time.get_ticks_msec() / 180.0) + 1.0) * 0.5
 		var glow = col
-		glow.a = 0.2 + pulse * 0.4
+		glow.a = (0.2 + pulse * 0.4) * alpha
 		draw_arc(pos, r + 5.0/zoom, 0, TAU, 32, glow, 4.0/zoom, true)
 	elif cd > 0.0:
-		draw_arc(pos, r + 3.0/zoom, -PI/2, -PI/2 + TAU * cd, 32, Color(1, 1, 1, 0.5), 5.0/zoom, true)
+		var cd_col = Color(1, 1, 1, 0.5 * alpha)
+		draw_arc(pos, r + 3.0/zoom, -PI/2, -PI/2 + TAU * cd, 32, cd_col, 5.0/zoom, true)
 
 	var icon_col = col if cd <= 0.0 else Color(0.5, 0.5, 0.5)
+	icon_col.a *= alpha
 	_draw_symbol(pos, r * 0.6, perk, icon_col, zoom)
 
 func _draw_symbol(pos: Vector2, s: float, type: String, col: Color, zoom: float) -> void:
@@ -386,7 +439,7 @@ func _get_icon_at(world_pos: Vector2) -> FloatingIcon:
 	var camera = get_viewport().get_camera_2d()
 	var hit_r = (ICON_SCREEN_RADIUS + 20.0) / (camera.zoom.x if camera else 1.0)
 	for icon in icons:
-		if is_instance_valid(icon.host_cell) and icon.pos.distance_to(world_pos) < hit_r:
+		if icon.is_visible and icon.pos.distance_to(world_pos) < hit_r:
 			return icon
 	return null
 
