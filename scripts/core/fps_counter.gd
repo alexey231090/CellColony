@@ -12,9 +12,9 @@ func _ready() -> void:
 	anchor_top = 0.0
 	anchor_bottom = 0.0
 	offset_left = -90.0
-	offset_top = 8.0
-	offset_right = -8.0
-	offset_bottom = 30.0
+	offset_top = 88.0    # Сдвинуто ниже кнопки паузы
+	offset_right = -16.0
+	offset_bottom = 110.0
 	
 	horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
 	mouse_filter = Control.MOUSE_FILTER_IGNORE

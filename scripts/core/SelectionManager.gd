@@ -148,14 +148,14 @@ func _unhandled_input(event: InputEvent) -> void:
 			activate_perk("shield")
 			get_viewport().set_input_as_handled()
 			return
-		# Горячая клавиша "2" для активации ускорения
+		# Горячая клавиша "2" для активации скорострельности
 		if key_event.keycode == KEY_2:
-			activate_perk("speed")
+			activate_perk("rapid_fire")
 			get_viewport().set_input_as_handled()
 			return
-		# Горячая клавиша "3" для активации скорострельности
+		# Горячая клавиша "3" для активации ускорения
 		if key_event.keycode == KEY_3:
-			activate_perk("rapid_fire")
+			activate_perk("speed")
 			get_viewport().set_input_as_handled()
 			return
 		# Горячая клавиша "4" для активации вируса
@@ -530,6 +530,7 @@ func _activate_virus_auto() -> void:
 		projectile.virus_outbreak_id = outbreak_id
 		projectile.virus_duration = VIRUS_DURATION
 		projectile.owner_type = shooter_cell.owner_type
+		projectile.original_owner_type = shooter_cell.owner_type
 		projectile.projectile_color = Color(0.9, 0.1, 0.9)
 		
 		var direction = (closest_enemy.global_position - shooter_cell.global_position).normalized()
@@ -632,6 +633,7 @@ func _activate_virus_at_position(world_pos: Vector2) -> void:
 		projectile.virus_outbreak_id = outbreak_id
 		projectile.virus_duration = VIRUS_DURATION
 		projectile.owner_type = shooter_cell.owner_type
+		projectile.original_owner_type = shooter_cell.owner_type
 		projectile.projectile_color = Color(0.9, 0.1, 0.9)  # Фиолетовый для вируса
 		
 		# Направление к целевой позиции

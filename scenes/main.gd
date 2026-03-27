@@ -108,6 +108,33 @@ func _ready() -> void:
 		spawned += 1
 
 	print("Мир: %d нейтральных, 4 фракции." % spawned)
+	
+	# 4. Инициализация меню паузы и мобильной UI кнопки
+	var pause_menu = preload("res://scenes/ui/pause_menu.gd").new()
+	pause_menu.name = "PauseMenu"
+	add_child(pause_menu) 
+	
+	# Создаем отдельный CanvasLayer для кнопки паузы, чтобы она была 100% поверх всего (layer 115)
+	var pause_hud = CanvasLayer.new()
+	pause_hud.name = "PauseHUD"
+	pause_hud.layer = 115
+	add_child(pause_hud)
+	
+	var pause_btn = preload("res://scripts/ui/pause_button_mobile.gd").new()
+	pause_btn.name = "MobilePauseButton"
+	pause_btn.process_mode = Node.PROCESS_MODE_ALWAYS
+	pause_btn.pause_menu = pause_menu
+	
+	# Позиционирование: якорь в правый верхний угол, размеры 68x68, отступ от края 16px
+	pause_btn.set_anchors_and_offsets_preset(Control.PRESET_TOP_RIGHT)
+	pause_btn.offset_right = -16
+	pause_btn.offset_top = 16
+	pause_btn.offset_left = -16 - 68
+	pause_btn.offset_bottom = 16 + 68
+	
+	pause_btn.pressed_btn.connect(pause_menu.toggle_pause)
+	pause_hud.add_child(pause_btn)
+
 
 func _spawn_cell(pos: Vector2, owner_type: BaseCell.OwnerType, energy: float) -> BaseCell:
 	var cell = cell_scene.instantiate() as BaseCell

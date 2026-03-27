@@ -141,7 +141,6 @@ func _is_target_still_valid(target: BaseCell) -> bool:
 func _get_all_cells() -> Array[BaseCell]:
 	var raw := get_tree().get_nodes_in_group("cells")
 	var result: Array[BaseCell] = []
-	result.resize(0)
 	for n in raw:
 		if n is BaseCell:
 			result.append(n)

@@ -11,15 +11,16 @@ var target_node: Node2D = null
 var is_virus: bool = false
 var virus_duration: float = 0.0
 var virus_outbreak_id: int = 0
+var was_reflected: bool = false
+var original_owner_type: BaseCell.OwnerType = BaseCell.OwnerType.NEUTRAL
 var trail_points: Array[Vector2] = []
 var trail_timer: float = 0.0
 const MAX_TRAIL_POINTS: int = 15
 
 # Жизненный цикл снаряда
-var max_lifetime: float = 5.0   # Максимальное время жизни в секундах
+var max_lifetime: float = 5.0
 var current_lifetime: float = 5.0
-var fade_start_time: float = 1.0 # За какое время до конца начинать исчезать
-var _fade_alpha: float = 1.0     # Текущая прозрачность (0..1)
+var fade_start_time: float = 1.0
 
 func _ready() -> void:
 	rotation = direction.angle()
@@ -98,10 +99,10 @@ func _process(delta: float) -> void:
 	if current_lifetime <= 0:
 		queue_free()
 	
-	# Обновление шлейфа
+	# Обновление шлейфа (только для вируса, троттлинг ~30fps)
 	if is_virus:
 		trail_timer += delta
-		if trail_timer >= 0.016: # 60 раз в секунду
+		if trail_timer >= 0.033:
 			trail_timer = 0.0
 			trail_points.push_front(global_position)
 			if trail_points.size() > MAX_TRAIL_POINTS:
@@ -152,12 +153,18 @@ func _impact(cell: BaseCell) -> void:
 	
 	# Наносим урон/лечение
 	if is_virus:
+		# Проверка на защиту от собственного отраженного вируса
+		if was_reflected and original_owner_type == BaseCell.OwnerType.PLAYER and cell.owner_type == BaseCell.OwnerType.PLAYER:
+			# Растворяемся без вреда для себя
+			queue_free()
+			return
 		cell.infect(virus_duration, virus_outbreak_id)
 	else:
 		cell.take_damage(damage, owner_type)
 	queue_free()
 
 func _reflect(cell: BaseCell) -> void:
+	was_reflected = true
 	# Меняем направление (чуть с разбросом для красоты)
 	direction = -direction.rotated(randf_range(-0.2, 0.2))
 	rotation = direction.angle() # Обновляем поворот хвоста

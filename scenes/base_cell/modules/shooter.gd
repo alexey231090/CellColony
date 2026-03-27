@@ -111,6 +111,7 @@ func shoot(current_target: Node2D) -> void:
 	proj.speed = parent_cell.stats.projectile_speed
 	proj.damage = parent_cell.stats.attack_cost
 	proj.owner_type = parent_cell.owner_type
+	proj.original_owner_type = parent_cell.owner_type
 	proj.target_node = current_target
 	
 	var p_color = parent_cell._get_cell_color()
@@ -133,5 +134,6 @@ func shoot_virus(current_target: Node2D, duration: float, outbreak_id: int) -> v
 	proj.virus_duration = duration
 	proj.virus_outbreak_id = outbreak_id
 	proj.owner_type = parent_cell.owner_type
+	proj.original_owner_type = parent_cell.owner_type
 	proj.target_node = current_target
 	proj.projectile_color = Color(0.8, 0.1, 1.0) # Яркий неоновый/пурпурный (заметный!)

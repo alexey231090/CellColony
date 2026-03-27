@@ -51,6 +51,10 @@ var decay_accum: float = 0.0
 var _redraw_timer: float = 0.0
 const REDRAW_INTERVAL: float = 0.033 # ~30 FPS для отрисовки (физика остаётся 60)
 
+# Кеш RNG для отрисовки вен вируса (избегаем аллокации каждый кадр)
+var _vein_rng: RandomNumberGenerator = null
+var _vein_rng_seed: int = 0
+
 func _ready() -> void:
 	add_to_group("cells")
 	_update_groups()
@@ -132,12 +136,14 @@ func _capture(new_owner: OwnerType) -> void:
 	reflect_chance = 0.0
 	reflect_timer = 0.0
 	speed_boost_timer = 0.0
+	current_speed_multiplier = 1.0
 	rapid_fire_timer = 0.0
 	current_fire_rate_multiplier = 1.0
 	is_infected = false
 	infection_timer = 0.0
 	_visual_infection_factor = 0.0
 	last_outbreak_id = -1
+	_vein_rng = null # Сброс кешированного RNG вен
 	
 	owner_type = new_owner
 	_update_groups()
@@ -221,41 +227,36 @@ func _draw() -> void:
 	
 	# Отрисовка вен (вирус)
 	if _visual_infection_factor > 0.01:
-		var vein_color = display_color.darkened(0.9) # Почти черные, с легким оттенком фракции
+		var vein_color = display_color.darkened(0.9)
 		vein_color.a = _visual_infection_factor * 0.8
 		var seed_val = int(global_position.x * 13.0 + global_position.y * 37.0) 
 		if last_outbreak_id != -1: seed_val += last_outbreak_id * 1024
 		
-		# Детерменированный RNG для стабильного рисунка вен
-		var v_rng = RandomNumberGenerator.new()
-		v_rng.seed = seed_val
+		# Кешированный RNG (создаём только при смене сида)
+		if _vein_rng == null or _vein_rng_seed != seed_val:
+			_vein_rng = RandomNumberGenerator.new()
+			_vein_rng_seed = seed_val
+		_vein_rng.seed = seed_val # Сбрасываем seed каждый кадр для детерминизма
 		
-		for v in range(4): # 4 ломаные вены от края к центру
+		for v in range(4):
 			var v_pts = PackedVector2Array()
-			# Точка на краю (случайный угол)
-			var start_ang = v_rng.randf_range(0.0, TAU)
+			var start_ang = _vein_rng.randf_range(0.0, TAU)
 			var c_pos = Vector2(cos(start_ang), sin(start_ang)) * (current_radius * 0.9)
 			v_pts.append(c_pos)
 			
-			var segs = 4
-			for seg in range(segs):
-				# направляем к центру + небольшое шумовое искривление
-				var to_center = -c_pos.normalized().rotated(v_rng.randf_range(-0.6, 0.6))
-				c_pos += to_center * (current_radius * 0.8 / segs)
+			for seg in range(4):
+				var to_center = -c_pos.normalized().rotated(_vein_rng.randf_range(-0.6, 0.6))
+				c_pos += to_center * (current_radius * 0.2)
 				v_pts.append(c_pos)
 			
-			draw_polyline(v_pts, vein_color, 2.0 + v_rng.randf_range(0.0, 1.5), true)
+			draw_polyline(v_pts, vein_color, 2.0 + _vein_rng.randf_range(0.0, 1.5), true)
 	
 	# 3. Основная обводка (мембрана)
 	var main_points = points.duplicate()
 	main_points.append(main_points[0]) # Замыкаем
 	draw_polyline(main_points, outline_color, 2.5, true)
 	
-	# 4. ЭНЕРГЕТИЧЕСКИЙ КУПОЛ (ЩИТ / СПРИНТ) - визуализация через ShieldOverlay (Шейдер)
-	if reflect_chance > 0.0 or speed_boost_timer > 0.0:
-		_update_shield_overlay()
-	else:
-		if shield_overlay.visible: shield_overlay.visible = false
+	# 4. ЭНЕРГЕТИЧЕСКИЙ КУПОЛ (ЩИТ / СПРИНТ) - визуализация перенесена в _process
 	
 	# 4. Ядро (Nucleus) - плавает около центра
 	var nucleus_pos = Vector2(cos(local_time * 1.5), sin(local_time * 2.1)) * (current_radius * 0.15)
@@ -282,9 +283,6 @@ func _draw() -> void:
 		org_color.a = 0.7
 		draw_circle(org_pos, current_radius * 0.12, org_color)
 
-	# 6. Щит (Отражение) - визуализация интегрирована в блок 4
-
-	# 7. Иконки перков теперь рисует PerkButtonManager (плавающие)
 
 func _get_cell_color() -> Color:
 	match owner_type:
@@ -368,6 +366,12 @@ func _process(delta: float) -> void:
 			for key in contributions.keys():
 				contributions[key] = max(0.0, contributions[key] - 1.0)
 			queue_redraw()
+
+	# Обновление ShieldOverlay (перенесено из _draw, чтобы не вызывать побочные эффекты при отрисовке)
+	if reflect_chance > 0.0 or speed_boost_timer > 0.0:
+		_update_shield_overlay()
+	elif shield_overlay and shield_overlay.visible:
+		shield_overlay.visible = false
 
 	# Оптимизация: перерисовка только ~30 раз в секунду (физика остаётся 60fps)
 	_redraw_timer += delta

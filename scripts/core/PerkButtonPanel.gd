@@ -4,16 +4,16 @@ class_name PerkButtonPanel
 ## Как в Mobile Legends: круглые кнопки с джойстиком прицеливания
 
 # --- Константы ---
-const BUTTON_SIZE: float = 64.0
-const BUTTON_SPACING: float = 12.0
-const MARGIN_LEFT: float = 20.0
-const MARGIN_BOTTOM: float = 20.0
+const BUTTON_SIZE: float = 68.0
+const BUTTON_SPACING: float = 14.0
+const MARGIN_LEFT: float = 24.0
+const MARGIN_BOTTOM: float = 24.0
 
 # --- Параметры перков ---
 var perk_configs: Array = [
 	{"name": "shield", "color": Color(0.2, 0.8, 1.0)},
-	{"name": "speed", "color": Color(1.0, 0.9, 0.1)},
 	{"name": "rapid_fire", "color": Color(1.0, 0.5, 0.1)},
+	{"name": "speed", "color": Color(1.0, 0.9, 0.1)},
 	{"name": "virus", "color": Color(0.9, 0.1, 0.1)}
 ]
 
@@ -55,13 +55,17 @@ func _arrange_buttons() -> void:
 	for i in range(buttons.size()):
 		var button = buttons[i]
 		
-		# Позиция: слева внизу, вертикально
+		# Позиция: слева внизу, вертикально. i=0 (Shield) - верхний.
 		var x = MARGIN_LEFT
-		var y = viewport_size.y - MARGIN_BOTTOM - (BUTTON_SIZE + BUTTON_SPACING) * (i + 1)
+		var y = viewport_size.y - MARGIN_BOTTOM - (BUTTON_SIZE + BUTTON_SPACING) * (buttons.size() - i)
 		
 		button.position = Vector2(x, y)
 
-func _process(delta: float) -> void:
+var _cached_viewport_size: Vector2 = Vector2.ZERO
+
+func _process(_delta: float) -> void:
 	# Адаптация к изменению размера окна
-	if get_viewport().get_visible_rect().size != container.get_viewport().get_visible_rect().size:
+	var current_size = get_viewport().get_visible_rect().size
+	if current_size != _cached_viewport_size:
+		_cached_viewport_size = current_size
 		_arrange_buttons()
