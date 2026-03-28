@@ -90,12 +90,20 @@ func _ready() -> void:
 	settings_panel.visible = false
 	overlay.visible = false
 	
-	# Запускаем пульсацию СВЕЧЕНИЯ
-	if play_button.has_meta("glow"):
+	# Запускаем пульсацию СВЕЧЕНИЯ и РАЗМЕРА
+	if play_button.has_meta("glow") and play_button.has_meta("wrapper"):
 		var glow = play_button.get_meta("glow")
-		var t = create_tween().set_loops()
+		var wrapper = play_button.get_meta("wrapper")
+		
+		var t = create_tween().set_loops().set_parallel(true)
+		# Пульсация свечения
 		t.tween_property(glow, "modulate:a", 1.0, 1.2).from(0.3)
-		t.tween_property(glow, "modulate:a", 0.3, 1.2)
+		t.chain().tween_property(glow, "modulate:a", 0.3, 1.2)
+		
+		# Пульсация размера (на 10%)
+		var t2 = create_tween().set_loops()
+		t2.tween_property(wrapper, "scale", Vector2(1.1, 1.1), 1.2).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN_OUT)
+		t2.tween_property(wrapper, "scale", Vector2(1.0, 1.0), 1.2).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN_OUT)
 
 # ========== ФАБРИКА ЭЛЕМЕНТОВ ==========
 
@@ -195,10 +203,50 @@ func _build_background() -> void:
 	background = TextureRect.new()
 	background.name = "Background"
 	background.set_anchors_and_offsets_preset(PRESET_FULL_RECT)
+	# Возвращаем COVERED для новой картинки, чтобы она была на весь экран
 	background.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_COVERED
 	background.mouse_filter = MOUSE_FILTER_IGNORE
-	# Заглушка: тёмный фон (замените на свою текстуру)
+	
+	background.texture = load("res://assets/background/menuBKGD.png")
 	add_child(background)
+	
+	_build_fire_particles()
+
+func _build_fire_particles() -> void:
+	var particles = CPUParticles2D.new()
+	particles.name = "FireParticles"
+	
+	# Настройка спавнера по низу экрана
+	var vp_size = get_viewport_rect().size
+	particles.position = Vector2(vp_size.x / 2.0, vp_size.y)
+	particles.emission_shape = CPUParticles2D.EMISSION_SHAPE_RECTANGLE
+	particles.emission_rect_extents = Vector2(vp_size.x / 2.0, 20.0)
+	
+	# Настройки физики (искры взлетают вверх)
+	particles.amount = 80
+	particles.lifetime = 2.5
+	particles.randomness = 0.5
+	particles.direction = Vector2(0, -1)
+	particles.spread = 20.0
+	particles.gravity = Vector2(0, -80)
+	particles.initial_velocity_min = 100.0
+	particles.initial_velocity_max = 250.0
+	particles.scale_amount_min = 2.0
+	particles.scale_amount_max = 6.0
+	
+	# Градиент цвета от ярко-желтого к прозрачно-красному
+	var c_grad = Gradient.new()
+	c_grad.set_color(0, Color(1.0, 0.9, 0.4, 1.0))
+	c_grad.set_color(1, Color(1.0, 0.2, 0.0, 0.0))
+	particles.color_ramp = c_grad
+	
+	background.add_child(particles)
+	
+	# Чтобы искры корректно обновлялись при ресайзе окна
+	get_tree().root.size_changed.connect(func():
+		particles.position = Vector2(get_viewport_rect().size.x / 2.0, get_viewport_rect().size.y)
+		particles.emission_rect_extents = Vector2(get_viewport_rect().size.x / 2.0, 20.0)
+	)
 
 func _build_overlay() -> void:
 	overlay = ColorRect.new()
@@ -231,25 +279,15 @@ func _build_main_screen() -> void:
 	top_bar.add_theme_constant_override("separation", 8)
 	main_screen.add_child(top_bar)
 	
-	sound_btn = _make_icon_button("🔊", 48)
+	sound_btn = _make_icon_button("🔊", 80)
 	sound_btn.tooltip_text = "Звуки вкл/выкл"
 	sound_btn.pressed.connect(_on_sound_toggle)
 	top_bar.add_child(sound_btn)
 	
-	music_btn = _make_icon_button("🎵", 48)
+	music_btn = _make_icon_button("🎵", 80)
 	music_btn.tooltip_text = "Музыка вкл/выкл"
 	music_btn.pressed.connect(_on_music_toggle)
 	top_bar.add_child(music_btn)
-	
-	# Спейсер — толкает шестерёнку вправо
-	var spacer = Control.new()
-	spacer.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	top_bar.add_child(spacer)
-	
-	settings_btn = _make_icon_button("⚙", 48)
-	settings_btn.tooltip_text = "Настройки"
-	settings_btn.pressed.connect(_on_settings_open)
-	top_bar.add_child(settings_btn)
 	
 	# === ЦЕНТР: Логотип + Кнопка ===
 	var center_spacer_top = Control.new()
@@ -264,28 +302,50 @@ func _build_main_screen() -> void:
 	center_box.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
 	main_screen.add_child(center_box)
 	
-	# Заголовок
-	title_label = Label.new()
-	title_label.text = "CELLCOLONY"
-	title_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	title_label.add_theme_font_size_override("font_size", 52)
-	title_label.add_theme_color_override("font_color", ACCENT_COLOR)
-	# Тень/обводка заголовка
-	var title_settings = LabelSettings.new()
-	title_settings.font_size = 52
-	title_settings.font_color = ACCENT_COLOR
-	title_settings.outline_size = 3
-	title_settings.outline_color = Color(0, 0, 0, 0.7)
-	title_settings.shadow_color = Color(0.1, 0.85, 0.55, 0.3)
-	title_settings.shadow_size = 3
-	title_settings.shadow_offset = Vector2(0, 3)
-	title_label.label_settings = title_settings
-	center_box.add_child(title_label)
+	# Контейнер для многослойного заголовка
+	var title_container = MarginContainer.new()
+	title_container.custom_minimum_size = Vector2(800, 110)
+	center_box.add_child(title_container)
 	
-	# Подзаголовок
-	var subtitle = _make_label("Стратегия клеточных колоний", 18, TEXT_DIM)
-	subtitle.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	center_box.add_child(subtitle)
+	# Задний план (тень и обводка)
+	var title_bg = Label.new()
+	title_bg.text = "БИТВА КЛЕТОК"
+	title_bg.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	var bg_settings = LabelSettings.new()
+	bg_settings.font_size = 76
+	bg_settings.font_color = Color.TRANSPARENT # Прозрачный текст, только контуры рисуем
+	bg_settings.outline_size = 10
+	bg_settings.outline_color = Color(0.1, 0.0, 0.0, 1.0)
+	bg_settings.shadow_color = Color(1.0, 0.2, 0.0, 0.6)
+	bg_settings.shadow_size = 15
+	bg_settings.shadow_offset = Vector2(0, 8)
+	title_bg.label_settings = bg_settings
+	title_container.add_child(title_bg)
+	
+	# Передний план (текст, который работает как маска)
+	title_label = Label.new()
+	title_label.text = "БИТВА КЛЕТОК"
+	title_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	var fg_settings = LabelSettings.new()
+	fg_settings.font_size = 76
+	fg_settings.font_color = Color.WHITE
+	title_label.label_settings = fg_settings
+	title_label.clip_children = CanvasItem.CLIP_CHILDREN_ONLY
+	title_container.add_child(title_label)
+	
+	# Градиент, который "закрасит" белые буквы
+	var title_grad = Gradient.new()
+	title_grad.set_color(0, Color(1.0, 0.9, 0.2)) # Желтый верх
+	title_grad.set_color(1, Color(1.0, 0.2, 0.2)) # Красный низ
+	var title_grad_tex = GradientTexture2D.new()
+	title_grad_tex.gradient = title_grad
+	title_grad_tex.fill_from = Vector2(0, 0)
+	title_grad_tex.fill_to = Vector2(0, 1)
+	
+	var tex_rect = TextureRect.new()
+	tex_rect.texture = title_grad_tex
+	tex_rect.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	title_label.add_child(tex_rect)
 	# Обертка-контейнер, которая статична и не дает VBox дёргаться
 	var play_container = CenterContainer.new()
 	play_container.custom_minimum_size = Vector2(320, 100)
@@ -377,7 +437,15 @@ func _build_main_screen() -> void:
 	
 	play_button.pressed.connect(_on_play_pressed)
 	play_button.set_meta("glow", play_glow)
+	play_button.set_meta("wrapper", play_wrapper)
 	play_wrapper.add_child(play_button)
+	
+	# Кнопка настроек под игрой
+	settings_btn = _make_button("⚙  НАСТРОЙКИ", ACCENT_BLUE)
+	settings_btn.custom_minimum_size = Vector2(240, 60)
+	settings_btn.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
+	settings_btn.pressed.connect(_on_settings_open)
+	center_box.add_child(settings_btn)
 	
 	var center_spacer_bottom = Control.new()
 	center_spacer_bottom.size_flags_vertical = Control.SIZE_EXPAND_FILL
@@ -385,7 +453,7 @@ func _build_main_screen() -> void:
 	main_screen.add_child(center_spacer_bottom)
 	
 	# Версия
-	var version_label = _make_label("v0.1  •  Яндекс Игры", 14, Color(0.4, 0.45, 0.5, 0.6))
+	var version_label = _make_label("v1.0", 24, Color(0.4, 0.45, 0.5, 0.8))
 	version_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	main_screen.add_child(version_label)
 
@@ -399,14 +467,15 @@ func _build_level_panel() -> void:
 	
 	var panel_box = PanelContainer.new()
 	panel_box.name = "LevelPanelBox"
-	panel_box.custom_minimum_size = Vector2(420, 480)
+	# Ширина под 5 колонок: 5 * 140 (кнопки) + 4 * 20 (отступы) + 2 * 36 (контент-маржин) = ~920
+	panel_box.custom_minimum_size = Vector2(920, 720)
 	var panel_sb = _make_stylebox(PANEL_BG, CORNER_RADIUS, 2, PANEL_BORDER)
-	panel_sb.shadow_size = 16
-	panel_sb.shadow_color = Color(0, 0, 0, 0.6)
-	panel_sb.content_margin_left = 24
-	panel_sb.content_margin_right = 24
-	panel_sb.content_margin_top = 20
-	panel_sb.content_margin_bottom = 20
+	panel_sb.shadow_size = 24
+	panel_sb.shadow_color = Color(0, 0, 0, 0.7)
+	panel_sb.content_margin_left = 36
+	panel_sb.content_margin_right = 36
+	panel_sb.content_margin_top = 30
+	panel_sb.content_margin_bottom = 30
 	panel_box.add_theme_stylebox_override("panel", panel_sb)
 	level_panel.add_child(panel_box)
 	
@@ -415,7 +484,7 @@ func _build_level_panel() -> void:
 	panel_box.add_child(vbox)
 	
 	# Заголовок
-	var header = _make_label("ВЫБОР УРОВНЯ", 26, ACCENT_COLOR)
+	var header = _make_label("ВЫБОР УРОВНЯ", 42, ACCENT_COLOR)
 	header.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	vbox.add_child(header)
 	
@@ -431,9 +500,9 @@ func _build_level_panel() -> void:
 	vbox.add_child(scroll)
 	
 	level_grid = GridContainer.new()
-	level_grid.columns = 3
-	level_grid.add_theme_constant_override("h_separation", 12)
-	level_grid.add_theme_constant_override("v_separation", 12)
+	level_grid.columns = 5
+	level_grid.add_theme_constant_override("h_separation", 20)
+	level_grid.add_theme_constant_override("v_separation", 20)
 	level_grid.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	scroll.add_child(level_grid)
 	
@@ -455,7 +524,7 @@ func _populate_levels() -> void:
 		var is_unlocked = level_num <= unlocked_levels
 		
 		var btn = Button.new()
-		btn.custom_minimum_size = Vector2(100, 100)
+		btn.custom_minimum_size = Vector2(140, 140) # 140 хватает для 5 в ряд на большинстве разрешений
 		btn.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND if is_unlocked else Control.CURSOR_FORBIDDEN
 		
 		if is_unlocked:
@@ -480,7 +549,7 @@ func _populate_levels() -> void:
 			
 			btn.add_theme_color_override("font_color", ACCENT_COLOR)
 			btn.add_theme_color_override("font_hover_color", ACCENT_COLOR.lightened(0.3))
-			btn.add_theme_font_size_override("font_size", 28)
+			btn.add_theme_font_size_override("font_size", 44)
 			btn.pressed.connect(_on_level_selected.bind(level_num))
 		else:
 			btn.text = "🔒"
@@ -492,7 +561,7 @@ func _populate_levels() -> void:
 			btn.add_theme_stylebox_override("disabled", locked_sb)
 			btn.add_theme_color_override("font_color", LOCKED_COLOR)
 			btn.add_theme_color_override("font_disabled_color", LOCKED_COLOR)
-			btn.add_theme_font_size_override("font_size", 24)
+			btn.add_theme_font_size_override("font_size", 38)
 		
 		btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		level_grid.add_child(btn)

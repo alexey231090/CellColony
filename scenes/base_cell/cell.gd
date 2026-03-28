@@ -114,8 +114,8 @@ func take_damage(amount: float, attacker_owner: OwnerType) -> void:
 			_capture(attacker_owner)
 
 func _capture(new_owner: OwnerType) -> void:
-	# Награда за захват: 50% от максимальной энергии клетки
-	var reward = stats.max_energy * 0.5
+	# Награда за захват: точное количество ХП (вклад), которое игрок отнял у клетки
+	var reward = contributions.get(new_owner, 0.0)
 	
 	if new_owner == OwnerType.PLAYER:
 		if reward > 0:
@@ -349,8 +349,14 @@ func _process(delta: float) -> void:
 		visual_angle = lerp_angle(visual_angle, velocity.angle(), delta * 8.0)
 
 	if is_infected:
-		# Истощение энергии при заражении
-		stats.current_energy = max(0.0, stats.current_energy - stats.energy_gain_rate * delta)
+		# Истощение энергии при заражении (1 HP каждые 1.5 сек)
+		var drain = (1.0 / 1.5) * delta
+		stats.current_energy -= drain
+		
+		# Если энергия упала до нуля - клетка становится нейтральной
+		if stats.current_energy <= 0.0:
+			stats.current_energy = 0.0
+			_capture(OwnerType.NEUTRAL)
 	elif owner_type != OwnerType.NEUTRAL:
 		stats.current_energy = min(stats.max_energy, stats.current_energy + stats.energy_gain_rate * delta)
 	

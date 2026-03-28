@@ -34,25 +34,41 @@ func _ready() -> void:
 	style_circle.shadow_size = 4
 	style_circle.shadow_offset = Vector2(0, 3)
 
+var _last_is_ready: bool = false
+var _last_cooldown: float = 0.0
+
 func _process(delta: float) -> void:
-	# Плавное изменение размера
 	var prev_scale = visual_scale
 	visual_scale = lerp(visual_scale, target_scale, delta * 15.0)
 	scale = Vector2(visual_scale, visual_scale)
 	
-	# Перерисовка только при изменении состояния (анимация или кулдаун)
-	if abs(prev_scale - visual_scale) > 0.001 or _needs_redraw():
-		queue_redraw()
-
-func _needs_redraw() -> bool:
-	## Проверяет, нужно ли перерисовывать (активный кулдаун или пульсация)
 	if not selection_manager:
 		selection_manager = get_tree().get_first_node_in_group("selection_manager")
+		
+	var needs_redraw = false
+	if abs(prev_scale - visual_scale) > 0.001:
+		needs_redraw = true
+		
 	if selection_manager:
+		var is_ready = selection_manager._is_perk_ready(perk_name)
 		var cd = selection_manager.get_perk_cooldown_ratio(perk_name)
-		if cd > 0.0: return true
-		if selection_manager._is_perk_ready(perk_name): return true
-	return false
+		
+		# Перерисовывать, если состояние энергии изменилось:
+		if is_ready != _last_is_ready:
+			needs_redraw = true
+		# Перерисовывать, если кд поменялся
+		elif abs(cd - _last_cooldown) > 0.01:
+			needs_redraw = true
+		# Перерисовывать всё время пока есть кулдаун или если кнопка готова (для эффекта пульсации)
+		elif is_ready or cd > 0.0:
+			needs_redraw = true
+			
+		_last_is_ready = is_ready
+		_last_cooldown = cd
+		
+	if needs_redraw:
+		queue_redraw()
+
 
 func _draw() -> void:
 	var center = Vector2(BUTTON_SIZE / 2.0, BUTTON_SIZE / 2.0)

@@ -105,9 +105,9 @@ func _draw() -> void:
 	var icon_pos = bar_rect.position + Vector2(-ICON_SIZE - 12, BAR_HEIGHT / 2.0)
 	_draw_lightning_icon(icon_pos, ICON_SIZE)
 	
-	# 4. Текст (процент или число)
-	var text = "%d%%" % [int((current_energy / max_energy) * 100)]
-	if current_energy >= max_energy: text = "READY"
+	# 4. Текст (теперь в абсолютных единицах для прозрачности)
+	var text = "%d / %d" % [int(current_energy), int(max_energy)]
+	if current_energy >= max_energy: text = "READY (100)"
 	
 	var font = ThemeDB.fallback_font
 	var font_size = 14

@@ -59,6 +59,9 @@ func _process(delta: float) -> void:
 
 func add_perk_energy(amount: float) -> void:
 	ai_perk_energy += amount
+	var sm = get_tree().get_first_node_in_group("selection_manager")
+	if sm:
+		ai_perk_energy = min(ai_perk_energy, sm.MAX_PERK_ENERGY)
 
 func _tick_ai() -> void:
 	var my_cells: Array[BaseCell] = _get_my_cells()

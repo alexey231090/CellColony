@@ -14,22 +14,22 @@ var active_perk: String = ""
 # Кулдауны и стоимость Щита
 var shield_cooldown: float = 0.0
 @export var SHIELD_COOLDOWN_MAX: float = 12.0
-@export var SHIELD_ENERGY_COST: float = 25.0
+@export var SHIELD_ENERGY_COST: float = 50.0
 
 # Кулдауны и стоимость Ускорения
 var speed_cooldown: float = 0.0
 @export var SPEED_COOLDOWN_MAX: float = 18.0
-@export var SPEED_ENERGY_COST: float = 15.0
+@export var SPEED_ENERGY_COST: float = 30.0
 @export var SPEED_BOOST_DURATION: float = 8.0
 @export var SPEED_BOOST_MULTIPLIER: float = 2.0
 @export var SHIELD_SELECT_RADIUS: float = 350.0
 
-@export var RAPID_FIRE_ENERGY_COST: float = 20.0
+@export var RAPID_FIRE_ENERGY_COST: float = 50.0
 @export var RAPID_FIRE_COOLDOWN_MAX: float = 15.0
 @export var RAPID_FIRE_DURATION: float = 4.0
 @export var RAPID_FIRE_MULTIPLIER: float = 3.0
 
-@export var VIRUS_ENERGY_COST: float = 30.0
+@export var VIRUS_ENERGY_COST: float = 100.0
 @export var VIRUS_COOLDOWN_MAX: float = 20.0
 @export var VIRUS_DURATION: float = 6.0
 @export var VIRUS_SPREAD_RADIUS: float = 200.0
@@ -50,6 +50,13 @@ var aim_line: Line2D = null
 func _ready() -> void:
 	add_to_group("selection_manager")
 	_init_aim_line()
+	
+	# Твёрдая фиксация баланса (игнорирует случайные изменения в Инспекторе)
+	SHIELD_ENERGY_COST = 50.0
+	SPEED_ENERGY_COST = 30.0
+	RAPID_FIRE_ENERGY_COST = 50.0
+	VIRUS_ENERGY_COST = 100.0
+	MAX_PERK_ENERGY = 100.0
 
 func _init_aim_line() -> void:
 	aim_line = Line2D.new()
@@ -342,6 +349,7 @@ func try_activate_cell_perk(cell: BaseCell, custom_pos: Vector2 = Vector2.ZERO) 
 				return true
 		else:
 			print("Вирус: Нет вражеской цели в радиусе!")
+			show_floating_message("НЕТ ЦЕЛИ", Color(1.0, 0.4, 0.4))
 			return false
 			
 	return false
@@ -488,6 +496,7 @@ func _activate_virus_auto() -> void:
 	
 	if not closest_enemy:
 		print("Нет цели!")
+		show_floating_message("НЕТ ЦЕЛИ", Color(1.0, 0.4, 0.4))
 		return
 	
 	# Находим ближайшую клетку для выстрела
@@ -728,6 +737,7 @@ func _handle_selection(pos: Vector2) -> void:
 						virus_cooldown = VIRUS_COOLDOWN_MAX
 				_clear_active_perk()
 			else:
+				show_floating_message("НЕТ ЦЕЛИ", Color(1.0, 0.4, 0.4))
 				_clear_active_perk()
 		return
 	# ==================================
@@ -776,3 +786,32 @@ func _handle_selection(pos: Vector2) -> void:
 			var feedback = CLICK_FEEDBACK_SCENE.instantiate()
 			get_parent().add_child(feedback)
 			feedback.setup(player_cells, pos, false)
+
+func show_floating_message(text_str: String, color: Color = Color.WHITE) -> void:
+	var msg = Label.new()
+	msg.text = text_str
+	msg.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	var settings = LabelSettings.new()
+	settings.font_size = 48
+	settings.font_color = color
+	settings.outline_size = 8
+	settings.outline_color = Color(0, 0, 0, 0.8)
+	settings.shadow_size = 4
+	settings.shadow_color = Color(0, 0, 0, 0.5)
+	msg.label_settings = settings
+	
+	# Создаем CanvasLayer для правильного порядка отрисовки поверх всего UI
+	var cl = CanvasLayer.new()
+	cl.layer = 150
+	get_tree().root.add_child(cl)
+	cl.add_child(msg)
+	
+	var vp_size = get_viewport().get_visible_rect().size
+	msg.size.x = 600
+	msg.position = Vector2(vp_size.x / 2.0 - 300.0, vp_size.y * 0.4)
+	
+	var tween = create_tween()
+	tween.set_parallel(true)
+	tween.tween_property(msg, "position:y", msg.position.y - 120.0, 1.5).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
+	tween.tween_property(msg, "modulate:a", 0.0, 1.5).set_trans(Tween.TRANS_EXPO).set_ease(Tween.EASE_IN)
+	tween.chain().tween_callback(cl.queue_free)
