@@ -18,6 +18,10 @@ config/name="CellColony"
 run/main_scene="res://scenes/ui/main_menu/main_menu.tscn"
 config/features=PackedStringArray("4.6", "GL Compatibility")
 
+[autoload]
+
+LevelManager="*res://scripts/core/LevelManager.gd"
+
 [dotnet]
 
 project/assembly_name="CellColony"

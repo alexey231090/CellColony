@@ -58,10 +58,12 @@ var is_sound_on: bool = true
 var is_music_on: bool = true
 var sound_volume: float = 80.0
 var music_volume: float = 80.0
+var total_levels: int = 4
 var unlocked_levels: int = 1
-var total_levels: int = 12
 
 func _ready() -> void:
+	if has_node("/root/LevelManager"):
+		unlocked_levels = get_node("/root/LevelManager").unlocked_levels
 	# Полный экран
 	set_anchors_and_offsets_preset(PRESET_FULL_RECT)
 	mouse_filter = MOUSE_FILTER_STOP
@@ -546,45 +548,54 @@ func _populate_levels() -> void:
 		var is_unlocked = level_num <= unlocked_levels
 		
 		var btn = Button.new()
-		btn.custom_minimum_size = Vector2(140, 140) # 140 хватает для 5 в ряд на большинстве разрешений
+		btn.custom_minimum_size = Vector2(140, 140)
 		btn.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND if is_unlocked else Control.CURSOR_FORBIDDEN
 		
+		# Номер уровня в левом верхнем углу
+		var num_lbl = Label.new()
+		num_lbl.text = str(level_num)
+		num_lbl.set_anchors_and_offsets_preset(Control.PRESET_TOP_LEFT)
+		num_lbl.add_theme_font_size_override("font_size", 24)
+		num_lbl.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		num_lbl.position = Vector2(12, 8)
+		
+		# Иконка Play в центре
+		var icon_lbl = Label.new()
+		icon_lbl.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+		icon_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		icon_lbl.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+		icon_lbl.add_theme_font_size_override("font_size", 54)
+		icon_lbl.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		
 		if is_unlocked:
-			btn.text = str(level_num)
-			var sb = _make_stylebox(BTN_BG, BTN_CORNER, 2, ACCENT_COLOR * Color(1,1,1,0.6))
-			sb.content_margin_top = 8
-			sb.content_margin_bottom = 8
-			btn.add_theme_stylebox_override("normal", sb)
+			icon_lbl.text = "▶"
+			icon_lbl.modulate.a = 0.3
+			num_lbl.add_theme_color_override("font_color", ACCENT_COLOR * Color(1,1,1,0.8))
+			icon_lbl.add_theme_color_override("font_color", Color.WHITE)
 			
-			var hover_sb = _make_stylebox(BTN_HOVER, BTN_CORNER, 2, ACCENT_COLOR)
-			hover_sb.shadow_size = 8
-			hover_sb.shadow_color = Color(0.1, 0.85, 0.55, 0.3)
-			hover_sb.content_margin_top = 8
-			hover_sb.content_margin_bottom = 8
-			btn.add_theme_stylebox_override("hover", hover_sb)
-			
-			var pressed_sb = _make_stylebox(BTN_PRESSED, BTN_CORNER, 3, ACCENT_COLOR)
-			pressed_sb.content_margin_top = 8
-			pressed_sb.content_margin_bottom = 8
-			btn.add_theme_stylebox_override("pressed", pressed_sb)
-			btn.add_theme_stylebox_override("focus", hover_sb.duplicate())
-			
-			btn.add_theme_color_override("font_color", ACCENT_COLOR)
-			btn.add_theme_color_override("font_hover_color", ACCENT_COLOR.lightened(0.3))
-			btn.add_theme_font_size_override("font_size", 44)
+			btn.mouse_entered.connect(func(): icon_lbl.modulate.a = 0.9)
+			btn.mouse_exited.connect(func(): icon_lbl.modulate.a = 0.3)
 			btn.pressed.connect(_on_level_selected.bind(level_num))
+			
+			var sb = _make_stylebox(BTN_BG, BTN_CORNER, 2, ACCENT_COLOR * Color(1,1,1,0.6))
+			btn.add_theme_stylebox_override("normal", sb)
+			var hover_sb = _make_stylebox(BTN_HOVER, BTN_CORNER, 2, ACCENT_COLOR)
+			hover_sb.shadow_size = 12
+			hover_sb.shadow_color = Color(0.1, 0.85, 0.55, 0.4)
+			btn.add_theme_stylebox_override("hover", hover_sb)
+			btn.add_theme_stylebox_override("pressed", _make_stylebox(BTN_PRESSED, BTN_CORNER, 3, ACCENT_COLOR))
+			btn.add_theme_stylebox_override("focus", hover_sb.duplicate())
 		else:
-			btn.text = "🔒"
+			icon_lbl.text = "🔒"
+			num_lbl.add_theme_color_override("font_color", LOCKED_COLOR)
+			icon_lbl.add_theme_color_override("font_color", LOCKED_COLOR)
 			btn.disabled = true
 			var locked_sb = _make_stylebox(Color(0.1, 0.12, 0.15, 0.6), BTN_CORNER, 1, LOCKED_COLOR * Color(1,1,1,0.3))
-			locked_sb.content_margin_top = 8
-			locked_sb.content_margin_bottom = 8
 			btn.add_theme_stylebox_override("normal", locked_sb)
 			btn.add_theme_stylebox_override("disabled", locked_sb)
-			btn.add_theme_color_override("font_color", LOCKED_COLOR)
-			btn.add_theme_color_override("font_disabled_color", LOCKED_COLOR)
-			btn.add_theme_font_size_override("font_size", 38)
 		
+		btn.add_child(num_lbl)
+		btn.add_child(icon_lbl)
 		btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		level_grid.add_child(btn)
 
@@ -699,7 +710,9 @@ func _on_play_pressed() -> void:
 
 func _on_level_selected(level_num: int) -> void:
 	print("Выбран уровень: ", level_num)
-	# Заглушка: загружаем основную сцену (уровень 1 = текущая карта)
+	if has_node("/root/LevelManager"):
+		get_node("/root/LevelManager").current_level = level_num
+	
 	_hide_panel(level_panel)
 	# Небольшая задержка перед переходом
 	var tween = create_tween()
