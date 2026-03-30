@@ -33,6 +33,8 @@ var overlay: ColorRect
 # Кнопки верхней панели
 var sound_btn: Button
 var music_btn: Button
+var sound_cross: Label
+var music_cross: Label
 var settings_btn: Button
 
 # Центр
@@ -207,7 +209,7 @@ func _build_background() -> void:
 	background.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_COVERED
 	background.mouse_filter = MOUSE_FILTER_IGNORE
 	
-	background.texture = load("res://assets/background/menuBKGD.png")
+	background.texture = load("res://assets/background/menuBKGD.jpg")
 	add_child(background)
 	
 	_build_fire_particles()
@@ -284,10 +286,30 @@ func _build_main_screen() -> void:
 	sound_btn.pressed.connect(_on_sound_toggle)
 	top_bar.add_child(sound_btn)
 	
+	sound_cross = _make_label("✕", 48, Color(1.0, 0.3, 0.35, 1.0))
+	sound_cross.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	sound_cross.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	sound_cross.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	sound_cross.add_theme_constant_override("outline_size", 8)
+	sound_cross.add_theme_color_override("font_outline_color", Color.BLACK)
+	sound_cross.mouse_filter = MOUSE_FILTER_IGNORE
+	sound_cross.visible = not is_sound_on
+	sound_btn.add_child(sound_cross)
+	
 	music_btn = _make_icon_button("🎵", 80)
 	music_btn.tooltip_text = "Музыка вкл/выкл"
 	music_btn.pressed.connect(_on_music_toggle)
 	top_bar.add_child(music_btn)
+	
+	music_cross = _make_label("✕", 48, Color(1.0, 0.3, 0.35, 1.0))
+	music_cross.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	music_cross.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	music_cross.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	music_cross.add_theme_constant_override("outline_size", 8)
+	music_cross.add_theme_color_override("font_outline_color", Color.BLACK)
+	music_cross.mouse_filter = MOUSE_FILTER_IGNORE
+	music_cross.visible = not is_music_on
+	music_btn.add_child(music_cross)
 	
 	# === ЦЕНТР: Логотип + Кнопка ===
 	var center_spacer_top = Control.new()
@@ -697,28 +719,26 @@ func _on_settings_close() -> void:
 
 func _on_sound_toggle() -> void:
 	is_sound_on = not is_sound_on
-	sound_btn.text = "🔊" if is_sound_on else "🔇"
-	# Заглушка: управление AudioBus
+	sound_cross.visible = not is_sound_on
 	_apply_sound_volume()
 
 func _on_music_toggle() -> void:
 	is_music_on = not is_music_on
-	music_btn.text = "🎵" if is_music_on else "🎵✖"
-	# Заглушка: управление AudioBus
+	music_cross.visible = not is_music_on
 	_apply_music_volume()
 
 func _on_sound_volume_changed(value: float) -> void:
 	sound_volume = value
 	sound_value_label.text = str(int(value)) + "%"
 	is_sound_on = value > 0
-	sound_btn.text = "🔊" if is_sound_on else "🔇"
+	sound_cross.visible = not is_sound_on
 	_apply_sound_volume()
 
 func _on_music_volume_changed(value: float) -> void:
 	music_volume = value
 	music_value_label.text = str(int(value)) + "%"
 	is_music_on = value > 0
-	music_btn.text = "🎵" if is_music_on else "🎵✖"
+	music_cross.visible = not is_music_on
 	_apply_music_volume()
 
 func _apply_sound_volume() -> void:
