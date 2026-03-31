@@ -1,7 +1,7 @@
 extends Node
 
 var current_level: int = 1
-var unlocked_levels: int = 2 # Разблокировано 2 уровня по умолчанию для теста
+var unlocked_levels: int = 2
 
 func get_current_level_data() -> Dictionary:
 	var data = {
@@ -28,6 +28,8 @@ func get_current_level_data() -> Dictionary:
 			data.map_scale = 0.9
 			data.num_neutrals = 35
 			data.seed = 202
+			data.noise_freq = 0.0012 # Плавные волны
+			data.noise_amp = 0.18    # Амплитуда "волнистости"
 		3:
 			data.num_enemies = 2
 			data.has_islands = true

@@ -76,12 +76,14 @@ func _apply_closed_position() -> void:
 func _build_settings() -> void:
 	_settings.clear()
 	_settings.append({
-		"id": "spectator",
-		"name": "Свободная камера",
-		"type": "bool",
-		"value": false,
-		"desc": "WASD + колесо. Enter/←→ — переключить.",
-		"apply": Callable(self, "_apply_spectator")
+		"id": "camera_mode",
+		"name": "Режим Камеры",
+		"type": "int",
+		"value": 1,
+		"min": 1,
+		"max": 2,
+		"desc": "1 - Игрок, 2 - Свободная (WASD). Enter — ввод.",
+		"apply": Callable(self, "_apply_camera_mode")
 	})
 	_settings.append({
 		"id": "show_fps",
@@ -101,6 +103,17 @@ func _build_settings() -> void:
 		"step": 0.1,
 		"desc": "Enter — ввод числа. ←→ — шаг 0.1.",
 		"apply": Callable(self, "_apply_time_scale")
+	})
+	_settings.append({
+		"id": "cell_speed",
+		"name": "Множитель Скорости",
+		"type": "float",
+		"value": 1.0,
+		"min": 1.0,
+		"max": 20.0,
+		"step": 1.0,
+		"desc": "Enter — ввод числа. ←→ — шаг 1.0. Умножает скорость клеток.",
+		"apply": Callable(self, "_apply_cell_speed")
 	})
 	_settings.append({
 		"id": "ai_decision_interval",
@@ -351,18 +364,29 @@ func _is_numeric_setting(s: Dictionary) -> bool:
 func _is_numeric_char(ch: String) -> bool:
 	return (ch >= "0" and ch <= "9") or ch == "." or ch == "-"
 
-func _apply_spectator(enabled: bool) -> void:
-	var camera := get_viewport().get_camera_2d()
-	if camera == null:
-		return
-	if camera.has_method("set_forced_spectator"):
-		camera.call("set_forced_spectator", enabled)
-		if enabled and ("min_zoom" in camera):
-			camera.zoom = Vector2(camera.min_zoom, camera.min_zoom)
-			camera.global_position = Vector2.ZERO
+func _apply_camera_mode(value: int) -> void:
+	var main = get_tree().current_scene
+	if main and main.has_method("_toggle_free_camera"):
+		var dev_cam = main.get_node_or_null("DevFreeCamera")
+		var cam_follow = main.get_node_or_null("Camera2D")
+		
+		if value == 1: # Игрок
+			if cam_follow: cam_follow.enabled = true
+			if dev_cam: dev_cam.enabled = false
+			if cam_follow: cam_follow.make_current()
+		else: # Свободная
+			if cam_follow: cam_follow.enabled = false
+			if dev_cam: dev_cam.enabled = true
+			if dev_cam: dev_cam.make_current()
 
 func _apply_time_scale(v: float) -> void:
 	Engine.time_scale = v
+
+func _apply_cell_speed(v: float) -> void:
+	var main = get_tree().get_first_node_in_group("main")
+	if main and "cell_speed_mult" in main:
+		main.cell_speed_mult = v
+		print("DEV: Множитель скорости клеток = ", v)
 
 func _apply_show_fps(enabled: bool) -> void:
 	var root := get_tree().current_scene

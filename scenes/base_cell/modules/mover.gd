@@ -54,8 +54,13 @@ func _physics_process(delta: float) -> void:
 		
 		if d_to_target > stop_distance * parent_cell.scale.x:
 			var dir = (target_position - current_pos).normalized()
-			# Рассчитываем скорость с учетом баффа ускорения
+			# Рассчитываем скорость с учетом баффа ускорения И меню отладки
 			var base_speed = parent_cell.stats.move_speed
+			
+			var root_main = get_tree().get_first_node_in_group("main")
+			if root_main and "cell_speed_mult" in root_main:
+				base_speed *= root_main.cell_speed_mult
+				
 			if parent_cell.speed_boost_timer > 0:
 				base_speed *= parent_cell.current_speed_multiplier
 				

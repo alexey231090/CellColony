@@ -1,0 +1,81 @@
+[gd_scene load_steps=12 format=3 uid="uid://dg0u8n3n4v5u6"]
+
+[ext_resource type="Script" path="res://scenes/levels/organic_level.gd" id="1_org"]
+[ext_resource type="Script" path="res://scripts/core/SelectionManager.gd" id="2_sm"]
+[ext_resource type="Script" path="res://scripts/core/CameraFollow.gd" id="3_cam"]
+[ext_resource type="Script" path="res://scripts/core/PerkButtonPanel.gd" id="4_pbp"]
+[ext_resource type="Shader" path="res://scenes/environment/background.gdshader" id="5_shader"]
+[ext_resource type="Script" path="res://scripts/core/fps_counter.gd" id="6_fps"]
+[ext_resource type="Script" path="res://scripts/core/PerkEnergyBar.gd" id="7_peb"]
+[ext_resource type="PackedScene" path="res://scenes/ui/dev_console.tscn" id="8_console"]
+[ext_resource type="Script" path="res://scripts/core/AIFactionManager.gd" id="9_ai"]
+
+[sub_resource type="ShaderMaterial" id="ShaderMaterial_org"]
+shader = ExtResource("5_shader")
+shader_parameter/color1 = Color(0.04, 0.08, 0.12, 1)
+shader_parameter/color2 = Color(0.08, 0.18, 0.28, 1)
+shader_parameter/speed = 0.6
+shader_parameter/scale = 3.5
+shader_parameter/cam_offset = Vector2(0, 0)
+
+[node name="OrganicLevel" type="Node2D"]
+script = ExtResource("1_org")
+
+[node name="BackgroundLayer" type="CanvasLayer" parent="."]
+layer = -1
+
+[node name="ColorRect" type="ColorRect" parent="BackgroundLayer"]
+material = SubResource("ShaderMaterial_org")
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+color = Color(0.1, 0.1, 0.12, 1)
+
+[node name="SelectionManager" type="Node" parent="."]
+script = ExtResource("2_sm")
+SHIELD_ENERGY_COST = 25.0
+SPEED_ENERGY_COST = 15.0
+RAPID_FIRE_ENERGY_COST = 20.0
+VIRUS_ENERGY_COST = 30.0
+
+[node name="PerkButtonPanel" type="CanvasLayer" parent="."]
+script = ExtResource("4_pbp")
+
+[node name="Camera2D" type="Camera2D" parent="."]
+ignore_rotation = false
+limit_smoothed = true
+position_smoothing_enabled = true
+script = ExtResource("3_cam")
+look_ahead_factor = 2.0
+
+[node name="HUDLayer" type="CanvasLayer" parent="."]
+layer = 100
+
+[node name="PerkEnergyBar" type="Control" parent="HUDLayer"]
+layout_mode = 3
+anchors_preset = 0
+script = ExtResource("7_peb")
+
+[node name="FPSCounter" type="Label" parent="HUDLayer"]
+offset_right = 40.0
+offset_bottom = 23.0
+script = ExtResource("6_fps")
+
+[node name="DevConsole" parent="HUDLayer" instance=ExtResource("8_console")]
+layout_mode = 3
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+
+[node name="AIManager_Red" type="Node" parent="."]
+script = ExtResource("9_ai")
+faction = 2
+
+[node name="AIManager_Green" type="Node" parent="."]
+script = ExtResource("9_ai")
+faction = 3

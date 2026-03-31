@@ -5,17 +5,43 @@ extends Node2D
 @export var cell_scene: PackedScene = preload("res://scenes/base_cell/cell.tscn")
 @export var map_size: Vector2 = Vector2(5000, 5000)
 @export var num_neutral_cells: int = 50
+var cell_speed_mult: float = 1.0
 
-# Базовые позиции фракций по углам карты
-const FACTION_BASES: Array = [
-	{"type": 1, "pos": Vector2(-1800, -1800)},  # PLAYER (синий) — левый верх
-	{"type": 2, "pos": Vector2( 1800,  1800)},  # ENEMY_RED  — правый низ
-	{"type": 3, "pos": Vector2( 1800, -1800)},  # ENEMY_GREEN — правый верх
-	{"type": 4, "pos": Vector2(-1800,  1800)},  # ENEMY_YELLOW — левый низ
+# Базовые "идеальные" позиции фракций (уменьшили до 0.6, чтобы точно попадали в кляксу)
+const FACTION_BASES_NORMALIZED: Array = [
+	{"type": 1, "pos": Vector2(-0.6, -0.6)},  # PLAYER (синий) — левый верх
+	{"type": 2, "pos": Vector2( 0.6,  0.6)},  # ENEMY_RED  — правый низ
+	{"type": 3, "pos": Vector2( 0.6, -0.6)},  # ENEMY_GREEN — правый верх
+	{"type": 4, "pos": Vector2(-0.6,  0.6)},  # ENEMY_YELLOW — левый низ
 ]
 
 @onready var bg_rect: ColorRect = $BackgroundLayer/ColorRect
 @onready var camera: Camera2D = $Camera2D
+
+func _unhandled_input(event: InputEvent) -> void:
+	if event is InputEventKey and event.pressed:
+		# Переключение камер по тильде (~)
+		if event.keycode == KEY_QUOTELEFT or event.keycode == KEY_SECTION:
+			_toggle_free_camera()
+
+func _toggle_free_camera() -> void:
+	var dev_cam = get_node_or_null("DevFreeCamera")
+	if not dev_cam: return
+	
+	if camera:
+		if camera.enabled:
+			# Переключаемся на Свободную камерu
+			camera.enabled = false
+			dev_cam.enabled = true
+			dev_cam.make_current()
+			dev_cam.global_position = camera.global_position # Переносим её к игроку для удобства старта
+			print("DEV: Свободная камера ВКЛ")
+		else:
+			# Возвращаемся к Игроку
+			dev_cam.enabled = false
+			camera.enabled = true
+			camera.make_current()
+			print("DEV: Камера игрока ВКЛ")
 
 func _process(_delta: float) -> void:
 	if bg_rect and bg_rect.material and camera:
@@ -28,87 +54,126 @@ func _process(_delta: float) -> void:
 		bg_rect.material.set_shader_parameter("cam_offset", camera.global_position * 0.15)
 
 func _ready() -> void:
-	# 0. Генерируем биологические стенки (границы карты)
-	_generate_borders()
+	add_to_group("main")
+	# 0. Получаем данные уровня
+	var level_data := {"num_enemies": 1, "is_organic": false, "map_scale": 1.0, "num_neutrals": 40, "seed": 42}
+	if has_node("/root/LevelManager"):
+		level_data = get_node("/root/LevelManager").get_current_level_data()
 	
-	# Ограничиваем камеру. Теперь она может заходить в "серую зону" на 2500px дальше карты.
+	seed(level_data.seed)
+	map_size *= level_data.map_scale
+	num_neutral_cells = level_data.num_neutrals
+	var hx = map_size.x / 2.0
+	var hy = map_size.y / 2.0
+
+	# 1. Скрываем старый ручной фон, чтобы было видно шейдер
+	var manual_bg = get_node_or_null("BackgroundManual")
+	if manual_bg: manual_bg.hide()
+
+	# 2. Сбрасываем камеру в центр
 	if camera:
-		var margin = 2500.0
-		camera.limit_left = -int(map_size.x / 2.0 + margin)
-		camera.limit_right = int(map_size.x / 2.0 + margin)
-		camera.limit_top = -int(map_size.y / 2.0 + margin)
-		camera.limit_bottom = int(map_size.y / 2.0 + margin)
+		camera.global_position = Vector2.ZERO
 	
-	# 1. Спавним игрока из сцены
-	var player_cell = get_node_or_null("PlayerCell")
-	var player_base = FACTION_BASES[0]
-	if player_cell:
-		player_cell.position = player_base.pos
-		player_cell.owner_type = BaseCell.OwnerType.PLAYER
-		player_cell.stats.current_energy = 20
+	# 1. Генерируем границы и сохраняем полигон игровой зоны
+	var playable_polygon_pts: PackedVector2Array = []
+	if level_data.get("is_organic", false):
+		playable_polygon_pts = _generate_borders_organic(level_data)
+	else:
+		_generate_borders() # Стандартный прямоугольник
+		# Создаем прямоугольный полигон для проверки спавна
+		# hx/hy уже объявлены выше
+		playable_polygon_pts = PackedVector2Array([
+			Vector2(-hx, -hy), Vector2(hx, -hy), Vector2(hx, hy), Vector2(-hx, hy)
+		])
+	
+	# Ограничиваем камеру по границам полигона
+	if camera:
+		var margin = 1000.0
+		var rect = _get_polygon_bounds(playable_polygon_pts)
+		camera.limit_left = int(rect.position.x - margin)
+		camera.limit_right = int(rect.end.x + margin)
+		camera.limit_top = int(rect.position.y - margin)
+		camera.limit_bottom = int(rect.end.y + margin)
+	
+	# 2. Спавним базы фракций (ДЛЯ УРОВНЯ 2)
+	if level_data.get("is_organic", false):
+		# Возвращаем в САМЫЙ ЦЕНТР (0,0) после фикса физики
+		var player_base_pos = Vector2.ZERO
+		
+		# СПАВНИМ НОВУЮ КЛЕТКУ ИГРОКА
+		var player_cell = _spawn_cell(player_base_pos, BaseCell.OwnerType.PLAYER, 40.0)
 		player_cell.assigned_perk = "speed"
-	
-	# Вторая стартовая клетка игрока — для перка Щит
-	var shield_cell = _spawn_cell(
-		player_base.pos + Vector2(160, 80),
-		BaseCell.OwnerType.PLAYER, 15.0
-	)
-	shield_cell.assigned_perk = "shield"
+		player_cell.z_index = 100 
+		
+		# --- СВОБОДНАЯ КАМЕРА ДЛЯ ТЕСТА (WASD) ---
+		var dev_cam = Camera2D.new()
+		dev_cam.name = "DevFreeCamera"
+		dev_cam.set_script(load("res://scripts/core/DevFreeCamera.gd"))
+		add_child(dev_cam)
+		dev_cam.global_position = player_base_pos
+		dev_cam.enabled = false 
+		
+		# По умолчанию на уровне 2 включаем обычную камеру ИГРОКА на новой позиции
+		if camera:
+			camera.enabled = true
+			camera.global_position = player_base_pos
+			camera._is_first_frame = true 
+			
+		print("DEBUG: Клетка игрока в САМОМ ЦЕНТРЕ (0,0)")
+	else:
+		var base_positions: Array = []
+		var player_base_pos = _find_safe_pos(FACTION_BASES_NORMALIZED[0].pos * Vector2(hx, hy), playable_polygon_pts)
+		base_positions.append(player_base_pos)
+		
+		var old_pc = get_node_or_null("PlayerCell")
+		if old_pc: old_pc.queue_free()
+		
+		# --- ПРОВЕРКА ПРИЗРАКОВ ---
+		print("--- Scene Tree after Purge ---")
+		print_tree_pretty()
+		print("------------------------------")
+		
+		var player_cell = get_node_or_null("PlayerCell")
+		if player_cell:
+			player_cell.show()
+			player_cell.visible = true
+			player_cell.position = player_base_pos
+			player_cell.owner_type = BaseCell.OwnerType.PLAYER
+			player_cell.stats.current_energy = 20
+			player_cell.assigned_perk = "speed"
+		
+		# Помощники игрока
+		_spawn_cell(player_base_pos + Vector2(160, 80), BaseCell.OwnerType.PLAYER, 15.0).assigned_perk = "shield"
+		_spawn_cell(player_base_pos + Vector2(-160, 80), BaseCell.OwnerType.PLAYER, 12.0).assigned_perk = "rapid_fire"
+		_spawn_cell(player_base_pos + Vector2(0, 160), BaseCell.OwnerType.PLAYER, 10.0).assigned_perk = "virus"
 
-	# Третья стартовая клетка игрока — для перка Скорострельность
-	var rapid_cell = _spawn_cell(
-		player_base.pos + Vector2(-160, 80),
-		BaseCell.OwnerType.PLAYER, 12.0
-	)
-	rapid_cell.assigned_perk = "rapid_fire"
+		# ИИ фракции (в зависимости от num_enemies)
+		for i in range(1, level_data.num_enemies + 1):
+			if i >= FACTION_BASES_NORMALIZED.size(): break
+			var raw_pos = FACTION_BASES_NORMALIZED[i].pos * Vector2(hx, hy)
+			var base_pos = _find_safe_pos(raw_pos, playable_polygon_pts)
+			base_positions.append(base_pos)
+			var faction_type = _int_to_owner_type(FACTION_BASES_NORMALIZED[i].type)
+			_spawn_cell(base_pos, faction_type, 25)
+			_spawn_cell(base_pos + Vector2(randf_range(-200, 200), randf_range(-200, 200)), faction_type, 15)
+			_spawn_cell(base_pos + Vector2(randf_range(-200, 200), randf_range(-200, 200)), faction_type, 12)
 
-	# Четвертая стартовая клетка игрока — для перка Вирус
-	var virus_cell = _spawn_cell(
-		player_base.pos + Vector2(0, 160),
-		BaseCell.OwnerType.PLAYER, 10.0
-	)
-	virus_cell.assigned_perk = "virus"
+		# 3. Нейтральные клетки
+		var spawned := 0
+		var attempts := 0
+		var bounds = _get_polygon_bounds(playable_polygon_pts)
+		while spawned < num_neutral_cells and attempts < num_neutral_cells * 10:
+			attempts += 1
+			var pos = Vector2(randf_range(bounds.position.x + 200, bounds.end.x - 200), randf_range(bounds.position.y + 200, bounds.end.y - 200))
+			if not Geometry2D.is_point_in_polygon(pos, playable_polygon_pts): continue
+			var too_close := false
+			for bpos in base_positions:
+				if pos.distance_to(bpos) < 600: too_close = true; break
+			if too_close: continue
+			_spawn_cell(pos, BaseCell.OwnerType.NEUTRAL, randf_range(3.0, 22.0))
+			spawned += 1
+		print("Мир: %d нейтральных, %d фракций." % [spawned, base_positions.size()])
 
-	# 2. Спавним 3 AI-фракции с базой и стартовыми клетками
-	for i in range(1, 4):
-		var faction_data = FACTION_BASES[i]
-		var faction_type = _int_to_owner_type(faction_data.type)
-		var base_pos: Vector2 = faction_data.pos
-
-		# Главная база
-		_spawn_cell(base_pos, faction_type, 25)
-		# 2 стартовые клетки рядом с базой
-		_spawn_cell(base_pos + Vector2(randf_range(-200, 200), randf_range(-200, 200)), faction_type, 15)
-		_spawn_cell(base_pos + Vector2(randf_range(-200, 200), randf_range(-200, 200)), faction_type, 12)
-
-	# 3. Нейтральные клетки — разбросаны по всей карте
-	var base_positions: Array = []
-	for bd in FACTION_BASES:
-		base_positions.append(bd.pos)
-
-	var spawned := 0
-	var attempts := 0
-	while spawned < num_neutral_cells and attempts < num_neutral_cells * 5:
-		attempts += 1
-		# Добавляем отступ от краев (margin = 400), чтобы не спавниться в неровных стенах
-		var safe_margin = 400.0
-		var pos = Vector2(
-			randf_range(-map_size.x / 2.0 + safe_margin, map_size.x / 2.0 - safe_margin),
-			randf_range(-map_size.y / 2.0 + safe_margin, map_size.y / 2.0 - safe_margin)
-		)
-		# Не спавним прямо на базах
-		var too_close := false
-		for bpos in base_positions:
-			if pos.distance_to(bpos) < 500:
-				too_close = true
-				break
-		if too_close:
-			continue
-		_spawn_cell(pos, BaseCell.OwnerType.NEUTRAL, randf_range(3.0, 22.0))
-		spawned += 1
-
-	print("Мир: %d нейтральных, 4 фракции." % spawned)
-	
 	# 4. Инициализация меню паузы и мобильной UI кнопки
 	var pause_menu = preload("res://scenes/ui/pause_menu.gd").new()
 	pause_menu.name = "PauseMenu"
@@ -230,3 +295,102 @@ func _generate_borders() -> void:
 	_build_side.call(Vector2(hx, -hy), Vector2(hx, hy), Vector2(1, 0), 1)
 	_build_side.call(Vector2(hx, hy), Vector2(-hx, hy), Vector2(0, 1), 2)
 	_build_side.call(Vector2(-hx, hy), Vector2(-hx, -hy), Vector2(-1, 0), 3)
+
+func _generate_borders_organic(level_data: Dictionary) -> PackedVector2Array:
+	var border_node = StaticBody2D.new()
+	border_node.name = "BiologicalWalls"
+	add_child(border_node)
+	
+	# 1. Генерируем основную "кляксу" (волнистый круг)
+	var radius = min(map_size.x, map_size.y) / 2.0
+	var noise = FastNoiseLite.new()
+	noise.seed = level_data.seed
+	noise.noise_type = FastNoiseLite.TYPE_SIMPLEX
+	noise.frequency = level_data.get("noise_freq", 0.001)
+	
+	var amp = level_data.get("noise_amp", 0.2)
+	var segments = 120
+	var blob_pts = PackedVector2Array()
+	
+	for i in range(segments):
+		var angle = (TAU / segments) * i
+		var dir = Vector2(cos(angle), sin(angle))
+		var noise_val = noise.get_noise_2d(dir.x * 500.0, dir.y * 500.0)
+		var p = dir * radius * (1.0 + noise_val * amp)
+		blob_pts.append(p)
+	
+	# Гарантируем CCW для Geometry2D.clip (отверстие должно быть против часовой)
+	if Geometry2D.is_polygon_clockwise(blob_pts): blob_pts.reverse()
+
+	# 2. Создаем внешний прямоугольник (Plate)
+	var outer_margin = 4000.0
+	var rect_pts = PackedVector2Array([
+		Vector2(-radius - outer_margin, -radius - outer_margin),
+		Vector2( radius + outer_margin, -radius - outer_margin),
+		Vector2( radius + outer_margin,  radius + outer_margin),
+		Vector2(-radius - outer_margin,  radius + outer_margin)
+	])
+	# Внешний контур по часовой (CW)
+	if not Geometry2D.is_polygon_clockwise(rect_pts): rect_pts.reverse()
+
+	# 3. Вырезаем отверстие (Blob) из ОГРОМНОГО прямоугольника (Plate with Hole)
+	var walls_polys = Geometry2D.clip_polygons(rect_pts, blob_pts)
+	var edge_color = Color(0.5, 0.55, 0.6, 0.95) # Цвет бортика
+	
+	for poly_pts in walls_polys:
+		# Физика (невидимая стена)
+		var coll = CollisionPolygon2D.new()
+		coll.polygon = poly_pts
+		border_node.add_child(coll)
+		
+		# Визуал (УДАЛЕНО ПО ПРОСЬБЕ ПОЛЬЗОВАТЕЛЯ)
+
+	# 4. Отрисовка "слизи" (мембраны) по краю кляксы
+	var line = Line2D.new()
+	var line_loop = blob_pts.duplicate()
+	line_loop.append(line_loop[0]) # Замыкаем
+	line.points = line_loop
+	line.width = 60.0
+	line.default_color = edge_color
+	line.joint_mode = Line2D.LINE_JOINT_ROUND
+	line.begin_cap_mode = Line2D.LINE_CAP_ROUND
+	line.end_cap_mode = Line2D.LINE_CAP_ROUND
+	line.z_index = -3
+	border_node.add_child(line)
+
+	# Внутренний блик для объема
+	var hl = Line2D.new()
+	hl.points = line_loop
+	hl.width = 18.0
+	hl.default_color = Color(0.6, 0.65, 0.7, 0.35)
+	hl.joint_mode = Line2D.LINE_JOINT_ROUND
+	hl.z_index = -2
+	# Сдвигаем блик чуть внутрь (на 10 пикселей к центру)
+	hl.scale = Vector2(0.99, 0.99)
+	border_node.add_child(hl)
+	
+	return blob_pts
+
+func _find_safe_pos(target_pos: Vector2, polygon: PackedVector2Array) -> Vector2:
+	# Если точка внутри — всё ок
+	if Geometry2D.is_point_in_polygon(target_pos, polygon):
+		return target_pos
+	
+	# Если нет — плавно тянем её к центру (0,0), пока не окажемся внутри
+	var current = target_pos
+	var center = Vector2.ZERO
+	# Пытаемся 30 раз с большим шагом, чтобы точно попасть в центр
+	for i in range(30):
+		current = current.lerp(center, 0.2)
+		if Geometry2D.is_point_in_polygon(current, polygon):
+			# Даем еще небольшой отстут от стены к центру
+			return current * 0.85
+	return center
+
+func _get_polygon_bounds(polygon: PackedVector2Array) -> Rect2:
+	if polygon.size() == 0: return Rect2()
+	var min_p = polygon[0]; var max_p = polygon[0]
+	for p in polygon:
+		min_p.x = min(min_p.x, p.x); min_p.y = min(min_p.y, p.y)
+		max_p.x = max(max_p.x, p.x); max_p.y = max(max_p.y, p.y)
+	return Rect2(min_p, max_p - min_p)

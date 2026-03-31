@@ -57,7 +57,8 @@ func _process(delta: float) -> void:
 		if _spectator_mode:
 			_spectator_mode = false
 			_spectator_label.hide()
-			_is_first_frame = true
+			# Мы НЕ сбрасываем _is_first_frame здесь, 
+			# чтобы при перезахвате первой клетки камера сразу прыгнула на неё
 
 		var avg_pos = Vector2.ZERO
 		var avg_vel = Vector2.ZERO
@@ -91,7 +92,7 @@ func _process(delta: float) -> void:
 		var target_zoom_h = screen_size.x / rect_size.x
 		var target_zoom = clamp(min(target_zoom_v, target_zoom_h), min_zoom, max_zoom)
 		
-		# Мгновенная привязка на первом кадре
+		# Мгновенная привязка ПРИ ПОЯВЛЕНИИ ПЕРВЫХ КЛЕТОК
 		if _is_first_frame:
 			global_position = final_pos
 			zoom = Vector2(target_zoom, target_zoom)
@@ -101,7 +102,8 @@ func _process(delta: float) -> void:
 			zoom = zoom.lerp(Vector2(target_zoom, target_zoom), zoom_speed * delta)
 	else:
 		# === Режим наблюдателя ===
-		_is_first_frame = false # Чтобы не сбивать камеру если вдруг враг захватил игрока
+		# Если мы в режиме наблюдателя, но флаг _is_first_frame еще поднят, 
+		# это значит, что мы ЕЩЕ НЕ НАШЛИ ПЕРВЫХ КЛЕТОК. Не сбрасываем его.
 		if not _spectator_mode:
 			_spectator_mode = true
 			_spectator_label.text = "DEV: свободная камера включена\nWASD — перемещение  |  Колесо мыши — зум" if _forced_spectator else "☠ Ты проиграл! Наблюдаешь за битвой...\nWASD — перемещение  |  Колесо мыши — зум"

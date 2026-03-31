@@ -63,7 +63,10 @@ var unlocked_levels: int = 1
 
 func _ready() -> void:
 	if has_node("/root/LevelManager"):
-		unlocked_levels = get_node("/root/LevelManager").unlocked_levels
+		var lm = get_node("/root/LevelManager")
+		unlocked_levels = lm.unlocked_levels
+		# Можно добавить метод get_total_levels() в LM, но пока зашьем 3 (т.к. в match их 3)
+		total_levels = 3 
 	# Полный экран
 	set_anchors_and_offsets_preset(PRESET_FULL_RECT)
 	mouse_filter = MOUSE_FILTER_STOP
@@ -718,7 +721,11 @@ func _on_level_selected(level_num: int) -> void:
 	var tween = create_tween()
 	tween.tween_interval(0.3)
 	tween.tween_callback(func():
-		get_tree().change_scene_to_file("res://scenes/main.tscn")
+		var scene_path = "res://scenes/main.tscn" # Базовая сцена для остальных
+		if level_num == 2:
+			scene_path = "res://scenes/levels/organic_level.tscn"
+		
+		get_tree().change_scene_to_file(scene_path)
 	)
 
 func _on_level_back() -> void:
