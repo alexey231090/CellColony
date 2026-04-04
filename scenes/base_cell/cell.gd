@@ -477,20 +477,31 @@ func _update_shield_overlay() -> void:
 	if not mat: return
 	
 	if reflect_chance > 0.0:
-		# РЕЖИМ ЩИТА
+		# РЕЖИМ ЩИТА (Базовый цвет щита)
 		var s_color = _get_cell_color().lightened(0.5)
 		s_color.s = 1.0
-		mat.set_shader_parameter("sprint_mode", false)
 		mat.set_shader_parameter("shield_color", s_color)
-		mat.set_shader_parameter("intensity", 1.0)
-	elif speed_boost_timer > 0.0:
+		mat.set_shader_parameter("has_shield", true)
+	else:
+		mat.set_shader_parameter("has_shield", false)
+		
+	if speed_boost_timer > 0.0:
 		# РЕЖИМ СПРИНТА (Оптимизированные полоски скорости)
 		var c_color = Color(0.0, 0.8, 1.0) # Неоново-синий
+		mat.set_shader_parameter("sprint_color_tint", c_color)
 		mat.set_shader_parameter("sprint_mode", true)
-		mat.set_shader_parameter("shield_color", c_color)
-		mat.set_shader_parameter("intensity", 1.8) # Чуть поярче
 		mat.set_shader_parameter("aura_intensity", 1.0)
-		mat.set_shader_parameter("sprint_angle", visual_angle) # Полоски летят вдоль движения
+		mat.set_shader_parameter("sprint_angle", visual_angle)
+	else:
+		mat.set_shader_parameter("sprint_mode", false)
+
+	# Интенсивность подгоняем
+	if speed_boost_timer > 0.0 and reflect_chance <= 0.0:
+		mat.set_shader_parameter("intensity", 1.8) # Поярче, если только спринт
+	elif speed_boost_timer > 0.0 and reflect_chance > 0.0:
+		mat.set_shader_parameter("intensity", 1.2) # Слегка ярче при обоих
+	else:
+		mat.set_shader_parameter("intensity", 1.0) # Обычный щит
 
 func _update_visuals() -> void:
 	queue_redraw()

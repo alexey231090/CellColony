@@ -1,9 +1,11 @@
 shader_type canvas_item;
 
 uniform vec4 shield_color : source_color = vec4(0.3, 1.0, 0.4, 1.0);
+uniform vec4 sprint_color_tint : source_color = vec4(0.0, 0.8, 1.0, 1.0);
 uniform float intensity : hint_range(0.0, 2.0) = 1.0;
 uniform float hit_pulse : hint_range(0.0, 1.0) = 0.0;
 uniform bool sprint_mode = false;
+uniform bool has_shield = false;
 uniform float aura_intensity : hint_range(0.0, 1.0) = 0.0;
 uniform float sprint_angle = 0.0; // Направление движения
 
@@ -21,6 +23,43 @@ void fragment() {
 	vec2 uv = UV;
 	vec2 center_uv = uv - vec2(0.5);
 	float dist_from_center = length(center_uv);
+	
+	vec4 final_color = vec4(0.0);
+	
+	if (has_shield) {
+		// РЕЖИМ ЩИТА: Шестигранное поле
+		float angle = atan(center_uv.y, center_uv.x);
+		float wobble = sin(angle * 12.0 + TIME * -8.0) * 0.01;
+		wobble += sin(angle * 5.0 + TIME * 5.0) * 0.015;
+		float radius = 0.42;
+		
+		float mask = smoothstep(radius + 0.03 + wobble, radius - 0.03 + wobble, dist_from_center);
+		float rim = smoothstep(0.1, radius + 0.05, dist_from_center);
+		
+		vec2 scroll_uv = uv;
+		scroll_uv.y -= TIME * 0.35;
+		scroll_uv += center_uv * dist_from_center * 0.3;
+		
+		float scale = 15.0;
+		vec2 s = vec2(1.0, 1.73205);
+		vec2 h = s * 0.5;
+		vec2 p = scroll_uv * scale;
+		
+		vec2 a = mod(p, s) - h;
+		vec2 b = mod(p - h, s) - h;
+		vec2 gv = dot(a, a) < dot(b, b) ? a : b;
+		
+		float d = hex_dist(gv);
+		float line_thickness = 0.05;
+		float edge = smoothstep(0.48 - line_thickness, 0.5, d);
+		
+		vec4 shield_base = mix(vec4(0.0), shield_color, edge);
+		shield_base += (shield_color * rim * 1.4); // Возвращаем яркий ободок
+		shield_base += (shield_color * 0.05 * (1.0 - rim)); // Делаем внутреннюю часть почти прозрачной
+		
+		shield_base.a *= mask * clamp(0.1 + rim * 0.9, 0.0, 1.0) * intensity;
+		final_color = shield_base;
+	}
 	
 	if (sprint_mode) {
 		// РЕЖИМ СПРИНТА: Эффект скорости (дождевые капли / спидлайны)
@@ -52,46 +91,17 @@ void fragment() {
 			float mask_y = smoothstep(0.02, 0.0, dy);
 			
 			// Маска по X (форма капли-полоски: тупая спереди, сужается сзади)
-			// flow_x > 0 это хвост, flow_x < 0 это нос летящей капли
 			float mask_x = smoothstep(-0.2, 0.0, flow_x) * smoothstep(0.15, -0.05, flow_x);
 			
 			lines += mask_y * mask_x * circle_mask;
 		}
 		
-		COLOR = shield_color;
-		COLOR.a = clamp(lines, 0.0, 1.0) * aura_intensity * intensity;
-	} else {
-		// РЕЖИМ ЩИТА: Шестигранное поле
-		float angle = atan(center_uv.y, center_uv.x);
-		float wobble = sin(angle * 12.0 + TIME * -8.0) * 0.01;
-		wobble += sin(angle * 5.0 + TIME * 5.0) * 0.015;
-		float radius = 0.42;
+		vec4 sprint_base = sprint_color_tint;
+		sprint_base.a = clamp(lines, 0.0, 1.0) * aura_intensity * intensity;
 		
-		float mask = smoothstep(radius + 0.03 + wobble, radius - 0.03 + wobble, dist_from_center);
-		float rim = smoothstep(0.1, radius + 0.05, dist_from_center);
-		
-		vec2 scroll_uv = uv;
-		scroll_uv.y -= TIME * 0.35;
-		scroll_uv += center_uv * dist_from_center * 0.3;
-		
-		float scale = 15.0;
-		vec2 s = vec2(1.0, 1.73205);
-		vec2 h = s * 0.5;
-		vec2 p = scroll_uv * scale;
-		
-		vec2 a = mod(p, s) - h;
-		vec2 b = mod(p - h, s) - h;
-		vec2 gv = dot(a, a) < dot(b, b) ? a : b;
-		
-		float d = hex_dist(gv);
-		float line_thickness = 0.05;
-		float edge = smoothstep(0.48 - line_thickness, 0.5, d);
-		
-		vec4 final_color = mix(vec4(0.0), shield_color, edge);
-		final_color += (shield_color * rim * 1.4); // Возвращаем яркий ободок
-		final_color += (shield_color * 0.05 * (1.0 - rim)); // Делаем внутреннюю часть почти прозрачной
-		
-		COLOR = final_color;
-		COLOR.a *= mask * clamp(0.1 + rim * 0.9, 0.0, 1.0) * intensity;
+		// Смешиваем так, чтобы спринт был ПОВЕРХ щита
+		final_color = vec4(mix(final_color.rgb, sprint_base.rgb, sprint_base.a), min(1.0, final_color.a + sprint_base.a));
 	}
+	
+	COLOR = final_color;
 }
