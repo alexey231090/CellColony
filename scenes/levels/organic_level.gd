@@ -1,5 +1,12 @@
 extends Node2D
 
+const FACTION_BASES_NORMALIZED: Array[Dictionary] = [
+	{"type": BaseCell.OwnerType.PLAYER, "pos": Vector2(-0.68, -0.68)},
+	{"type": BaseCell.OwnerType.ENEMY_RED, "pos": Vector2(0.68, 0.68)},
+	{"type": BaseCell.OwnerType.ENEMY_GREEN, "pos": Vector2(0.68, -0.68)},
+	{"type": BaseCell.OwnerType.ENEMY_YELLOW, "pos": Vector2(-0.68, 0.68)},
+]
+
 ## ORGANIC LEVEL - CLEAN VERSION ##
 # Этот уровень полностью отделен от классического main.tscn.
 # Здесь используется только органическая генерация и шейдеры.
@@ -16,36 +23,72 @@ func _ready() -> void:
 	add_to_group("main") # Важно для DevConsole и Mover
 	
 	# 0. Получаем данные (у нас они фиксированные для органики обычно)
-	var level_data = {"seed": 202, "map_scale": 1.0}
+	var level_data: Dictionary = {
+		"seed": 202,
+		"map_scale": 1.0,
+		"shape_type": "blob",
+		"shape_size": Vector2(3600, 2400),
+		"shape_power": 4.0,
+		"play_area_radius_mult": 1.0,
+		"island_count": 4,
+		"island_radius": 620.0,
+		"island_noise_freq": 0.0025,
+		"island_noise_amp": 0.2,
+		"island_specs": [],
+		"noise_freq": 0.0012,
+		"noise_amp": 0.18,
+	}
 	if has_node("/root/LevelManager"):
 		level_data = get_node("/root/LevelManager").get_current_level_data()
 	
 	seed(level_data.seed)
+	map_size *= float(level_data.get("map_scale", 1.0))
 	
-	# 1. Генерация границ (ТОЛЬКО ВИЗУАЛЬНАЯ ПОКА)
-	playable_polygon_pts = _generate_borders_organic()
+	# 1. Генерация органических физических границ уровня
+	playable_polygon_pts = _generate_borders_organic(level_data)
+	var level_rect: Rect2 = _get_polygon_bounds(playable_polygon_pts)
 	
 	# 2. Настройка камеры
 	if camera:
-		var rect = _get_polygon_bounds(playable_polygon_pts)
 		var margin = 1000.0
-		camera.limit_left = int(rect.position.x - margin)
-		camera.limit_right = int(rect.end.x + margin)
-		camera.limit_top = int(rect.position.y - margin)
-		camera.limit_bottom = int(rect.end.y + margin)
+		camera.limit_left = int(level_rect.position.x - margin)
+		camera.limit_right = int(level_rect.end.x + margin)
+		camera.limit_top = int(level_rect.position.y - margin)
+		camera.limit_bottom = int(level_rect.end.y + margin)
 		camera.global_position = Vector2.ZERO
 	
-	# 3. Спавним игрока в ЦЕНТРЕ (0,0)
-	var player_cell = _spawn_cell(Vector2.ZERO, 1, 40.0) # 1 = Player
+	# 3. Спавним игрока и врагов по конфигу уровня
+	var base_positions: Array[Vector2] = []
+	var player_base_pos: Vector2 = _find_safe_pos(
+		FACTION_BASES_NORMALIZED[0].pos * Vector2(level_rect.size.x * 0.5, level_rect.size.y * 0.5),
+		playable_polygon_pts
+	)
+	base_positions.append(player_base_pos)
+	var player_cell = _spawn_cell(player_base_pos, BaseCell.OwnerType.PLAYER, 40.0)
 	player_cell.assigned_perk = "speed"
 	player_cell.z_index = 100
 	
+	for i in range(1, int(level_data.get("num_enemies", 1)) + 1):
+		if i >= FACTION_BASES_NORMALIZED.size():
+			break
+		var raw_pos: Vector2 = FACTION_BASES_NORMALIZED[i].pos * Vector2(level_rect.size.x * 0.5, level_rect.size.y * 0.5)
+		var enemy_pos: Vector2 = _find_safe_pos(raw_pos, playable_polygon_pts)
+		base_positions.append(enemy_pos)
+		var enemy_type: int = int(FACTION_BASES_NORMALIZED[i].type)
+		_spawn_cell(enemy_pos, enemy_type, 28.0)
+		_spawn_cell(enemy_pos + Vector2(randf_range(-140, 140), randf_range(-140, 140)), enemy_type, 16.0)
+		_spawn_cell(enemy_pos + Vector2(randf_range(-140, 140), randf_range(-140, 140)), enemy_type, 12.0)
+	
+	_spawn_neutral_cells(int(level_data.get("num_neutrals", 18)), base_positions)
+	
 	# Сбрасываем камеру, чтобы она сразу прыгнула на игрока
 	if camera:
+		camera.global_position = player_base_pos
 		camera._is_first_frame = true
 	
 	# 4. Свободная камера
 	_setup_dev_camera()
+	_setup_pause_ui()
 	
 	print("--- ORGANIC LEVEL LOADED: Чистое пространство (0,0) ---")
 
@@ -60,9 +103,10 @@ func _input(event: InputEvent) -> void:
 			_toggle_free_camera()
 
 func _spawn_cell(pos: Vector2, owner_type: int, energy: float):
-	var cell = cell_scene.instantiate()
+	var cell: BaseCell = cell_scene.instantiate() as BaseCell
 	cell.position = pos
 	cell.owner_type = owner_type
+	cell.stats.current_energy = energy
 	
 	# ВАЖНО: Добавляем в группы, чтобы SelectionManager и Camera его видели
 	cell.add_to_group("cells")
@@ -72,11 +116,31 @@ func _spawn_cell(pos: Vector2, owner_type: int, energy: float):
 	
 	add_child(cell)
 	
-	# Настройка энергии
-	if cell.has_node("Stats"):
-		cell.stats.current_energy = energy
-	
 	return cell
+
+func _spawn_neutral_cells(count: int, base_positions: Array[Vector2]) -> void:
+	var spawned: int = 0
+	var attempts: int = 0
+	var bounds: Rect2 = _get_polygon_bounds(playable_polygon_pts)
+	while spawned < count and attempts < count * 15:
+		attempts += 1
+		var pos: Vector2 = Vector2(
+			randf_range(bounds.position.x + 200.0, bounds.end.x - 200.0),
+			randf_range(bounds.position.y + 200.0, bounds.end.y - 200.0)
+		)
+		if not Geometry2D.is_point_in_polygon(pos, playable_polygon_pts):
+			continue
+		if _is_inside_any_island(pos):
+			continue
+		var too_close: bool = false
+		for base_pos in base_positions:
+			if pos.distance_to(base_pos) < 700.0:
+				too_close = true
+				break
+		if too_close:
+			continue
+		_spawn_cell(pos, BaseCell.OwnerType.NEUTRAL, randf_range(3.0, 15.0))
+		spawned += 1
 
 func _setup_dev_camera() -> void:
 	var dev_cam = Camera2D.new()
@@ -100,32 +164,315 @@ func _toggle_free_camera() -> void:
 		camera.enabled = true
 		camera.make_current()
 
-func _generate_borders_organic() -> PackedVector2Array:
-	var blob_pts = PackedVector2Array()
-	var segments = 120
-	var radius = min(map_size.x, map_size.y) / 2.0
+func _setup_pause_ui() -> void:
+	var pause_menu = preload("res://scenes/ui/pause_menu.gd").new()
+	pause_menu.name = "PauseMenu"
+	add_child(pause_menu)
 	
-	var fnl = FastNoiseLite.new()
-	fnl.seed = randi()
-	fnl.frequency = 0.0015
+	var pause_hud: CanvasLayer = CanvasLayer.new()
+	pause_hud.name = "PauseHUD"
+	pause_hud.layer = 115
+	add_child(pause_hud)
 	
-	for i in range(segments):
-		var angle = (float(i) / segments) * TAU
-		var p_dir = Vector2(cos(angle), sin(angle))
-		var noise_val = fnl.get_noise_2dv(p_dir * 1000.0)
-		var current_radius = radius * (1.0 + noise_val * 0.18)
-		blob_pts.append(p_dir * current_radius)
+	var pause_btn = preload("res://scripts/ui/pause_button_mobile.gd").new()
+	pause_btn.name = "MobilePauseButton"
+	pause_btn.process_mode = Node.PROCESS_MODE_ALWAYS
+	pause_btn.pause_menu = pause_menu
+	pause_btn.custom_minimum_size = Vector2(68, 68)
 	
-	# Визуальная линия
-	var line = Line2D.new()
+	# Явно задаем размеры и привязку, чтобы кнопка не схлопывалась до нуля.
+	pause_btn.set_anchors_and_offsets_preset(Control.PRESET_TOP_RIGHT)
+	pause_btn.offset_right = -16
+	pause_btn.offset_top = 16
+	pause_btn.offset_left = -16 - 68
+	pause_btn.offset_bottom = 16 + 68
+	
+	pause_btn.pressed_btn.connect(pause_menu.toggle_pause)
+	pause_hud.add_child(pause_btn)
+
+func _generate_borders_organic(level_data: Dictionary) -> PackedVector2Array:
+	var border_node: StaticBody2D = StaticBody2D.new()
+	border_node.name = "BiologicalWalls"
+	add_child(border_node)
+	
+	var radius_mult: float = float(level_data.get("play_area_radius_mult", 1.0))
+	var shape_type: String = String(level_data.get("shape_type", "blob"))
+	var shape_size: Vector2 = level_data.get("shape_size", Vector2(map_size.x, map_size.y))
+	var radius: float = minf(map_size.x, map_size.y) / 2.0 * radius_mult
+	var noise: FastNoiseLite = FastNoiseLite.new()
+	noise.seed = int(level_data.get("seed", randi()))
+	noise.noise_type = FastNoiseLite.TYPE_SIMPLEX
+	noise.frequency = float(level_data.get("noise_freq", 0.0012))
+	
+	var amp: float = float(level_data.get("noise_amp", 0.18))
+	var segments: int = 72
+	var blob_pts: PackedVector2Array = PackedVector2Array()
+	var outer_wall_color: Color = Color(0.08, 0.19, 0.22, 1.0)
+	var outer_edge_color: Color = Color(0.33, 0.82, 0.88, 0.95)
+	var outer_highlight_color: Color = Color(0.82, 0.97, 1.0, 0.34)
+	var island_wall_color: Color = Color(0.09, 0.22, 0.25, 1.0)
+	var island_edge_color: Color = Color(0.26, 0.72, 0.78, 0.92)
+	var island_highlight_color: Color = Color(0.78, 0.95, 1.0, 0.26)
+	var outer_line_width: float = 110.0
+	var outer_highlight_width: float = 42.0
+	var island_line_width: float = 48.0
+	var island_highlight_width: float = 14.0
+	var visual_thickness: float = 3000.0
+	var collision_thickness: float = 3000.0
+	var collision_inset: float = 90.0
+	var segment_overlap: float = 160.0
+	var center: Vector2 = Vector2.ZERO
+	
+	if shape_type == "rounded_box":
+		blob_pts = _build_rounded_box_polygon(
+			Vector2.ZERO,
+			shape_size,
+			float(level_data.get("shape_power", 4.0)),
+			segments,
+			int(level_data.get("seed", 0)),
+			float(level_data.get("noise_freq", 0.0012)),
+			amp
+		)
+	else:
+		for i in range(segments):
+			var angle: float = (TAU / float(segments)) * float(i)
+			var dir: Vector2 = Vector2(cos(angle), sin(angle))
+			var noise_val: float = noise.get_noise_2d(dir.x * 500.0, dir.y * 500.0)
+			var p: Vector2 = dir * radius * (1.0 + noise_val * amp)
+			blob_pts.append(p)
+	
+	for p in blob_pts:
+		center += p
+	
+	# Контур игровой зоны должен быть CCW, чтобы корректно вырезать его из внешней плиты.
+	if Geometry2D.is_polygon_clockwise(blob_pts):
+		blob_pts.reverse()
+	center /= float(max(1, blob_pts.size()))
+	
+	for i in range(blob_pts.size()):
+		var p0: Vector2 = blob_pts[i]
+		var p1: Vector2 = blob_pts[(i + 1) % blob_pts.size()]
+		var edge: Vector2 = p1 - p0
+		if edge.length_squared() <= 0.001:
+			continue
+		
+		var tangent: Vector2 = edge.normalized()
+		var outward: Vector2 = Vector2(edge.y, -edge.x).normalized()
+		var mid: Vector2 = (p0 + p1) * 0.5
+		if outward.dot(mid - center) < 0.0:
+			outward = -outward
+		
+		# Удлиняем сегменты вдоль касательной и слегка перекрываем соседние,
+		# чтобы не было щелей между отдельными кусками стены.
+		var ext_p0: Vector2 = p0 - tangent * segment_overlap
+		var ext_p1: Vector2 = p1 + tangent * segment_overlap
+		var coll_inner_p0: Vector2 = p0 - outward * collision_inset - tangent * segment_overlap
+		var coll_inner_p1: Vector2 = p1 - outward * collision_inset + tangent * segment_overlap
+		
+		var visual_poly_pts: PackedVector2Array = PackedVector2Array([
+			ext_p0,
+			ext_p1,
+			ext_p1 + outward * visual_thickness,
+			ext_p0 + outward * visual_thickness,
+		])
+		var visual_poly: Polygon2D = Polygon2D.new()
+		visual_poly.polygon = visual_poly_pts
+		visual_poly.color = outer_wall_color
+		visual_poly.z_index = -5
+		border_node.add_child(visual_poly)
+		
+		var coll_poly_pts: PackedVector2Array = PackedVector2Array([
+			coll_inner_p0,
+			coll_inner_p1,
+			ext_p1 + outward * collision_thickness,
+			ext_p0 + outward * collision_thickness,
+		])
+		var coll: CollisionPolygon2D = CollisionPolygon2D.new()
+		coll.polygon = coll_poly_pts
+		border_node.add_child(coll)
+	
+	var line_loop: PackedVector2Array = blob_pts.duplicate()
+	line_loop.append(line_loop[0])
+	
+	var line: Line2D = Line2D.new()
 	line.name = "OrganicBorderVisual"
-	line.width = 18.0
-	line.default_color = Color(0.3, 0.9, 0.4, 0.6)
-	line.closed = true
-	line.points = blob_pts
-	add_child(line)
+	line.points = line_loop
+	line.width = outer_line_width
+	line.default_color = outer_edge_color
+	line.joint_mode = Line2D.LINE_JOINT_ROUND
+	line.begin_cap_mode = Line2D.LINE_CAP_ROUND
+	line.end_cap_mode = Line2D.LINE_CAP_ROUND
+	line.z_index = -3
+	border_node.add_child(line)
+	
+	var hl: Line2D = Line2D.new()
+	hl.points = line_loop
+	hl.width = outer_highlight_width
+	hl.default_color = outer_highlight_color
+	hl.joint_mode = Line2D.LINE_JOINT_ROUND
+	hl.z_index = -2
+	border_node.add_child(hl)
+	
+	if bool(level_data.get("has_islands", false)):
+		_generate_organic_islands(
+			border_node,
+			level_data,
+			center,
+			radius,
+			island_wall_color,
+			island_edge_color,
+			island_highlight_color,
+			island_line_width,
+			island_highlight_width
+		)
 	
 	return blob_pts
+
+func _generate_organic_islands(border_node: StaticBody2D, level_data: Dictionary, center: Vector2, outer_radius: float, wall_color: Color, edge_color: Color, highlight_color: Color, line_width: float, highlight_width: float) -> void:
+	var island_count: int = int(level_data.get("island_count", 4))
+	var island_radius: float = float(level_data.get("island_radius", 620.0))
+	var island_noise_freq: float = float(level_data.get("island_noise_freq", 0.0025))
+	var island_noise_amp: float = float(level_data.get("island_noise_amp", 0.2))
+	var island_specs: Array = level_data.get("island_specs", [])
+	
+	for i in range(island_count):
+		var spec: Dictionary = island_specs[i] if i < island_specs.size() else {}
+		var center_ratio: Vector2 = spec.get("center_ratio", Vector2.ZERO)
+		var island_center: Vector2 = center + center_ratio * outer_radius
+		var island_radius_x: float = float(spec.get("radius_x", island_radius))
+		var island_radius_y: float = float(spec.get("radius_y", island_radius * 0.65))
+		var island_rotation: float = float(spec.get("rotation", 0.0))
+		var island_segments: int = int(spec.get("segments", 24))
+		var island_local_amp: float = float(spec.get("noise_amp", island_noise_amp))
+		var island_pts: PackedVector2Array = _build_organic_blob_polygon(
+			island_center,
+			island_radius_x,
+			island_radius_y,
+			island_rotation,
+			island_segments,
+			int(level_data.get("seed", 0)) + 1000 + i * 97,
+			island_noise_freq,
+			island_local_amp
+		)
+		_add_organic_island(border_node, island_pts, wall_color, edge_color, highlight_color, line_width, highlight_width)
+
+func _build_rounded_box_polygon(center: Vector2, size: Vector2, shape_power: float, segments: int, noise_seed: int, noise_freq: float, noise_amp: float) -> PackedVector2Array:
+	var noise: FastNoiseLite = FastNoiseLite.new()
+	noise.seed = noise_seed
+	noise.noise_type = FastNoiseLite.TYPE_SIMPLEX
+	noise.frequency = noise_freq
+	
+	var pts: PackedVector2Array = PackedVector2Array()
+	var hx: float = size.x * 0.5
+	var hy: float = size.y * 0.5
+	var exponent: float = maxf(0.1, 2.0 / maxf(0.1, shape_power))
+	for i in range(segments):
+		var angle: float = (TAU / float(segments)) * float(i)
+		var c: float = cos(angle)
+		var s: float = sin(angle)
+		var base: Vector2 = Vector2(
+			signf(c) * pow(absf(c), exponent) * hx,
+			signf(s) * pow(absf(s), exponent) * hy
+		)
+		var noise_val: float = noise.get_noise_2d(base.x * 0.35, base.y * 0.35)
+		pts.append(center + base * (1.0 + noise_val * noise_amp))
+	if Geometry2D.is_polygon_clockwise(pts):
+		pts.reverse()
+	return pts
+
+func _build_organic_blob_polygon(center: Vector2, radius_x: float, radius_y: float, rotation: float, segments: int, noise_seed: int, noise_freq: float, noise_amp: float) -> PackedVector2Array:
+	var noise: FastNoiseLite = FastNoiseLite.new()
+	noise.seed = noise_seed
+	noise.noise_type = FastNoiseLite.TYPE_SIMPLEX
+	noise.frequency = noise_freq
+	
+	var pts: PackedVector2Array = PackedVector2Array()
+	for i in range(segments):
+		var angle: float = (TAU / float(segments)) * float(i)
+		var dir: Vector2 = Vector2(cos(angle), sin(angle))
+		var local: Vector2 = Vector2(dir.x * radius_x, dir.y * radius_y).rotated(rotation)
+		var noise_val: float = noise.get_noise_2d(dir.x * 400.0, dir.y * 400.0)
+		var p: Vector2 = center + local * (1.0 + noise_val * noise_amp)
+		pts.append(p)
+	
+	if Geometry2D.is_polygon_clockwise(pts):
+		pts.reverse()
+	return pts
+
+func _add_organic_island(border_node: StaticBody2D, island_pts: PackedVector2Array, wall_color: Color, edge_color: Color, highlight_color: Color, line_width: float, highlight_width: float) -> void:
+	var fill_poly: Polygon2D = Polygon2D.new()
+	fill_poly.polygon = island_pts
+	fill_poly.color = wall_color
+	fill_poly.z_index = -5
+	border_node.add_child(fill_poly)
+	
+	var expanded_island_pts: PackedVector2Array = _expand_polygon_from_center(island_pts, 80.0)
+	var coll: CollisionPolygon2D = CollisionPolygon2D.new()
+	coll.polygon = expanded_island_pts
+	coll.set_meta("is_island", true)
+	border_node.add_child(coll)
+	
+	var loop_pts: PackedVector2Array = island_pts.duplicate()
+	loop_pts.append(loop_pts[0])
+	
+	var line: Line2D = Line2D.new()
+	line.points = loop_pts
+	line.width = line_width
+	line.default_color = edge_color
+	line.joint_mode = Line2D.LINE_JOINT_ROUND
+	line.begin_cap_mode = Line2D.LINE_CAP_ROUND
+	line.end_cap_mode = Line2D.LINE_CAP_ROUND
+	line.z_index = -3
+	border_node.add_child(line)
+	
+	var hl: Line2D = Line2D.new()
+	hl.points = loop_pts
+	hl.width = highlight_width
+	hl.default_color = highlight_color
+	hl.joint_mode = Line2D.LINE_JOINT_ROUND
+	hl.z_index = -2
+	border_node.add_child(hl)
+
+func _expand_polygon_from_center(polygon: PackedVector2Array, amount: float) -> PackedVector2Array:
+	if polygon.is_empty():
+		return polygon
+	var center: Vector2 = Vector2.ZERO
+	for p in polygon:
+		center += p
+	center /= float(polygon.size())
+	var expanded: PackedVector2Array = PackedVector2Array()
+	for p in polygon:
+		var dir: Vector2 = p - center
+		var len: float = dir.length()
+		if len <= 0.001:
+			expanded.append(p)
+		else:
+			expanded.append(center + dir.normalized() * (len + amount))
+	return expanded
+
+func _is_inside_any_island(pos: Vector2) -> bool:
+	var walls: Node = get_node_or_null("BiologicalWalls")
+	if walls == null:
+		return false
+	for child in walls.get_children():
+		if child is CollisionPolygon2D:
+			var coll: CollisionPolygon2D = child
+			if not coll.has_meta("is_island"):
+				continue
+			if Geometry2D.is_point_in_polygon(pos, coll.polygon):
+				return true
+	return false
+
+func _find_safe_pos(target_pos: Vector2, polygon: PackedVector2Array) -> Vector2:
+	if Geometry2D.is_point_in_polygon(target_pos, polygon) and not _is_inside_any_island(target_pos):
+		return target_pos
+	var current: Vector2 = target_pos
+	var center: Vector2 = Vector2.ZERO
+	for i in range(40):
+		current = current.lerp(center, 0.18)
+		if Geometry2D.is_point_in_polygon(current, polygon) and not _is_inside_any_island(current):
+			return current * 0.92
+	return center
 
 func _get_polygon_bounds(pts: PackedVector2Array) -> Rect2:
 	if pts.is_empty(): return Rect2(-1000, -1000, 2000, 2000)

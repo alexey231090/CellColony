@@ -63,10 +63,9 @@ var unlocked_levels: int = 1
 
 func _ready() -> void:
 	if has_node("/root/LevelManager"):
-		var lm = get_node("/root/LevelManager")
+		var lm: Node = get_node("/root/LevelManager")
 		unlocked_levels = lm.unlocked_levels
-		# Можно добавить метод get_total_levels() в LM, но пока зашьем 3 (т.к. в match их 3)
-		total_levels = 3 
+		total_levels = lm.get_total_levels()
 	# Полный экран
 	set_anchors_and_offsets_preset(PRESET_FULL_RECT)
 	mouse_filter = MOUSE_FILTER_STOP
@@ -104,13 +103,13 @@ func _ready() -> void:
 		
 		var t = create_tween().set_loops().set_parallel(true)
 		# Пульсация свечения
-		t.tween_property(glow, "modulate:a", 1.0, 1.2).from(0.3)
-		t.chain().tween_property(glow, "modulate:a", 0.3, 1.2)
+		t.tween_property(glow, "modulate:a", 0.75, 1.7).from(0.4)
+		t.chain().tween_property(glow, "modulate:a", 0.4, 1.7)
 		
-		# Пульсация размера (на 10%)
+		# Пульсация размера делаем мягче и медленнее, чтобы дёрганье было менее заметно
 		var t2 = create_tween().set_loops()
-		t2.tween_property(wrapper, "scale", Vector2(1.1, 1.1), 1.2).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN_OUT)
-		t2.tween_property(wrapper, "scale", Vector2(1.0, 1.0), 1.2).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN_OUT)
+		t2.tween_property(wrapper, "scale", Vector2(1.04, 1.04), 1.7).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN_OUT)
+		t2.tween_property(wrapper, "scale", Vector2(1.0, 1.0), 1.7).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN_OUT)
 
 # ========== ФАБРИКА ЭЛЕМЕНТОВ ==========
 
@@ -713,18 +712,17 @@ func _on_play_pressed() -> void:
 
 func _on_level_selected(level_num: int) -> void:
 	print("Выбран уровень: ", level_num)
+	var scene_path := "res://scenes/main.tscn"
 	if has_node("/root/LevelManager"):
-		get_node("/root/LevelManager").current_level = level_num
+		var lm: Node = get_node("/root/LevelManager")
+		lm.set_current_level(level_num)
+		scene_path = lm.get_current_level_scene_path()
 	
 	_hide_panel(level_panel)
 	# Небольшая задержка перед переходом
 	var tween = create_tween()
 	tween.tween_interval(0.3)
 	tween.tween_callback(func():
-		var scene_path = "res://scenes/main.tscn" # Базовая сцена для остальных
-		if level_num == 2:
-			scene_path = "res://scenes/levels/organic_level.tscn"
-		
 		get_tree().change_scene_to_file(scene_path)
 	)
 

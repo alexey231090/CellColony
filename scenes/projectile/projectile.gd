@@ -84,8 +84,20 @@ func _draw() -> void:
 			draw_circle(p, final_radius * life_factor * 0.7, t_col)
 
 func _process(delta: float) -> void:
+	var motion: Vector2 = direction * speed * delta
+	var next_position: Vector2 = position + motion
+	var next_global_position: Vector2 = global_position + motion
+	var wall_query: PhysicsRayQueryParameters2D = PhysicsRayQueryParameters2D.create(global_position, next_global_position)
+	wall_query.exclude = [self]
+	var wall_hit: Dictionary = get_world_2d().direct_space_state.intersect_ray(wall_query)
+	if not wall_hit.is_empty():
+		var collider: Object = wall_hit.get("collider")
+		if collider is StaticBody2D:
+			_impact_wall_at(Vector2(wall_hit.get("position", global_position)))
+			return
+
 	# Используем простую физику прямого полета
-	position += direction * speed * delta
+	position = next_position
 	
 	# Уменьшаем время жизни
 	current_lifetime -= delta
@@ -110,6 +122,10 @@ func _process(delta: float) -> void:
 			queue_redraw()
 
 func _on_body_entered(body: Node2D) -> void:
+	if body is StaticBody2D:
+		_impact_wall_at(global_position)
+		return
+	
 	# Теперь body — это сама клетка (CharacterBody2D)
 	var cell = body as BaseCell
 	if not cell: 
@@ -161,6 +177,13 @@ func _impact(cell: BaseCell) -> void:
 		cell.infect(virus_duration, virus_outbreak_id)
 	else:
 		cell.take_damage(damage, owner_type)
+	queue_free()
+
+func _impact_wall_at(impact_pos: Vector2) -> void:
+	var impact = impact_effect_scene.instantiate()
+	get_tree().current_scene.add_child(impact)
+	impact.global_position = impact_pos + direction.normalized() * 100.0
+	impact.color = Color(0.28, 0.86, 0.92, 0.9)
 	queue_free()
 
 func _reflect(cell: BaseCell) -> void:

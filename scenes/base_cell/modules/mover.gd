@@ -7,6 +7,72 @@ var stop_distance: float = 120.0
 var acceleration: float = 5.0
 var friction: float = 2.0
 var push_force: float = 120.0 # Сила отталкивания
+var _wall_slide_dir: Vector2 = Vector2.ZERO
+var _wall_slide_timer: float = 0.0
+const WALL_SLIDE_MEMORY: float = 0.35
+
+func _get_wall_aware_direction(parent_cell: BaseCell, desired_dir: Vector2) -> Vector2:
+	if desired_dir.length_squared() <= 0.001:
+		return desired_dir
+	if _wall_slide_timer > 0.0 and _wall_slide_dir.length_squared() > 0.001:
+		var memory_query: PhysicsRayQueryParameters2D = PhysicsRayQueryParameters2D.create(
+			parent_cell.global_position,
+			parent_cell.global_position + desired_dir * maxf(140.0, parent_cell.radius * parent_cell.scale.x + 80.0)
+		)
+		memory_query.exclude = [parent_cell]
+		memory_query.collision_mask = parent_cell.collision_mask
+		var memory_hit: Dictionary = parent_cell.get_world_2d().direct_space_state.intersect_ray(memory_query)
+		if memory_hit.is_empty():
+			_wall_slide_timer = 0.0
+			_wall_slide_dir = Vector2.ZERO
+		else:
+			var remembered_dir: Vector2 = (_wall_slide_dir * 0.75 + desired_dir * 0.25).normalized()
+			if remembered_dir.length_squared() > 0.001:
+				return remembered_dir
+	
+	var probe_distance: float = maxf(140.0, parent_cell.radius * parent_cell.scale.x + 80.0)
+	var query: PhysicsRayQueryParameters2D = PhysicsRayQueryParameters2D.create(
+		parent_cell.global_position,
+		parent_cell.global_position + desired_dir * probe_distance
+	)
+	query.exclude = [parent_cell]
+	query.collision_mask = parent_cell.collision_mask
+	
+	var hit: Dictionary = parent_cell.get_world_2d().direct_space_state.intersect_ray(query)
+	if hit.is_empty():
+		return desired_dir
+	
+	var collider: Object = hit.get("collider")
+	if not (collider is StaticBody2D):
+		return desired_dir
+	
+	var normal: Vector2 = hit.get("normal", Vector2.ZERO)
+	if normal.length_squared() <= 0.001:
+		return desired_dir
+	
+	var tangent_a: Vector2 = Vector2(-normal.y, normal.x).normalized()
+	var tangent_b: Vector2 = -tangent_a
+	var slide_dir: Vector2 = desired_dir.slide(normal).normalized()
+	if slide_dir.length_squared() > 0.001:
+		if _wall_slide_dir.length_squared() > 0.001:
+			if tangent_a.dot(_wall_slide_dir) < tangent_b.dot(_wall_slide_dir):
+				tangent_a = -tangent_a
+				tangent_b = -tangent_b
+			if slide_dir.dot(_wall_slide_dir) < 0.0:
+				slide_dir = -slide_dir
+		_wall_slide_dir = slide_dir
+		_wall_slide_timer = WALL_SLIDE_MEMORY
+		return (_wall_slide_dir * 0.8 + desired_dir * 0.2).normalized()
+	
+	var chosen_tangent: Vector2 = tangent_a
+	if _wall_slide_dir.length_squared() > 0.001:
+		if tangent_b.dot(_wall_slide_dir) > tangent_a.dot(_wall_slide_dir):
+			chosen_tangent = tangent_b
+	elif tangent_b.dot(desired_dir) > tangent_a.dot(desired_dir):
+		chosen_tangent = tangent_b
+	_wall_slide_dir = chosen_tangent
+	_wall_slide_timer = WALL_SLIDE_MEMORY
+	return (_wall_slide_dir * 0.85 + desired_dir * 0.15).normalized()
 
 func set_target(pos: Vector2) -> void:
 	target_position = pos
@@ -15,6 +81,9 @@ func set_target(pos: Vector2) -> void:
 func _physics_process(delta: float) -> void:
 	var parent_cell = get_parent() as BaseCell
 	if not parent_cell: return
+	_wall_slide_timer = maxf(0.0, _wall_slide_timer - delta)
+	if _wall_slide_timer <= 0.0:
+		_wall_slide_dir = Vector2.ZERO
 	
 	if parent_cell.is_infected:
 		# Если заражена — только трение и отталкивание от других, сама не плывет
@@ -53,7 +122,8 @@ func _physics_process(delta: float) -> void:
 		var d_to_target = current_pos.distance_to(target_position)
 		
 		if d_to_target > stop_distance * parent_cell.scale.x:
-			var dir = (target_position - current_pos).normalized()
+			var dir: Vector2 = (target_position - current_pos).normalized()
+			dir = _get_wall_aware_direction(parent_cell, dir)
 			# Рассчитываем скорость с учетом баффа ускорения И меню отладки
 			var base_speed = parent_cell.stats.move_speed
 			
@@ -67,7 +137,11 @@ func _physics_process(delta: float) -> void:
 			var target_vel = dir * base_speed
 			parent_cell.velocity = parent_cell.velocity.lerp(target_vel, acceleration * delta)
 		else:
+			_wall_slide_timer = 0.0
+			_wall_slide_dir = Vector2.ZERO
 			parent_cell.velocity = parent_cell.velocity.lerp(Vector2.ZERO, friction * delta)
 	else:
 		# Трение покоя
+		_wall_slide_timer = 0.0
+		_wall_slide_dir = Vector2.ZERO
 		parent_cell.velocity = parent_cell.velocity.lerp(Vector2.ZERO, friction * delta)

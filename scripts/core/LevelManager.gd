@@ -1,41 +1,70 @@
 extends Node
 
 var current_level: int = 1
-var unlocked_levels: int = 2
+var unlocked_levels: int = 1
+
+const DEFAULT_LEVEL_DATA := {
+	"scene_path": "res://scenes/levels/organic_level.tscn",
+	"num_enemies": 1,
+	"has_islands": true,
+	"is_organic": true,
+	"map_scale": 1.1,
+	"num_neutrals": 36,
+	"seed": 42,
+}
+
+const LEVELS: Array[Dictionary] = [
+	{
+		"id": 1,
+		"scene_path": "res://scenes/levels/organic_level.tscn",
+		"num_enemies": 1,
+		"has_islands": true,
+		"is_organic": true,
+		"map_scale": 1.1,
+		"num_neutrals": 36,
+		"seed": 101,
+		"shape_type": "rounded_box",
+		"shape_size": Vector2(7200, 5000),
+		"shape_power": 4.6,
+		"play_area_radius_mult": 1.0,
+		"noise_freq": 0.0014,
+		"noise_amp": 0.08,
+		"island_count": 2,
+		"island_radius": 260.0,
+		"island_noise_freq": 0.0032,
+		"island_noise_amp": 0.22,
+		"island_specs": [
+			{
+				"center_ratio": Vector2(-0.34, -0.18),
+				"radius_x": 320.0,
+				"radius_y": 160.0,
+				"rotation": -0.42,
+				"noise_amp": 0.24,
+			},
+			{
+				"center_ratio": Vector2(0.3, 0.22),
+				"radius_x": 280.0,
+				"radius_y": 140.0,
+				"rotation": 0.73,
+				"noise_amp": 0.2,
+			},
+		],
+	},
+]
+
+func get_total_levels() -> int:
+	return LEVELS.size()
+
+func get_level_data(level_num: int) -> Dictionary:
+	if level_num < 1 or level_num > LEVELS.size():
+		return DEFAULT_LEVEL_DATA.duplicate(true)
+	return LEVELS[level_num - 1].duplicate(true)
 
 func get_current_level_data() -> Dictionary:
-	var data = {
-		"num_enemies": 1,
-		"has_islands": false,
-		"is_organic": false,
-		"map_scale": 1.0, 
-		"num_neutrals": 20,
-		"seed": 42 # Фиксированный сид по умолчанию
-	}
-	
-	match current_level:
-		1:
-			data.num_enemies = 1
-			data.has_islands = false
-			data.is_organic = false # Квадрат
-			data.map_scale = 0.6
-			data.num_neutrals = 25
-			data.seed = 101
-		2:
-			data.num_enemies = 2
-			data.has_islands = true
-			data.is_organic = true # Органическая "Клякса"
-			data.map_scale = 0.9
-			data.num_neutrals = 35
-			data.seed = 202
-			data.noise_freq = 0.0012 # Плавные волны
-			data.noise_amp = 0.18    # Амплитуда "волнистости"
-		3:
-			data.num_enemies = 2
-			data.has_islands = true
-			data.is_organic = true
-			data.map_scale = 1.1
-			data.num_neutrals = 50
-			data.seed = 303
-	
-	return data
+	return get_level_data(current_level)
+
+func get_current_level_scene_path() -> String:
+	return String(get_current_level_data().get("scene_path", DEFAULT_LEVEL_DATA.scene_path))
+
+func set_current_level(level_num: int) -> void:
+	current_level = clampi(level_num, 1, max(1, LEVELS.size()))
