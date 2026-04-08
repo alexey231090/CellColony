@@ -151,7 +151,7 @@ func _on_body_entered(body: Node2D) -> void:
 
 func _impact(cell: BaseCell) -> void:
 	# Проверка на отскок (если у цели есть активный щит)
-	if cell.reflect_chance > 0.0 and cell.owner_type != owner_type:
+	if not is_virus and cell.reflect_chance > 0.0 and cell.owner_type != owner_type:
 		if randf() <= cell.reflect_chance:
 			_reflect(cell)
 			return

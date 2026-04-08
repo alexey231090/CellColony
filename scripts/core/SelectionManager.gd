@@ -420,15 +420,7 @@ func _activate_shield_chain() -> void:
 		return
 	
 	# Находим центральную клетку (ближайшую к центру колонии)
-	var colony_center = Vector2.ZERO
-	var count = 0
-	for cell in player_cells:
-		if cell is BaseCell:
-			colony_center += cell.global_position
-			count += 1
-	
-	if count > 0:
-		colony_center /= float(count)
+	var colony_center = BaseCell.get_colony_center(get_tree(), BaseCell.OwnerType.PLAYER)
 	
 	var center_cell: BaseCell = null
 	var min_dist = INF
@@ -472,15 +464,7 @@ func _activate_virus_auto() -> void:
 		return
 	
 	# Находим центр колонии
-	var colony_center = Vector2.ZERO
-	var count = 0
-	for cell in player_cells:
-		if cell is BaseCell:
-			colony_center += cell.global_position
-			count += 1
-	
-	if count > 0:
-		colony_center /= float(count)
+	var colony_center = BaseCell.get_colony_center(get_tree(), BaseCell.OwnerType.PLAYER)
 	
 	# Поиск ближайшего врага
 	var all_cells = get_tree().get_nodes_in_group("cells")

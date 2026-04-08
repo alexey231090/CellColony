@@ -16,6 +16,7 @@ const TEXT_COLOR := Color(0.9, 0.95, 1.0, 1.0)
 var overlay: ColorRect
 var center_panel: PanelContainer
 var resume_btn: Button
+var restart_btn: Button
 var main_menu_btn: Button
 
 var is_open: bool = false
@@ -93,6 +94,11 @@ func _build_ui() -> void:
 	resume_btn = _make_button("Продолжить", ACCENT_COLOR)
 	resume_btn.pressed.connect(toggle_pause)
 	vbox.add_child(resume_btn)
+
+	# Кнопка РЕСТАРТ
+	restart_btn = _make_button("Рестарт", ACCENT_BLUE)
+	restart_btn.pressed.connect(_on_restart_pressed)
+	vbox.add_child(restart_btn)
 	
 	# Кнопка В ГЛАВНОЕ МЕНЮ
 	main_menu_btn = _make_button("Выйти в меню", ACCENT_RED)
@@ -166,3 +172,13 @@ func _input(event: InputEvent) -> void:
 func _on_main_menu_pressed() -> void:
 	get_tree().paused = false # Снимаем паузу перед переходом
 	get_tree().change_scene_to_file("res://scenes/ui/main_menu/main_menu.tscn")
+
+func _on_restart_pressed() -> void:
+	get_tree().paused = false
+	is_open = false
+	if overlay:
+		overlay.visible = false
+		overlay.modulate.a = 0.0
+	if center_panel:
+		center_panel.scale = Vector2.ONE
+	get_tree().reload_current_scene()

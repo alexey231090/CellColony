@@ -42,6 +42,8 @@ func _ready() -> void:
 		level_data = get_node("/root/LevelManager").get_current_level_data()
 	
 	seed(level_data.seed)
+	var neutral_rng := RandomNumberGenerator.new()
+	neutral_rng.randomize()
 	map_size *= float(level_data.get("map_scale", 1.0))
 	
 	# 1. Генерация органических физических границ уровня
@@ -79,7 +81,7 @@ func _ready() -> void:
 		_spawn_cell(enemy_pos + Vector2(randf_range(-140, 140), randf_range(-140, 140)), enemy_type, 16.0)
 		_spawn_cell(enemy_pos + Vector2(randf_range(-140, 140), randf_range(-140, 140)), enemy_type, 12.0)
 	
-	_spawn_neutral_cells(int(level_data.get("num_neutrals", 18)), base_positions)
+	_spawn_neutral_cells(int(level_data.get("num_neutrals", 18)), base_positions, neutral_rng)
 	
 	# Сбрасываем камеру, чтобы она сразу прыгнула на игрока
 	if camera:
@@ -118,15 +120,15 @@ func _spawn_cell(pos: Vector2, owner_type: int, energy: float):
 	
 	return cell
 
-func _spawn_neutral_cells(count: int, base_positions: Array[Vector2]) -> void:
+func _spawn_neutral_cells(count: int, base_positions: Array[Vector2], rng: RandomNumberGenerator) -> void:
 	var spawned: int = 0
 	var attempts: int = 0
 	var bounds: Rect2 = _get_polygon_bounds(playable_polygon_pts)
 	while spawned < count and attempts < count * 15:
 		attempts += 1
 		var pos: Vector2 = Vector2(
-			randf_range(bounds.position.x + 200.0, bounds.end.x - 200.0),
-			randf_range(bounds.position.y + 200.0, bounds.end.y - 200.0)
+			rng.randf_range(bounds.position.x + 200.0, bounds.end.x - 200.0),
+			rng.randf_range(bounds.position.y + 200.0, bounds.end.y - 200.0)
 		)
 		if not Geometry2D.is_point_in_polygon(pos, playable_polygon_pts):
 			continue
@@ -139,7 +141,7 @@ func _spawn_neutral_cells(count: int, base_positions: Array[Vector2]) -> void:
 				break
 		if too_close:
 			continue
-		_spawn_cell(pos, BaseCell.OwnerType.NEUTRAL, randf_range(3.0, 15.0))
+		_spawn_cell(pos, BaseCell.OwnerType.NEUTRAL, rng.randf_range(3.0, 15.0))
 		spawned += 1
 
 func _setup_dev_camera() -> void:

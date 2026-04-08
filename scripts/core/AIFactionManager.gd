@@ -7,6 +7,7 @@ class_name AIFactionManager
 @export var faction: BaseCell.OwnerType = BaseCell.OwnerType.NEUTRAL
 @export var decision_interval: float = 2.5
 @export var attack_range: float = 2000.0
+@export var enemy_notice_range: float = 2000.0
 @export var expand_range: float = 10000.0
 @export var min_energy_ratio_for_war: float = 0.55
 @export var goal_lock_time: float = 4.0
@@ -85,10 +86,13 @@ func _tick_ai() -> void:
 		return
 	
 	var avg_energy_ratio := _get_avg_energy_ratio(my_cells)
-	var best_enemy := _find_best_enemy_global(center, all_cells)
 	var best_neutral := _find_best_neutral_global(center, all_cells)
-	
-	if best_enemy != null and (avg_energy_ratio >= min_energy_ratio_for_war or best_neutral == null):
+	var noticed_enemy := _find_best_enemy_in_range(center, enemy_notice_range, all_cells)
+	var best_enemy: BaseCell = null
+	if noticed_enemy != null or best_neutral == null:
+		best_enemy = _find_best_enemy_global(center, all_cells)
+
+	if best_enemy != null and avg_energy_ratio >= min_energy_ratio_for_war:
 		_set_goal_lock()
 		_order_all_attack(my_cells, best_enemy)
 		return

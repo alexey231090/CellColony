@@ -61,6 +61,8 @@ func _ready() -> void:
 		level_data = get_node("/root/LevelManager").get_current_level_data()
 	
 	seed(level_data.seed)
+	var neutral_rng := RandomNumberGenerator.new()
+	neutral_rng.randomize()
 	map_size *= level_data.map_scale
 	num_neutral_cells = level_data.num_neutrals
 	var hx = map_size.x / 2.0
@@ -164,13 +166,16 @@ func _ready() -> void:
 		var bounds = _get_polygon_bounds(playable_polygon_pts)
 		while spawned < num_neutral_cells and attempts < num_neutral_cells * 10:
 			attempts += 1
-			var pos = Vector2(randf_range(bounds.position.x + 200, bounds.end.x - 200), randf_range(bounds.position.y + 200, bounds.end.y - 200))
+			var pos = Vector2(
+				neutral_rng.randf_range(bounds.position.x + 200, bounds.end.x - 200),
+				neutral_rng.randf_range(bounds.position.y + 200, bounds.end.y - 200)
+			)
 			if not Geometry2D.is_point_in_polygon(pos, playable_polygon_pts): continue
 			var too_close := false
 			for bpos in base_positions:
 				if pos.distance_to(bpos) < 600: too_close = true; break
 			if too_close: continue
-			_spawn_cell(pos, BaseCell.OwnerType.NEUTRAL, randf_range(3.0, 22.0))
+			_spawn_cell(pos, BaseCell.OwnerType.NEUTRAL, neutral_rng.randf_range(3.0, 22.0))
 			spawned += 1
 		print("Мир: %d нейтральных, %d фракций." % [spawned, base_positions.size()])
 

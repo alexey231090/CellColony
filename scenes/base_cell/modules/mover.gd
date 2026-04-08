@@ -136,12 +136,21 @@ func _physics_process(delta: float) -> void:
 	parent_cell.velocity += push_vector * delta * 50.0
 
 	# 2. Движение к цели (если активно)
-	if is_active:
+	var move_target: Vector2 = target_position
+	var should_move: bool = is_active
+	var move_speed_multiplier: float = 1.0
+
+	if parent_cell.is_stranded and parent_cell.has_stranded_return_target:
+		move_target = parent_cell.stranded_return_target
+		should_move = true
+		move_speed_multiplier = 2.0
+
+	if should_move:
 		var current_pos = parent_cell.global_position
-		var d_to_target = current_pos.distance_to(target_position)
+		var d_to_target = current_pos.distance_to(move_target)
 		
 		if d_to_target > stop_distance * parent_cell.scale.x:
-			var dir: Vector2 = (target_position - current_pos).normalized()
+			var dir: Vector2 = (move_target - current_pos).normalized()
 			dir = _get_wall_aware_direction(parent_cell, dir)
 			# Рассчитываем скорость с учетом баффа ускорения И меню отладки
 			var base_speed = parent_cell.stats.move_speed
@@ -152,6 +161,8 @@ func _physics_process(delta: float) -> void:
 				
 			if parent_cell.speed_boost_timer > 0:
 				base_speed *= parent_cell.current_speed_multiplier
+
+			base_speed *= move_speed_multiplier
 				
 			var target_vel = dir * base_speed
 			parent_cell.velocity = parent_cell.velocity.lerp(target_vel, acceleration * delta)

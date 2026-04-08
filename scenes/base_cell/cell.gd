@@ -55,6 +55,46 @@ const REDRAW_INTERVAL: float = 0.033 # ~30 FPS для отрисовки (физ
 var _vein_rng: RandomNumberGenerator = null
 var _vein_rng_seed: int = 0
 
+# Механика "отставшей" клетки
+var is_stranded: bool = false
+var _stranded_check_timer: float = 0.0
+var _stranded_damage_timer: float = 0.0
+var stranded_return_target: Vector2 = Vector2.ZERO
+var has_stranded_return_target: bool = false
+const STRANDED_CHECK_INTERVAL: float = 2.0
+const STRANDED_DISTANCE_THRESHOLD: float = 2000.0
+const STRANDED_DAMAGE_INTERVAL: float = 1.0
+const STRANDED_DAMAGE_AMOUNT: float = 1.0
+
+static func get_group_for_owner(owner: OwnerType) -> String:
+	match owner:
+		OwnerType.PLAYER:
+			return "player_cells"
+		OwnerType.ENEMY_RED:
+			return "enemy_red_cells"
+		OwnerType.ENEMY_GREEN:
+			return "enemy_green_cells"
+		OwnerType.ENEMY_YELLOW:
+			return "enemy_yellow_cells"
+	return ""
+
+static func get_colony_center(tree: SceneTree, owner: OwnerType) -> Vector2:
+	var group_name := get_group_for_owner(owner)
+	if group_name == "":
+		return Vector2.ZERO
+
+	var colony_center := Vector2.ZERO
+	var count := 0
+	for node in tree.get_nodes_in_group(group_name):
+		var cell := node as BaseCell
+		if cell:
+			colony_center += cell.global_position
+			count += 1
+
+	if count <= 0:
+		return Vector2.ZERO
+	return colony_center / float(count)
+
 func _ready() -> void:
 	add_to_group("cells")
 	_update_groups()
@@ -144,6 +184,16 @@ func _capture(new_owner: OwnerType) -> void:
 	_visual_infection_factor = 0.0
 	last_outbreak_id = -1
 	_vein_rng = null # Сброс кешированного RNG вен
+	is_stranded = false
+	_stranded_check_timer = 0.0
+	_stranded_damage_timer = 0.0
+	stranded_return_target = Vector2.ZERO
+	has_stranded_return_target = false
+	velocity = Vector2.ZERO
+	var mover = get_node_or_null("MoverModule") as MoverModule
+	if mover:
+		mover.is_active = false
+		mover.target_position = global_position
 	
 	owner_type = new_owner
 	_update_groups()
@@ -255,6 +305,27 @@ func _draw() -> void:
 	var main_points = points.duplicate()
 	main_points.append(main_points[0]) # Замыкаем
 	draw_polyline(main_points, outline_color, 2.5, true)
+
+	# 3.1 Маркер отставшей клетки: тревожное кольцо и стрелка к центру колонии
+	if is_stranded and has_stranded_return_target and owner_type != OwnerType.NEUTRAL:
+		var alert_pulse = (sin(local_time * 8.0) + 1.0) * 0.5
+		var alert_color = Color(1.0, 0.35, 0.2, 0.45 + alert_pulse * 0.25)
+		var ring_radius = current_radius * (1.3 + alert_pulse * 0.08)
+		draw_arc(Vector2.ZERO, ring_radius, 0.0, TAU, 40, alert_color, 3.0, true)
+
+		var to_center = stranded_return_target - global_position
+		if to_center.length_squared() > 0.001:
+			var pointer_dir = to_center.normalized()
+			var pointer_tip = pointer_dir * (current_radius * 1.75)
+			var pointer_base = pointer_dir * (current_radius * 1.22)
+			var pointer_side = Vector2(-pointer_dir.y, pointer_dir.x) * (current_radius * 0.22)
+			var pointer_points = PackedVector2Array([
+				pointer_tip,
+				pointer_base + pointer_side,
+				pointer_base - pointer_side,
+			])
+			draw_colored_polygon(pointer_points, Color(1.0, 0.55, 0.2, 0.95))
+			draw_polyline(pointer_points + PackedVector2Array([pointer_tip]), Color(1.0, 0.9, 0.7, 0.85), 1.5, true)
 	
 	# 4. ЭНЕРГЕТИЧЕСКИЙ КУПОЛ (ЩИТ / СПРИНТ) - визуализация перенесена в _process
 	
@@ -303,6 +374,8 @@ func _process(delta: float) -> void:
 		if reflect_timer <= 0.0:
 			reflect_chance = 0.0
 			queue_redraw()
+
+	_update_stranded_state(delta)
 			
 	# Обработка таймера ускорения
 	if speed_boost_timer > 0.0:
@@ -357,8 +430,13 @@ func _process(delta: float) -> void:
 		if stats.current_energy <= 0.0:
 			stats.current_energy = 0.0
 			_capture(OwnerType.NEUTRAL)
+	elif is_stranded:
+		_apply_stranded_damage(delta)
 	elif owner_type != OwnerType.NEUTRAL:
+		_stranded_damage_timer = 0.0
 		stats.current_energy = min(stats.max_energy, stats.current_energy + stats.energy_gain_rate * delta)
+	else:
+		_stranded_damage_timer = 0.0
 	
 	_update_size()
 	_update_ui()
@@ -384,6 +462,63 @@ func _process(delta: float) -> void:
 	if _redraw_timer >= REDRAW_INTERVAL:
 		_redraw_timer = 0.0
 		queue_redraw()
+
+func _update_stranded_state(delta: float) -> void:
+	if owner_type == OwnerType.NEUTRAL:
+		is_stranded = false
+		_stranded_damage_timer = 0.0
+		stranded_return_target = Vector2.ZERO
+		has_stranded_return_target = false
+		return
+
+	_stranded_check_timer += delta
+	if _stranded_check_timer < STRANDED_CHECK_INTERVAL:
+		return
+	_stranded_check_timer = 0.0
+
+	var group_name := get_group_for_owner(owner_type)
+	if group_name == "":
+		is_stranded = false
+		_stranded_damage_timer = 0.0
+		stranded_return_target = Vector2.ZERO
+		has_stranded_return_target = false
+		return
+
+	var own_cells := get_tree().get_nodes_in_group(group_name)
+	if own_cells.is_empty():
+		is_stranded = false
+		_stranded_damage_timer = 0.0
+		stranded_return_target = Vector2.ZERO
+		has_stranded_return_target = false
+		return
+
+	var colony_center := get_colony_center(get_tree(), owner_type)
+	stranded_return_target = colony_center
+	has_stranded_return_target = true
+	var was_stranded := is_stranded
+	is_stranded = global_position.distance_to(colony_center) > STRANDED_DISTANCE_THRESHOLD
+	if not is_stranded:
+		_stranded_damage_timer = 0.0
+	elif not was_stranded:
+		_stranded_damage_timer = 0.0
+
+func _apply_stranded_damage(delta: float) -> void:
+	_stranded_damage_timer += delta
+	if _stranded_damage_timer < STRANDED_DAMAGE_INTERVAL:
+		return
+
+	while _stranded_damage_timer >= STRANDED_DAMAGE_INTERVAL:
+		_stranded_damage_timer -= STRANDED_DAMAGE_INTERVAL
+		stats.current_energy -= STRANDED_DAMAGE_AMOUNT
+		# Тот же визуальный отклик, как при попадании снаряда
+		hit_flash_timer = 0.2
+		hit_impact_wobble = 15.0
+		queue_redraw()
+
+		if stats.current_energy <= 0.0:
+			stats.current_energy = 0.0
+			_capture(OwnerType.NEUTRAL)
+			return
 
 func _physics_process(_delta: float) -> void:
 	move_and_slide()
