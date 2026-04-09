@@ -46,10 +46,13 @@ var drag_cell: BaseCell = null
 var drag_target_pos: Vector2 = Vector2.ZERO
 var drag_preview: Node2D = null
 var aim_line: Line2D = null
+var attack_target_line: Line2D = null
+var attack_target_node: BaseCell = null
 
 func _ready() -> void:
 	add_to_group("selection_manager")
 	_init_aim_line()
+	_init_attack_target_line()
 	
 	# Твёрдая фиксация баланса (игнорирует случайные изменения в Инспекторе)
 	SHIELD_ENERGY_COST = 50.0
@@ -64,6 +67,17 @@ func _init_aim_line() -> void:
 	aim_line.default_color = Color(0.2, 0.8, 1.0, 0.3)
 	aim_line.hide()
 	add_child(aim_line)
+
+func _init_attack_target_line() -> void:
+	attack_target_line = Line2D.new()
+	attack_target_line.width = 1.4
+	attack_target_line.default_color = Color(0.95, 0.72, 0.76, 0.12)
+	attack_target_line.joint_mode = Line2D.LINE_JOINT_ROUND
+	attack_target_line.begin_cap_mode = Line2D.LINE_CAP_ROUND
+	attack_target_line.end_cap_mode = Line2D.LINE_CAP_ROUND
+	attack_target_line.z_index = 6
+	attack_target_line.hide()
+	add_child(attack_target_line)
 
 func add_perk_energy(amount: float) -> void:
 	perk_energy += amount
@@ -85,6 +99,44 @@ func _process(delta: float) -> void:
 		
 	_update_cursor_visual()
 	_update_drag_preview()
+	_update_attack_target_line()
+
+func _update_attack_target_line() -> void:
+	if attack_target_line == null:
+		return
+
+	if not is_instance_valid(attack_target_node) or not attack_target_node.is_inside_tree() or attack_target_node.owner_type == BaseCell.OwnerType.PLAYER:
+		attack_target_node = null
+		attack_target_line.hide()
+		return
+
+	var player_cells_raw = get_tree().get_nodes_in_group("player_cells")
+	var player_cells: Array[BaseCell] = []
+	for node in player_cells_raw:
+		var cell := node as BaseCell
+		if cell:
+			player_cells.append(cell)
+
+	if player_cells.is_empty():
+		attack_target_line.hide()
+		return
+
+	var colony_center := BaseCell.get_colony_center(get_tree(), BaseCell.OwnerType.PLAYER)
+	attack_target_line.clear_points()
+	attack_target_line.add_point(colony_center)
+	attack_target_line.add_point(attack_target_node.global_position)
+
+	if attack_target_node.owner_type == BaseCell.OwnerType.NEUTRAL:
+		attack_target_line.default_color = Color(0.8, 0.9, 0.96, 0.1)
+	else:
+		attack_target_line.default_color = Color(0.95, 0.72, 0.76, 0.12)
+
+	attack_target_line.show()
+
+func _clear_attack_target_line() -> void:
+	attack_target_node = null
+	if attack_target_line:
+		attack_target_line.hide()
 
 func _update_drag_preview() -> void:
 	if is_dragging_perk and drag_cell and is_instance_valid(drag_cell):
@@ -360,6 +412,7 @@ func activate_perk(perk_name: String) -> void:
 		if perk_energy < SHIELD_ENERGY_COST or shield_cooldown > 0:
 			print("Нет энергии или КД")
 			return
+		_clear_attack_target_line()
 		
 		# Щит активируется на центральной клетке и передаётся соседям
 		_activate_shield_chain()
@@ -368,6 +421,7 @@ func activate_perk(perk_name: String) -> void:
 		if perk_energy < VIRUS_ENERGY_COST or virus_cooldown > 0:
 			print("Нет энергии или КД для вируса")
 			return
+		_clear_attack_target_line()
 		
 		# Автоприцеливание на ближайшего врага
 		_activate_virus_auto()
@@ -376,6 +430,7 @@ func activate_perk(perk_name: String) -> void:
 		if perk_energy < SPEED_ENERGY_COST or speed_cooldown > 0:
 			print("Нет энергии или КД для ускорения")
 			return
+		_clear_attack_target_line()
 		
 		# Ускорение применяется мгновенно ко всем клеткам
 		perk_energy -= SPEED_ENERGY_COST
@@ -396,6 +451,7 @@ func activate_perk(perk_name: String) -> void:
 		if perk_energy < RAPID_FIRE_ENERGY_COST or rapid_fire_cooldown > 0:
 			print("Нет энергии или КД для скорострельности")
 			return
+		_clear_attack_target_line()
 		
 		# Скорострельность применяется мгновенно ко всем клеткам
 		perk_energy -= RAPID_FIRE_ENERGY_COST
@@ -735,6 +791,7 @@ func _handle_selection(pos: Vector2) -> void:
 		# ИСПРАВЛЕНИЕ: Если кликнули по СВОЕЙ клетке (например, для перка),
 		# не заставляем всю остальную колонию бросать дела и целиться в неё.
 		if clicked_node.owner_type != BaseCell.OwnerType.PLAYER:
+			attack_target_node = clicked_node
 			for p_cell in player_cells:
 				if p_cell is BaseCell:
 					p_cell.command_attack(clicked_node.global_position, clicked_node)
@@ -746,20 +803,21 @@ func _handle_selection(pos: Vector2) -> void:
 				var is_attack = clicked_node.owner_type != BaseCell.OwnerType.PLAYER
 				feedback.setup(player_cells, clicked_node.global_position, is_attack)
 				
-			# Временное выделение атакуемой/нейтральной цели на 3 секунды
-			if TARGET_HIGHLIGHT_SCENE and clicked_node.owner_type != BaseCell.OwnerType.NEUTRAL:
+			# Временное выделение атакуемой или нейтральной цели на 3 секунды
+			if TARGET_HIGHLIGHT_SCENE:
 				var highlight = TARGET_HIGHLIGHT_SCENE.instantiate()
 				get_parent().add_child(highlight)
-				var ht_color = Color(0.9, 0.3, 0.3) if clicked_node.owner_type != BaseCell.OwnerType.NEUTRAL else Color(0.8, 0.8, 0.8)
+				var ht_color = Color(0.95, 0.45, 0.42) if clicked_node.owner_type != BaseCell.OwnerType.NEUTRAL else Color(0.78, 0.9, 0.96)
 				highlight.setup(clicked_node, ht_color)
 		else:
 			# Если кликнули по своей, просто покажем круг выбора на ней (опционально)
-			pass
+			_clear_attack_target_line()
 	else:
 		# ЦЕЛИ НЕТ — ПЛЫВЕМ ВСЕЙ КОЛОНИЕЙ ТУДА
 		if circle:
 			circle.target_node = null
 			circle.hide()
+		_clear_attack_target_line()
 
 		for p_cell in player_cells:
 			if p_cell is BaseCell:

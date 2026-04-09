@@ -43,8 +43,10 @@ var play_button: Button
 var play_pulse_tween: Tween
 
 # Уровни
-var level_grid: GridContainer
+var level_list: VBoxContainer
 var level_back_btn: Button
+var difficulty_panel: Control
+var pending_level_num: int = 1
 
 # Настройки
 var sound_slider: HSlider
@@ -89,10 +91,12 @@ func _ready() -> void:
 	_build_safe_area()
 	_build_main_screen()
 	_build_level_panel()
+	_build_difficulty_panel()
 	_build_settings_panel()
 	
 	# Элементы основного экрана (начальное состояние)
 	level_panel.visible = false
+	difficulty_panel.visible = false
 	settings_panel.visible = false
 	overlay.visible = false
 	
@@ -525,12 +529,20 @@ func _build_level_panel() -> void:
 	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
 	vbox.add_child(scroll)
 	
-	level_grid = GridContainer.new()
-	level_grid.columns = 5
-	level_grid.add_theme_constant_override("h_separation", 20)
-	level_grid.add_theme_constant_override("v_separation", 20)
-	level_grid.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	scroll.add_child(level_grid)
+	# MarginContainer внутри ScrollContainer решает проблему обрезания hover-эффектов у карточек
+	var scroll_margin = MarginContainer.new()
+	scroll_margin.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	scroll_margin.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	scroll_margin.add_theme_constant_override("margin_left", 16)
+	scroll_margin.add_theme_constant_override("margin_right", 16)
+	scroll_margin.add_theme_constant_override("margin_top", 16)
+	scroll_margin.add_theme_constant_override("margin_bottom", 24)
+	scroll.add_child(scroll_margin)
+	
+	level_list = VBoxContainer.new()
+	level_list.add_theme_constant_override("separation", 26)
+	level_list.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	scroll_margin.add_child(level_list)
 	
 	_populate_levels()
 	
@@ -542,64 +554,288 @@ func _build_level_panel() -> void:
 
 func _populate_levels() -> void:
 	# Очищаем
-	for child in level_grid.get_children():
+	for child in level_list.get_children():
 		child.queue_free()
+
+	var chapters := int(ceili(float(total_levels) / 5.0))
+	for chapter_index in range(1, chapters + 1):
+		var chapter_box = VBoxContainer.new()
+		chapter_box.add_theme_constant_override("separation", 14)
+		level_list.add_child(chapter_box)
+
+		var chapter_title = _make_label("ГЛАВА %d" % chapter_index, 28, ACCENT_BLUE)
+		chapter_title.horizontal_alignment = HORIZONTAL_ALIGNMENT_LEFT
+		chapter_box.add_child(chapter_title)
+
+		var subtitle = _make_label("Уровни %d-%d" % [((chapter_index - 1) * 5) + 1, mini(chapter_index * 5, total_levels)], 16, TEXT_DIM)
+		subtitle.horizontal_alignment = HORIZONTAL_ALIGNMENT_LEFT
+		chapter_box.add_child(subtitle)
+
+		var chapter_grid = GridContainer.new()
+		chapter_grid.columns = 5
+		chapter_grid.add_theme_constant_override("h_separation", 20)
+		chapter_grid.add_theme_constant_override("v_separation", 20)
+		chapter_box.add_child(chapter_grid)
+
+		var start_level := (chapter_index - 1) * 5 + 1
+		var end_level := mini(chapter_index * 5, total_levels)
+		for level_num in range(start_level, end_level + 1):
+			chapter_grid.add_child(_build_level_button(level_num, level_num <= unlocked_levels))
+
+func _build_level_button(level_num: int, is_unlocked: bool) -> Button:
+	var btn = Button.new()
+	btn.custom_minimum_size = Vector2(140, 150)
+	btn.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND if is_unlocked else Control.CURSOR_FORBIDDEN
+	btn.pivot_offset = Vector2(70, 75)
+
+	var num_lbl = Label.new()
+	num_lbl.text = str(level_num)
+	num_lbl.set_anchors_and_offsets_preset(Control.PRESET_TOP_LEFT)
+	num_lbl.add_theme_font_size_override("font_size", 28)
+	num_lbl.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	num_lbl.position = Vector2(12, 8)
+	var num_settings = LabelSettings.new()
+	num_settings.font_size = 28
+	num_settings.shadow_color = Color(0, 0, 0, 0.5)
+	num_settings.shadow_offset = Vector2(0, 2)
+	num_lbl.label_settings = num_settings
+
+	var icon_lbl = Label.new()
+	icon_lbl.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	icon_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	icon_lbl.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	icon_lbl.add_theme_font_size_override("font_size", 56)
+	icon_lbl.mouse_filter = Control.MOUSE_FILTER_IGNORE
+
+	var stars_lbl = Label.new()
+	stars_lbl.text = "☆ ☆ ☆"
+	stars_lbl.set_anchors_and_offsets_preset(Control.PRESET_BOTTOM_WIDE)
+	stars_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	stars_lbl.position.y = -32
+	stars_lbl.size.y = 24
+	stars_lbl.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	
-	for i in range(total_levels):
-		var level_num = i + 1
-		var is_unlocked = level_num <= unlocked_levels
+	var stars_set = LabelSettings.new()
+	stars_set.font_size = 22
+	stars_lbl.label_settings = stars_set
+
+	if is_unlocked:
+		icon_lbl.text = "◉"
+		icon_lbl.modulate.a = 0.32
+		num_settings.font_color = ACCENT_COLOR * Color(1, 1, 1, 0.9)
+		icon_lbl.add_theme_color_override("font_color", Color(0.92, 0.98, 1.0, 0.95))
 		
-		var btn = Button.new()
-		btn.custom_minimum_size = Vector2(140, 140)
-		btn.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND if is_unlocked else Control.CURSOR_FORBIDDEN
-		
-		# Номер уровня в левом верхнем углу
-		var num_lbl = Label.new()
-		num_lbl.text = str(level_num)
-		num_lbl.set_anchors_and_offsets_preset(Control.PRESET_TOP_LEFT)
-		num_lbl.add_theme_font_size_override("font_size", 24)
-		num_lbl.mouse_filter = Control.MOUSE_FILTER_IGNORE
-		num_lbl.position = Vector2(12, 8)
-		
-		# Иконка Play в центре
-		var icon_lbl = Label.new()
-		icon_lbl.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-		icon_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-		icon_lbl.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
-		icon_lbl.add_theme_font_size_override("font_size", 54)
-		icon_lbl.mouse_filter = Control.MOUSE_FILTER_IGNORE
-		
-		if is_unlocked:
-			icon_lbl.text = "▶"
-			icon_lbl.modulate.a = 0.3
-			num_lbl.add_theme_color_override("font_color", ACCENT_COLOR * Color(1,1,1,0.8))
-			icon_lbl.add_theme_color_override("font_color", Color.WHITE)
-			
-			btn.mouse_entered.connect(func(): icon_lbl.modulate.a = 0.9)
-			btn.mouse_exited.connect(func(): icon_lbl.modulate.a = 0.3)
-			btn.pressed.connect(_on_level_selected.bind(level_num))
-			
-			var sb = _make_stylebox(BTN_BG, BTN_CORNER, 2, ACCENT_COLOR * Color(1,1,1,0.6))
-			btn.add_theme_stylebox_override("normal", sb)
-			var hover_sb = _make_stylebox(BTN_HOVER, BTN_CORNER, 2, ACCENT_COLOR)
-			hover_sb.shadow_size = 12
-			hover_sb.shadow_color = Color(0.1, 0.85, 0.55, 0.4)
-			btn.add_theme_stylebox_override("hover", hover_sb)
-			btn.add_theme_stylebox_override("pressed", _make_stylebox(BTN_PRESSED, BTN_CORNER, 3, ACCENT_COLOR))
-			btn.add_theme_stylebox_override("focus", hover_sb.duplicate())
-		else:
-			icon_lbl.text = "🔒"
-			num_lbl.add_theme_color_override("font_color", LOCKED_COLOR)
-			icon_lbl.add_theme_color_override("font_color", LOCKED_COLOR)
-			btn.disabled = true
-			var locked_sb = _make_stylebox(Color(0.1, 0.12, 0.15, 0.6), BTN_CORNER, 1, LOCKED_COLOR * Color(1,1,1,0.3))
-			btn.add_theme_stylebox_override("normal", locked_sb)
-			btn.add_theme_stylebox_override("disabled", locked_sb)
-		
-		btn.add_child(num_lbl)
-		btn.add_child(icon_lbl)
-		btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-		level_grid.add_child(btn)
+		stars_set.font_color = Color(1.0, 0.9, 0.4, 0.8) # Золотые звезды
+		stars_set.outline_size = 4
+		stars_set.outline_color = Color(1.0, 0.5, 0.0, 0.5)
+		stars_set.shadow_color = Color(1.0, 0.8, 0.2, 0.6)
+		stars_set.shadow_size = 8
+
+		btn.mouse_entered.connect(func():
+			icon_lbl.modulate.a = 0.8
+			var t = btn.create_tween()
+			t.tween_property(btn, "scale", Vector2(1.08, 1.08), 0.2).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+			t.parallel().tween_property(btn, "modulate", Color(1.2, 1.2, 1.2, 1.0), 0.2)
+		)
+		btn.mouse_exited.connect(func():
+			icon_lbl.modulate.a = 0.32
+			var t = btn.create_tween()
+			t.tween_property(btn, "scale", Vector2(1.0, 1.0), 0.15).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_IN_OUT)
+			t.parallel().tween_property(btn, "modulate", Color.WHITE, 0.15)
+		)
+		btn.pressed.connect(_open_difficulty_panel.bind(level_num))
+
+		var sb = _make_stylebox(Color(0.1, 0.2, 0.15, 0.85), BTN_CORNER, 2, ACCENT_COLOR * Color(1, 1, 1, 0.6))
+		btn.add_theme_stylebox_override("normal", sb)
+		var hover_sb = _make_stylebox(Color(0.15, 0.3, 0.2, 0.95), BTN_CORNER, 2, ACCENT_COLOR)
+		hover_sb.shadow_size = 20
+		hover_sb.shadow_color = Color(0.1, 0.85, 0.55, 0.5)
+		btn.add_theme_stylebox_override("hover", hover_sb)
+		btn.add_theme_stylebox_override("pressed", _make_stylebox(Color(0.05, 0.15, 0.1, 1.0), BTN_CORNER, 3, ACCENT_COLOR))
+		btn.add_theme_stylebox_override("focus", hover_sb.duplicate())
+	else:
+		icon_lbl.text = "🔒"
+		num_settings.font_color = LOCKED_COLOR
+		icon_lbl.add_theme_color_override("font_color", LOCKED_COLOR)
+		stars_set.font_color = LOCKED_COLOR * Color(1,1,1, 0.5)
+		btn.disabled = true
+		var locked_sb = _make_stylebox(Color(0.08, 0.1, 0.12, 0.7), BTN_CORNER, 1, LOCKED_COLOR * Color(1, 1, 1, 0.2))
+		btn.add_theme_stylebox_override("normal", locked_sb)
+		btn.add_theme_stylebox_override("disabled", locked_sb)
+
+	btn.add_child(num_lbl)
+	btn.add_child(icon_lbl)
+	btn.add_child(stars_lbl)
+	btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	return btn
+
+func _build_difficulty_panel() -> void:
+	difficulty_panel = CenterContainer.new()
+	difficulty_panel.name = "DifficultyPanel"
+	difficulty_panel.set_anchors_and_offsets_preset(PRESET_FULL_RECT)
+	difficulty_panel.mouse_filter = MOUSE_FILTER_IGNORE
+	add_child(difficulty_panel)
+
+	var panel_box = PanelContainer.new()
+	panel_box.name = "DifficultyPanelBox"
+	panel_box.custom_minimum_size = Vector2(560, 480)
+	var panel_sb = _make_stylebox(PANEL_BG, CORNER_RADIUS, 2, ACCENT_BLUE * Color(1, 1, 1, 0.6))
+	panel_sb.shadow_size = 40
+	panel_sb.shadow_color = Color(0.0, 0.2, 0.4, 0.4)
+	panel_sb.content_margin_left = 36
+	panel_sb.content_margin_right = 36
+	panel_sb.content_margin_top = 32
+	panel_sb.content_margin_bottom = 32
+	panel_box.add_theme_stylebox_override("panel", panel_sb)
+	difficulty_panel.add_child(panel_box)
+
+	var vbox = VBoxContainer.new()
+	vbox.add_theme_constant_override("separation", 24)
+	panel_box.add_child(vbox)
+
+	var header = _make_label("ВЫБЕРИ СЛОЖНОСТЬ", 38, ACCENT_COLOR)
+	header.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	var head_set = LabelSettings.new()
+	head_set.font_size = 38
+	head_set.font_color = ACCENT_COLOR
+	head_set.shadow_color = ACCENT_COLOR * Color(1,1,1,0.3)
+	head_set.shadow_size = 10
+	header.label_settings = head_set
+	vbox.add_child(header)
+
+	var subtitle = _make_label("Каждая сложность даст разное число звезд", 20, TEXT_DIM)
+	subtitle.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	vbox.add_child(subtitle)
+
+	var sep = HSeparator.new()
+	sep.add_theme_stylebox_override("separator", _make_stylebox(PANEL_BORDER * Color(1, 1, 1, 0.3), 0))
+	vbox.add_child(sep)
+
+	vbox.add_child(_make_difficulty_button("ЛЕГКИЙ", "★ ☆ ☆", "Меньше врагов, медленная реакция ИИ", ACCENT_COLOR, "easy"))
+	vbox.add_child(_make_difficulty_button("СРЕДНИЙ", "★ ★ ☆", "Стандартный сбалансированный бой", ACCENT_BLUE, "medium"))
+	vbox.add_child(_make_difficulty_button("СЛОЖНЫЙ", "★ ★ ★", "Усиленный старт врага, агрессивный ИИ", Color(1.0, 0.4, 0.2, 1.0), "hard"))
+
+	var cancel_btn = _make_button("✖ ОТМЕНА", ACCENT_RED)
+	cancel_btn.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
+	cancel_btn.custom_minimum_size = Vector2(220, 56)
+	cancel_btn.pressed.connect(_on_difficulty_cancel)
+	vbox.add_child(cancel_btn)
+
+func _make_difficulty_button(title_text: String, stars_text: String, desc_text: String, accent: Color, difficulty: String) -> Button:
+	var btn = Button.new()
+	btn.custom_minimum_size = Vector2(0, 88)
+	btn.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
+	btn.pivot_offset = Vector2(244, 44) # Для скейла (учитываем ширину ~488)
+	
+	# Стили
+	var dark_bg = Color(accent.r * 0.1, accent.g * 0.1, accent.b * 0.1, 0.8)
+	var hover_bg = Color(accent.r * 0.15, accent.g * 0.15, accent.b * 0.15, 0.95)
+	
+	var sb = _make_stylebox(dark_bg, BTN_CORNER, 2, accent * Color(1, 1, 1, 0.4))
+	btn.add_theme_stylebox_override("normal", sb)
+	var hover_sb = _make_stylebox(hover_bg, BTN_CORNER, 2, accent)
+	hover_sb.shadow_size = 16
+	hover_sb.shadow_color = accent * Color(1,1,1, 0.4)
+	btn.add_theme_stylebox_override("hover", hover_sb)
+	btn.add_theme_stylebox_override("pressed", _make_stylebox(dark_bg, BTN_CORNER, 3, accent))
+	btn.add_theme_stylebox_override("focus", hover_sb.duplicate())
+	
+	btn.pressed.connect(_start_level_with_difficulty.bind(difficulty))
+	
+	# Анимация
+	btn.mouse_entered.connect(func():
+		var t = btn.create_tween()
+		t.tween_property(btn, "scale", Vector2(1.03, 1.03), 0.15).set_trans(Tween.TRANS_BACK)
+		t.parallel().tween_property(btn, "modulate", Color(1.1, 1.1, 1.1, 1.0), 0.15)
+	)
+	btn.mouse_exited.connect(func():
+		var t = btn.create_tween()
+		t.tween_property(btn, "scale", Vector2(1.0, 1.0), 0.1)
+		t.parallel().tween_property(btn, "modulate", Color.WHITE, 0.1)
+	)
+
+	# Компоновка контента
+	var hbox = HBoxContainer.new()
+	hbox.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	hbox.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	hbox.add_theme_constant_override("separation", 16)
+	btn.add_child(hbox)
+	
+	# Отступ слева
+	var margin_l = Control.new()
+	margin_l.custom_minimum_size.x = 12
+	hbox.add_child(margin_l)
+
+	var title_lbl = _make_label(title_text, 28, accent)
+	title_lbl.custom_minimum_size.x = 160
+	title_lbl.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	var tset = LabelSettings.new()
+	tset.font_size = 28
+	tset.font_color = accent
+	tset.shadow_color = Color(0,0,0,0.5)
+	tset.shadow_offset = Vector2(0, 2)
+	title_lbl.label_settings = tset
+	hbox.add_child(title_lbl)
+	
+	var v_sep = VSeparator.new()
+	v_sep.add_theme_stylebox_override("separator", _make_stylebox(accent * Color(1,1,1,0.2), 0))
+	v_sep.custom_minimum_size.y = 50
+	v_sep.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	hbox.add_child(v_sep)
+
+	var text_vbox = VBoxContainer.new()
+	text_vbox.alignment = BoxContainer.ALIGNMENT_CENTER
+	text_vbox.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	text_vbox.add_theme_constant_override("separation", 2)
+	hbox.add_child(text_vbox)
+
+	var stars_lbl = _make_label(stars_text, 22, Color(1.0, 0.9, 0.4, 1.0))
+	var sset = LabelSettings.new()
+	sset.font_size = 22
+	sset.font_color = Color(1.0, 0.9, 0.4, 1.0)
+	sset.shadow_color = Color(1.0, 0.5, 0.0, 0.5)
+	sset.shadow_size = 4
+	stars_lbl.label_settings = sset
+	text_vbox.add_child(stars_lbl)
+
+	var desc_lbl = _make_label(desc_text, 16, TEXT_DIM.lightened(0.2))
+	desc_lbl.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	text_vbox.add_child(desc_lbl)
+
+	return btn
+
+func _open_difficulty_panel(level_num: int) -> void:
+	pending_level_num = level_num
+	_hide_panel(level_panel)
+	var tween = create_tween()
+	tween.tween_interval(0.22)
+	tween.tween_callback(func():
+		_show_panel(difficulty_panel)
+	)
+
+func _start_level_with_difficulty(difficulty: String) -> void:
+	print("Выбран уровень: ", pending_level_num, ", сложность: ", difficulty)
+	var scene_path := "res://scenes/main.tscn"
+	if has_node("/root/LevelManager"):
+		var lm: Node = get_node("/root/LevelManager")
+		lm.set_current_level(pending_level_num)
+		lm.set_selected_difficulty(difficulty)
+		scene_path = lm.get_current_level_scene_path()
+
+	_hide_panel(difficulty_panel)
+	var tween = create_tween()
+	tween.tween_interval(0.3)
+	tween.tween_callback(func():
+		get_tree().change_scene_to_file(scene_path)
+	)
+
+func _on_difficulty_cancel() -> void:
+	_hide_panel(difficulty_panel)
+	var tween = create_tween()
+	tween.tween_interval(0.2)
+	tween.tween_callback(func():
+		_show_panel(level_panel)
+	)
 
 # === ПАНЕЛЬ НАСТРОЕК ===
 func _build_settings_panel() -> void:
@@ -687,13 +923,13 @@ func _show_panel(panel: Control) -> void:
 	overlay.modulate = Color(1, 1, 1, 0)
 	panel.visible = true
 	panel.modulate = Color(1, 1, 1, 0)
-	panel.scale = Vector2(0.85, 0.85)
+	panel.scale = Vector2(0.8, 0.8)
 	panel.pivot_offset = panel.size / 2.0
 	
 	var tween = create_tween().set_parallel()
 	tween.tween_property(overlay, "modulate:a", 1.0, 0.25).set_trans(Tween.TRANS_QUAD)
 	tween.tween_property(panel, "modulate:a", 1.0, 0.3).set_trans(Tween.TRANS_QUAD)
-	tween.tween_property(panel, "scale", Vector2(1.0, 1.0), 0.35).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+	tween.tween_property(panel, "scale", Vector2(1.0, 1.0), 0.45).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
 
 func _hide_panel(panel: Control) -> void:
 	var tween = create_tween().set_parallel()
@@ -711,20 +947,7 @@ func _on_play_pressed() -> void:
 	_show_panel(level_panel)
 
 func _on_level_selected(level_num: int) -> void:
-	print("Выбран уровень: ", level_num)
-	var scene_path := "res://scenes/main.tscn"
-	if has_node("/root/LevelManager"):
-		var lm: Node = get_node("/root/LevelManager")
-		lm.set_current_level(level_num)
-		scene_path = lm.get_current_level_scene_path()
-	
-	_hide_panel(level_panel)
-	# Небольшая задержка перед переходом
-	var tween = create_tween()
-	tween.tween_interval(0.3)
-	tween.tween_callback(func():
-		get_tree().change_scene_to_file(scene_path)
-	)
+	_open_difficulty_panel(level_num)
 
 func _on_level_back() -> void:
 	_hide_panel(level_panel)
@@ -778,6 +1001,9 @@ func _input(event: InputEvent) -> void:
 	if event is InputEventKey and event.pressed and event.keycode == KEY_ESCAPE:
 		if settings_panel.visible:
 			_on_settings_close()
+			get_viewport().set_input_as_handled()
+		elif difficulty_panel.visible:
+			_on_difficulty_cancel()
 			get_viewport().set_input_as_handled()
 		elif level_panel.visible:
 			_on_level_back()
