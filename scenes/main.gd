@@ -175,7 +175,7 @@ func _ready() -> void:
 			for bpos in base_positions:
 				if pos.distance_to(bpos) < 600: too_close = true; break
 			if too_close: continue
-			_spawn_cell(pos, BaseCell.OwnerType.NEUTRAL, neutral_rng.randf_range(3.0, 22.0))
+			_spawn_cell(pos, BaseCell.OwnerType.NEUTRAL, neutral_rng.randf_range(2.0, 9.0))
 			spawned += 1
 		print("Мир: %d нейтральных, %d фракций." % [spawned, base_positions.size()])
 

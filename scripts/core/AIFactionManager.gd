@@ -3,6 +3,7 @@ class_name AIFactionManager
 
 ## Менеджер целой фракции ИИ. 
 ## Управляет всеми клетками цвета как единой колонией.
+## Поддерживает профили сложности (easy / medium / hard).
 
 @export var faction: BaseCell.OwnerType = BaseCell.OwnerType.NEUTRAL
 @export var decision_interval: float = 2.5
@@ -30,6 +31,20 @@ var _ai_speed_cd: float = 0.0
 var _ai_rapid_fire_cd: float = 0.0
 var _ai_virus_cd: float = 0.0
 
+# === ПАРАМЕТРЫ СЛОЖНОСТИ ===
+## Режим скоринга нейтралок: "max_value" (жирные первыми) или "fast_capture" (слабые первыми)
+var neutral_score_mode: String = "max_value"
+## Порог HP (доля от max_energy) для активации щита
+var shield_hp_threshold: float = 0.45
+## Минимальный max_energy клетки для активации щита (фильтрует молодые клетки)
+var shield_min_max_energy: float = 20.0
+## Минимальное количество врагов для активации вируса
+var virus_min_enemy_count: int = 3
+## Порог HP цели (доля от max_energy) для скорострельности
+var rapid_fire_hp_target_threshold: float = 0.4
+## Порог дистанции до цели для активации ускорения
+var speed_boost_distance_threshold: float = 1200.0
+
 func _ready() -> void:
 	add_to_group("ai_faction_managers")
 	# Небольшой разброс, чтобы фракции не думали одновременно
@@ -41,6 +56,47 @@ func _init_base() -> void:
 	if not my_cells.is_empty():
 		base_pos = _pick_base_pos(my_cells)
 		current_goal_pos = base_pos
+
+## Применяет профиль сложности к менеджеру ИИ.
+## Вызывается из organic_level.gd при старте уровня.
+func apply_difficulty_profile(profile: Dictionary) -> void:
+	if profile.has("decision_interval"):
+		decision_interval = float(profile.decision_interval)
+	if profile.has("enemy_notice_range"):
+		enemy_notice_range = float(profile.enemy_notice_range)
+	if profile.has("min_energy_ratio_for_war"):
+		min_energy_ratio_for_war = float(profile.min_energy_ratio_for_war)
+	if profile.has("goal_lock_time"):
+		goal_lock_time = float(profile.goal_lock_time)
+	if profile.has("score_distance_scale"):
+		score_distance_scale = float(profile.score_distance_scale)
+	if profile.has("neutral_score_mode"):
+		neutral_score_mode = String(profile.neutral_score_mode)
+	if profile.has("shield_hp_threshold"):
+		shield_hp_threshold = float(profile.shield_hp_threshold)
+	if profile.has("shield_min_max_energy"):
+		shield_min_max_energy = float(profile.shield_min_max_energy)
+	if profile.has("virus_min_enemy_count"):
+		virus_min_enemy_count = int(profile.virus_min_enemy_count)
+	if profile.has("rapid_fire_hp_target_threshold"):
+		rapid_fire_hp_target_threshold = float(profile.rapid_fire_hp_target_threshold)
+	if profile.has("speed_boost_distance_threshold"):
+		speed_boost_distance_threshold = float(profile.speed_boost_distance_threshold)
+	
+	# Стартовый кулдаун перков (perk_delay_mult): 
+	# На Easy/Medium ИИ начинает с перками на откате, на Hard — сразу готов.
+	var perk_delay_mult: float = float(profile.get("perk_delay_mult", 1.0))
+	if perk_delay_mult > 1.0:
+		var sm = get_tree().get_first_node_in_group("selection_manager")
+		if sm:
+			_ai_shield_cd = maxf(_ai_shield_cd, sm.SHIELD_COOLDOWN_MAX * perk_delay_mult)
+			_ai_speed_cd = maxf(_ai_speed_cd, sm.SPEED_COOLDOWN_MAX * perk_delay_mult)
+			_ai_rapid_fire_cd = maxf(_ai_rapid_fire_cd, sm.RAPID_FIRE_COOLDOWN_MAX * perk_delay_mult)
+			_ai_virus_cd = maxf(_ai_virus_cd, sm.VIRUS_COOLDOWN_MAX * perk_delay_mult)
+	
+	print("[AI %s] Профиль сложности применён: interval=%.1f, notice_range=%.0f, war_ratio=%.2f, neutral_mode=%s" % [
+		_get_group_for_owner(faction), decision_interval, enemy_notice_range, min_energy_ratio_for_war, neutral_score_mode
+	])
 
 func _process(delta: float) -> void:
 	if faction == BaseCell.OwnerType.NEUTRAL or faction == BaseCell.OwnerType.PLAYER:
@@ -190,14 +246,13 @@ func _find_best_enemy_global(from: Vector2, all_cells: Array[BaseCell]) -> BaseC
 
 func _find_best_neutral_global(from: Vector2, all_cells: Array[BaseCell]) -> BaseCell:
 	var best: BaseCell = null
-	var best_score := -INF
+	var min_dist_sq := INF
 	for c in all_cells:
 		if c.owner_type != BaseCell.OwnerType.NEUTRAL: continue
 		var dist_sq := from.distance_squared_to(c.global_position)
 		if dist_sq > expand_range * expand_range: continue
-		var score := _score_neutral(from, c, dist_sq)
-		if score > best_score:
-			best_score = score
+		if dist_sq < min_dist_sq:
+			min_dist_sq = dist_sq
 			best = c
 	return best
 
@@ -207,11 +262,6 @@ func _score_enemy(_from: Vector2, enemy: BaseCell, dist_sq: float) -> float:
 		weakness = 1.0 - (enemy.stats.current_energy / enemy.stats.max_energy)
 	var denom := 1.0 + (dist_sq / (score_distance_scale * score_distance_scale))
 	return (1.0 + weakness * 1.6) / denom
-
-func _score_neutral(_from: Vector2, neutral: BaseCell, dist_sq: float) -> float:
-	var value := neutral.stats.current_energy
-	var denom := 1.0 + (dist_sq / (score_distance_scale * score_distance_scale))
-	return value / denom
 
 func _pick_patrol_point(from: Vector2) -> Vector2:
 	var map_rect := _get_map_rect()
@@ -266,11 +316,25 @@ func _evaluate_and_use_perks(_delta: float) -> void:
 	if my_cells.is_empty(): return
 	
 	# 1. ЩИТ (Приоритет: спасение)
+	# Исправление бага: фильтруем молодые клетки (max_energy < shield_min_max_energy),
+	# чтобы ИИ не тратил щит на свеже-захваченные нейтралки с малым HP.
 	if _ai_shield_cd <= 0 and ai_perk_energy >= sm.SHIELD_ENERGY_COST:
 		var target_shieldee: BaseCell = null
+		var current_time: float = Time.get_ticks_msec() / 1000.0
 		for cell in my_cells:
-			# Если клетка под огнем и ранена (и не заражена)
-			if not cell.is_infected and cell.stats.current_energy < cell.stats.max_energy * 0.45 and (Time.get_ticks_msec() / 1000.0 - cell.last_damage_time) < 1.5:
+			# Пропускаем молодые клетки — у них мало max_energy, это нормально
+			if cell.stats.max_energy < shield_min_max_energy:
+				continue
+
+			var damaged_by_enemy: bool = false
+			for attacker_owner in cell.contributions.keys():
+				var attacker_owner_int: int = int(attacker_owner)
+				if attacker_owner_int != int(faction) and attacker_owner_int != int(BaseCell.OwnerType.NEUTRAL) and cell.contributions[attacker_owner] > 0.0:
+					damaged_by_enemy = true
+					break
+
+			# Щит только при реальном бою с другой фракцией, а не при фарме нейтралок.
+			if not cell.is_infected and damaged_by_enemy and cell.stats.current_energy < cell.stats.max_energy * shield_hp_threshold and (current_time - cell.last_damage_time) < 1.5:
 				if cell.reflect_chance < 0.1: # Еще нет щита
 					target_shieldee = cell
 					break
@@ -295,7 +359,7 @@ func _evaluate_and_use_perks(_delta: float) -> void:
 			var target_faction_group = _get_group_for_owner(current_target_node.owner_type)
 			var enemies = get_tree().get_nodes_in_group(target_faction_group)
 			
-			if enemies.size() >= 3: # Бьем если у врага солидная кучка
+			if enemies.size() >= virus_min_enemy_count: # Бьем если у врага достаточная кучка
 				# Ищем нашу ближайшую клетку к цели
 				var nearest = _get_nearest_cell(my_cells, current_target_node.global_position)
 				if nearest:
@@ -309,7 +373,7 @@ func _evaluate_and_use_perks(_delta: float) -> void:
 	# 3. СКОРОСТРЕЛЬНОСТЬ (Приоритет: добивание/атака)
 	if _ai_rapid_fire_cd <= 0 and ai_perk_energy >= sm.RAPID_FIRE_ENERGY_COST:
 		if current_target_node and is_instance_valid(current_target_node) and current_target_node.owner_type != BaseCell.OwnerType.NEUTRAL:
-			if current_target_node.stats.current_energy < current_target_node.stats.max_energy * 0.4:
+			if current_target_node.stats.current_energy < current_target_node.stats.max_energy * rapid_fire_hp_target_threshold:
 				# Проверяем, не включен ли уже перк (чтобы не спамить)
 				var already_raging = false
 				for c in my_cells:
@@ -327,7 +391,7 @@ func _evaluate_and_use_perks(_delta: float) -> void:
 	# 4. УСКОРЕНИЕ (Приоритет: догнать цель)
 	if _ai_speed_cd <= 0 and ai_perk_energy >= sm.SPEED_ENERGY_COST:
 		var center = _get_center(my_cells)
-		if current_goal_pos != Vector2.ZERO and center.distance_to(current_goal_pos) > 1200.0:
+		if current_goal_pos != Vector2.ZERO and center.distance_to(current_goal_pos) > speed_boost_distance_threshold:
 			# Не ускоряемся, если уже летим на спринте
 			var already_sprinting = false
 			for c in my_cells:

@@ -69,6 +69,8 @@ func _ready() -> void:
 	var player_cell = _spawn_cell(player_base_pos, BaseCell.OwnerType.PLAYER, 40.0)
 	player_cell.assigned_perk = "speed"
 	player_cell.z_index = 100
+	var difficulty: String = String(level_data.get("selected_difficulty", "easy"))
+	var enemy_start_cell_count: int = _get_enemy_start_cell_count(difficulty)
 	
 	for i in range(1, int(level_data.get("num_enemies", 1)) + 1):
 		if i >= FACTION_BASES_NORMALIZED.size():
@@ -77,9 +79,12 @@ func _ready() -> void:
 		var enemy_pos: Vector2 = _find_safe_pos(raw_pos, playable_polygon_pts)
 		base_positions.append(enemy_pos)
 		var enemy_type: int = int(FACTION_BASES_NORMALIZED[i].type)
-		_spawn_cell(enemy_pos, enemy_type, 28.0)
-		_spawn_cell(enemy_pos + Vector2(randf_range(-140, 140), randf_range(-140, 140)), enemy_type, 16.0)
-		_spawn_cell(enemy_pos + Vector2(randf_range(-140, 140), randf_range(-140, 140)), enemy_type, 12.0)
+		var enemy_spawn_energies: Array[float] = [28.0, 16.0, 12.0]
+		for spawn_index in range(enemy_start_cell_count):
+			var spawn_pos := enemy_pos
+			if spawn_index > 0:
+				spawn_pos += Vector2(randf_range(-140, 140), randf_range(-140, 140))
+			_spawn_cell(spawn_pos, enemy_type, enemy_spawn_energies[spawn_index])
 	
 	_spawn_neutral_cells(int(level_data.get("num_neutrals", 18)), base_positions, neutral_rng)
 	
@@ -92,7 +97,19 @@ func _ready() -> void:
 	_setup_dev_camera()
 	_setup_pause_ui()
 	
-	print("--- ORGANIC LEVEL LOADED: Чистое пространство (0,0) ---")
+	# 5. Применяем профиль сложности ИИ (deferred, чтобы AIFactionManager был готов)
+	call_deferred("_apply_ai_difficulty", difficulty)
+	
+	print("--- ORGANIC LEVEL LOADED: Чистое пространство (0,0), сложность: %s ---" % difficulty)
+
+func _get_enemy_start_cell_count(difficulty: String) -> int:
+	match difficulty:
+		"medium":
+			return 2
+		"hard":
+			return 3
+		_:
+			return 1
 
 func _process(_delta: float) -> void:
 	# Обновляем смещение шейдера для параллакса
@@ -141,7 +158,7 @@ func _spawn_neutral_cells(count: int, base_positions: Array[Vector2], rng: Rando
 				break
 		if too_close:
 			continue
-		_spawn_cell(pos, BaseCell.OwnerType.NEUTRAL, rng.randf_range(3.0, 15.0))
+		_spawn_cell(pos, BaseCell.OwnerType.NEUTRAL, rng.randf_range(2.0, 9.0))
 		spawned += 1
 
 func _setup_dev_camera() -> void:
@@ -486,3 +503,60 @@ func _get_polygon_bounds(pts: PackedVector2Array) -> Rect2:
 		max_v.x = max(max_v.x, p.x)
 		max_v.y = max(max_v.y, p.y)
 	return Rect2(min_v, max_v - min_v)
+
+## Применяет профиль сложности ко всем AIFactionManager в сцене.
+func _apply_ai_difficulty(difficulty: String) -> void:
+	var profile: Dictionary = _build_difficulty_profile(difficulty)
+	var managers = get_tree().get_nodes_in_group("ai_faction_managers")
+	for manager in managers:
+		if manager is AIFactionManager:
+			manager.apply_difficulty_profile(profile)
+	print("[Level] Профиль сложности '%s' применён к %d ИИ-менеджерам" % [difficulty, managers.size()])
+
+## Строит словарь-профиль параметров ИИ для выбранной сложности.
+func _build_difficulty_profile(difficulty: String) -> Dictionary:
+	match difficulty:
+		"easy":
+			return {
+				"decision_interval": 5.5,
+				"perk_delay_mult": 3.0,
+				"min_energy_ratio_for_war": 0.85,
+				"score_distance_scale": 900.0,
+				"goal_lock_time": 8.0,
+				"enemy_notice_range": 1000.0,
+				"shield_hp_threshold": 0.45,
+				"shield_min_max_energy": 20.0,
+				"virus_min_enemy_count": 3,
+				"rapid_fire_hp_target_threshold": 0.4,
+				"speed_boost_distance_threshold": 1200.0,
+			}
+		"hard":
+			return {
+				"decision_interval": 1.2,
+				"perk_delay_mult": 1.0,
+				"min_energy_ratio_for_war": 0.65,
+				"score_distance_scale": 3500.0,
+				"goal_lock_time": 3.0,
+				"enemy_notice_range": 3500.0,
+				"shield_hp_threshold": 0.35,
+				"shield_min_max_energy": 20.0,
+				"virus_min_enemy_count": 2,
+				"rapid_fire_hp_target_threshold": 0.55,
+				"speed_boost_distance_threshold": 900.0,
+			}
+		_: # medium (по умолчанию) — текущее поведение + стартовый кулдаун перков
+			return {
+				"decision_interval": 2.5,
+				"perk_delay_mult": 1.5,
+				"min_energy_ratio_for_war": 0.55,
+				"score_distance_scale": 2200.0,
+				# Как на easy, но без общей "тупизны": ИИ дольше добивает выбранную цель,
+				# вместо постоянного перескока между жирными нейтралками.
+				"goal_lock_time": 8.0,
+				"enemy_notice_range": 2000.0,
+				"shield_hp_threshold": 0.45,
+				"shield_min_max_energy": 20.0,
+				"virus_min_enemy_count": 3,
+				"rapid_fire_hp_target_threshold": 0.4,
+				"speed_boost_distance_threshold": 1200.0,
+			}

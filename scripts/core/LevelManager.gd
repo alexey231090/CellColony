@@ -15,7 +15,7 @@ const DEFAULT_LEVEL_DATA := {
 	"has_islands": true,
 	"is_organic": true,
 	"map_scale": 1.1,
-	"num_neutrals": 36,
+	"num_neutrals": 46,
 	"seed": 42,
 	"chapter": 1,
 	"title": "Уровень",
@@ -31,7 +31,7 @@ const BASE_LEVELS: Array[Dictionary] = [
 		"has_islands": true,
 		"is_organic": true,
 		"map_scale": 1.1,
-		"num_neutrals": 36,
+		"num_neutrals": 46,
 		"seed": 101,
 		"shape_type": "rounded_box",
 		"shape_size": Vector2(7200, 5000),
@@ -79,7 +79,7 @@ func _ensure_level_count(target_count: int) -> void:
 		level_data["chapter"] = int(ceili(float(i) / float(CHAPTER_SIZE)))
 		level_data["title"] = "Уровень %d" % i
 		level_data["seed"] = 100 + i * 17
-		level_data["num_neutrals"] = maxi(14, 38 - int((i - 1) / 2))
+		level_data["num_neutrals"] = maxi(24, 48 - int((i - 1) / 2))
 		level_data["map_scale"] = 1.08 + minf(0.5, float(i - 1) * 0.015)
 		level_data["island_count"] = mini(5, 2 + int((i - 1) / 5))
 		levels.append(level_data)
