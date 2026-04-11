@@ -79,3 +79,7 @@ faction = 2
 [node name="AIManager_Green" type="Node" parent="."]
 script = ExtResource("9_ai")
 faction = 3
+
+[node name="AIManager_Yellow" type="Node" parent="."]
+script = ExtResource("9_ai")
+faction = 4

@@ -1,10 +1,16 @@
 extends Node2D
 
-const FACTION_BASES_NORMALIZED: Array[Dictionary] = [
-	{"type": BaseCell.OwnerType.PLAYER, "pos": Vector2(-0.68, -0.68)},
-	{"type": BaseCell.OwnerType.ENEMY_RED, "pos": Vector2(0.68, 0.68)},
-	{"type": BaseCell.OwnerType.ENEMY_GREEN, "pos": Vector2(0.68, -0.68)},
-	{"type": BaseCell.OwnerType.ENEMY_YELLOW, "pos": Vector2(-0.68, 0.68)},
+const SPAWN_SLOTS_NORMALIZED: Array[Vector2] = [
+	Vector2(-0.68, -0.68),
+	Vector2(0.68, 0.68),
+	Vector2(0.68, -0.68),
+	Vector2(-0.68, 0.68),
+]
+
+const DEFAULT_ENEMY_TYPES: Array[int] = [
+	BaseCell.OwnerType.ENEMY_RED,
+	BaseCell.OwnerType.ENEMY_GREEN,
+	BaseCell.OwnerType.ENEMY_YELLOW,
 ]
 
 ## ORGANIC LEVEL - CLEAN VERSION ##
@@ -61,8 +67,10 @@ func _ready() -> void:
 	
 	# 3. Спавним игрока и врагов по конфигу уровня
 	var base_positions: Array[Vector2] = []
+	var player_spawn_slot: int = clampi(int(level_data.get("player_spawn_slot", 0)), 0, SPAWN_SLOTS_NORMALIZED.size() - 1)
+	var enemy_spawn_slots: Array = level_data.get("enemy_spawn_slots", [1, 2, 3])
 	var player_base_pos: Vector2 = _find_safe_pos(
-		FACTION_BASES_NORMALIZED[0].pos * Vector2(level_rect.size.x * 0.5, level_rect.size.y * 0.5),
+		SPAWN_SLOTS_NORMALIZED[player_spawn_slot] * Vector2(level_rect.size.x * 0.5, level_rect.size.y * 0.5),
 		playable_polygon_pts
 	)
 	base_positions.append(player_base_pos)
@@ -71,14 +79,22 @@ func _ready() -> void:
 	player_cell.z_index = 100
 	var difficulty: String = String(level_data.get("selected_difficulty", "easy"))
 	var enemy_start_cell_count: int = _get_enemy_start_cell_count(difficulty)
+	var configured_enemy_types: Array = level_data.get("enemy_types", [])
 	
 	for i in range(1, int(level_data.get("num_enemies", 1)) + 1):
-		if i >= FACTION_BASES_NORMALIZED.size():
+		if i > DEFAULT_ENEMY_TYPES.size():
 			break
-		var raw_pos: Vector2 = FACTION_BASES_NORMALIZED[i].pos * Vector2(level_rect.size.x * 0.5, level_rect.size.y * 0.5)
+		var spawn_slot_index: int = i
+		if i - 1 < enemy_spawn_slots.size():
+			spawn_slot_index = clampi(int(enemy_spawn_slots[i - 1]), 0, SPAWN_SLOTS_NORMALIZED.size() - 1)
+		var raw_pos: Vector2 = SPAWN_SLOTS_NORMALIZED[spawn_slot_index] * Vector2(level_rect.size.x * 0.5, level_rect.size.y * 0.5)
 		var enemy_pos: Vector2 = _find_safe_pos(raw_pos, playable_polygon_pts)
 		base_positions.append(enemy_pos)
-		var enemy_type: int = int(FACTION_BASES_NORMALIZED[i].type)
+		var enemy_type: int = DEFAULT_ENEMY_TYPES[i - 1]
+		if i - 1 < configured_enemy_types.size():
+			enemy_type = int(configured_enemy_types[i - 1])
+		elif i == 1:
+			enemy_type = int(level_data.get("enemy_type", enemy_type))
 		var enemy_spawn_energies: Array[float] = [28.0, 16.0, 12.0]
 		for spawn_index in range(enemy_start_cell_count):
 			var spawn_pos := enemy_pos
