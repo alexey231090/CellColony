@@ -9,11 +9,77 @@ var friction: float = 2.0
 var push_force: float = 120.0 # Сила отталкивания
 var _wall_slide_dir: Vector2 = Vector2.ZERO
 var _wall_slide_timer: float = 0.0
+var _main_root: Node = null
+var _grid_key: Vector2i = Vector2i(2147483647, 2147483647)
 
 # --- Dual Whisker Steering ---
 const WHISKER_ANGLE: float = 0.52       # ~30° в радианах
 const WALL_SLIDE_MEMORY: float = 0.4    # Время «памяти» направления скольжения
 const WALL_STEER_BLEND: float = 0.7     # Вес скольжения vs. направления к цели
+const SEPARATION_RANGE_PADDING: float = 24.0
+const SPATIAL_GRID_CELL_SIZE: float = 220.0
+static var _spatial_grid: Dictionary = {}
+
+func _ready() -> void:
+	_main_root = get_tree().get_first_node_in_group("main")
+	var parent_cell := get_parent() as BaseCell
+	if parent_cell:
+		_update_spatial_grid(parent_cell)
+
+func _exit_tree() -> void:
+	var parent_cell := get_parent() as BaseCell
+	if parent_cell:
+		_remove_from_spatial_grid(parent_cell)
+
+static func _get_grid_key(pos: Vector2) -> Vector2i:
+	return Vector2i(
+		int(floor(pos.x / SPATIAL_GRID_CELL_SIZE)),
+		int(floor(pos.y / SPATIAL_GRID_CELL_SIZE))
+	)
+
+func _update_spatial_grid(parent_cell: BaseCell) -> void:
+	var new_key := _get_grid_key(parent_cell.global_position)
+	if new_key == _grid_key:
+		return
+	_remove_from_spatial_grid(parent_cell)
+	var bucket: Array = _spatial_grid.get(new_key, [])
+	bucket.append(parent_cell)
+	_spatial_grid[new_key] = bucket
+	_grid_key = new_key
+
+func _remove_from_spatial_grid(parent_cell: BaseCell) -> void:
+	if _grid_key == Vector2i(2147483647, 2147483647):
+		return
+	if not _spatial_grid.has(_grid_key):
+		_grid_key = Vector2i(2147483647, 2147483647)
+		return
+	var bucket: Array = _spatial_grid[_grid_key]
+	var idx := bucket.find(parent_cell)
+	if idx != -1:
+		bucket.remove_at(idx)
+	if bucket.is_empty():
+		_spatial_grid.erase(_grid_key)
+	else:
+		_spatial_grid[_grid_key] = bucket
+	_grid_key = Vector2i(2147483647, 2147483647)
+
+func _is_relevant_separation_target(parent_owner: int, other_owner: int) -> bool:
+	if parent_owner == BaseCell.OwnerType.NEUTRAL:
+		return true
+	return other_owner != BaseCell.OwnerType.NEUTRAL
+
+func _get_nearby_cells(parent_cell: BaseCell) -> Array:
+	var result: Array = []
+	var center_key := _get_grid_key(parent_cell.global_position)
+	for y in range(center_key.y - 1, center_key.y + 2):
+		for x in range(center_key.x - 1, center_key.x + 2):
+			var key := Vector2i(x, y)
+			if not _spatial_grid.has(key):
+				continue
+			var bucket: Array = _spatial_grid[key]
+			for other in bucket:
+				result.append(other)
+	return result
 
 func _cast_ray(space: PhysicsDirectSpaceState2D, origin: Vector2, dir: Vector2, dist: float, parent: BaseCell) -> Dictionary:
 	var query: PhysicsRayQueryParameters2D = PhysicsRayQueryParameters2D.create(
@@ -100,6 +166,7 @@ func set_target(pos: Vector2) -> void:
 func _physics_process(delta: float) -> void:
 	var parent_cell = get_parent() as BaseCell
 	if not parent_cell: return
+	_update_spatial_grid(parent_cell)
 	_wall_slide_timer = maxf(0.0, _wall_slide_timer - delta)
 	if _wall_slide_timer <= 0.0:
 		_wall_slide_dir = Vector2.ZERO
@@ -110,27 +177,31 @@ func _physics_process(delta: float) -> void:
 		# Но отталкивание от соседей оставим ниже (чтобы клетки не слипались в одну точку)
 	
 	# Кешируем позицию и радиус родителя
-	var my_pos = parent_cell.global_position
-	var my_scaled_radius = parent_cell.radius * parent_cell.scale.x
+	var my_pos: Vector2 = parent_cell.global_position
+	var my_scaled_radius: float = parent_cell.radius * parent_cell.scale.x
+	var separation_range: float = my_scaled_radius * 2.5 + SEPARATION_RANGE_PADDING
+	var separation_range_sq: float = separation_range * separation_range
 	
 	# 1. Отталкивание от соседей
-	var push_vector = Vector2.ZERO
-	var all_cells = get_tree().get_nodes_in_group("cells")
-	
-	for other in all_cells:
-		if other == parent_cell: continue
-		
-		# Оптимизация: сначала проверяем квадрат расстояния (без sqrt)
-		var min_dist = my_scaled_radius + (other.radius * other.scale.x) + 5.0
-		var min_dist_sq = min_dist * min_dist
-		var diff = my_pos - other.global_position
-		var dist_sq = diff.length_squared()
-		
-		if dist_sq < min_dist_sq and dist_sq > 0.01:
-			var dist = sqrt(dist_sq)
-			var dir = diff / dist  # normalized без повторного sqrt
-			var force = (1.0 - (dist / min_dist)) * push_force
-			push_vector += dir * force
+	var push_vector: Vector2 = Vector2.ZERO
+	var nearby_cells := _get_nearby_cells(parent_cell)
+	for other in nearby_cells:
+		if other == parent_cell or not (other is BaseCell):
+			continue
+		if not _is_relevant_separation_target(parent_cell.owner_type, other.owner_type):
+			continue
+		var diff: Vector2 = my_pos - other.global_position
+		var dist_sq: float = diff.length_squared()
+		if dist_sq > separation_range_sq or dist_sq <= 0.01:
+			continue
+		var min_dist: float = my_scaled_radius + (other.radius * other.scale.x) + 5.0
+		var min_dist_sq: float = min_dist * min_dist
+		if dist_sq >= min_dist_sq:
+			continue
+		var dist: float = sqrt(dist_sq)
+		var dir: Vector2 = diff / dist
+		var force: float = (1.0 - (dist / min_dist)) * push_force
+		push_vector += dir * force
 		
 	# Применяем силу отталкивания
 	parent_cell.velocity += push_vector * delta * 50.0
@@ -147,15 +218,19 @@ func _physics_process(delta: float) -> void:
 
 	if should_move:
 		var current_pos = parent_cell.global_position
-		var d_to_target = current_pos.distance_to(move_target)
+		var d_to_target_sq: float = current_pos.distance_squared_to(move_target)
+		var stop_distance_scaled: float = stop_distance * parent_cell.scale.x
 		
-		if d_to_target > stop_distance * parent_cell.scale.x:
+		if d_to_target_sq > stop_distance_scaled * stop_distance_scaled:
 			var dir: Vector2 = (move_target - current_pos).normalized()
 			dir = _get_wall_aware_direction(parent_cell, dir)
 			# Рассчитываем скорость с учетом баффа ускорения И меню отладки
-			var base_speed = parent_cell.stats.move_speed
+			var base_speed: float = parent_cell.stats.move_speed
 			
-			var root_main = get_tree().get_first_node_in_group("main")
+			var root_main = _main_root
+			if root_main == null:
+				root_main = get_tree().get_first_node_in_group("main")
+				_main_root = root_main
 			if root_main and "cell_speed_mult" in root_main:
 				base_speed *= root_main.cell_speed_mult
 				

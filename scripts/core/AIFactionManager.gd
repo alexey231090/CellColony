@@ -22,6 +22,7 @@ var base_pos: Vector2 = Vector2.ZERO
 var current_target_node: BaseCell = null
 var current_goal_pos: Vector2 = Vector2.ZERO
 var goal_lock_timer: float = 0.0
+var _selection_manager: Node = null
 
 # === ПЕРКИ ИИ ===
 @export var ai_perk_energy: float = 0.0
@@ -49,6 +50,7 @@ func _ready() -> void:
 	add_to_group("ai_faction_managers")
 	# Небольшой разброс, чтобы фракции не думали одновременно
 	decision_timer = randf_range(0.0, decision_interval)
+	_selection_manager = get_tree().get_first_node_in_group("selection_manager")
 	call_deferred("_init_base")
 
 func _init_base() -> void:
@@ -87,7 +89,7 @@ func apply_difficulty_profile(profile: Dictionary) -> void:
 	# На Easy/Medium ИИ начинает с перками на откате, на Hard — сразу готов.
 	var perk_delay_mult: float = float(profile.get("perk_delay_mult", 1.0))
 	if perk_delay_mult > 1.0:
-		var sm = get_tree().get_first_node_in_group("selection_manager")
+		var sm = _selection_manager
 		if sm:
 			_ai_shield_cd = maxf(_ai_shield_cd, sm.SHIELD_COOLDOWN_MAX * perk_delay_mult)
 			_ai_speed_cd = maxf(_ai_speed_cd, sm.SPEED_COOLDOWN_MAX * perk_delay_mult)
@@ -116,7 +118,7 @@ func _process(delta: float) -> void:
 
 func add_perk_energy(amount: float) -> void:
 	ai_perk_energy += amount
-	var sm = get_tree().get_first_node_in_group("selection_manager")
+	var sm = _selection_manager
 	if sm:
 		ai_perk_energy = min(ai_perk_energy, sm.MAX_PERK_ENERGY)
 
@@ -158,7 +160,7 @@ func _tick_ai() -> void:
 		_order_all_attack(my_cells, best_neutral)
 		return
 	
-	if center.distance_to(current_goal_pos) <= patrol_reached_distance:
+	if center.distance_squared_to(current_goal_pos) <= patrol_reached_distance * patrol_reached_distance:
 		current_goal_pos = _pick_patrol_point(center)
 	_order_all_move(my_cells, current_goal_pos)
 
@@ -204,9 +206,13 @@ func _is_target_still_valid(target: BaseCell) -> bool:
 func _get_all_cells() -> Array[BaseCell]:
 	var raw := get_tree().get_nodes_in_group("cells")
 	var result: Array[BaseCell] = []
+	result.resize(raw.size())
+	var write_index := 0
 	for n in raw:
 		if n is BaseCell:
-			result.append(n)
+			result[write_index] = n
+			write_index += 1
+	result.resize(write_index)
 	return result
 
 func _get_avg_energy_ratio(cells: Array[BaseCell]) -> float:
@@ -285,9 +291,13 @@ func _get_my_cells() -> Array[BaseCell]:
 	var group = _get_group_for_owner(faction)
 	var nodes = get_tree().get_nodes_in_group(group)
 	var cells: Array[BaseCell] = []
+	cells.resize(nodes.size())
+	var write_index := 0
 	for n in nodes:
 		if n is BaseCell:
-			cells.append(n)
+			cells[write_index] = n
+			write_index += 1
+	cells.resize(write_index)
 	return cells
 
 func _get_nearest_cell(cells: Array[BaseCell], pos: Vector2) -> BaseCell:
@@ -309,7 +319,7 @@ func _get_group_for_owner(owner_t: BaseCell.OwnerType) -> String:
 	return "cells"
 
 func _evaluate_and_use_perks(_delta: float) -> void:
-	var sm = get_tree().get_first_node_in_group("selection_manager")
+	var sm = _selection_manager
 	if not sm: return
 	
 	var my_cells = _get_my_cells()
@@ -347,19 +357,17 @@ func _evaluate_and_use_perks(_delta: float) -> void:
 			var a_radius = sm.SHIELD_SELECT_RADIUS * 1.5
 			for cell in my_cells:
 				if cell.is_infected: continue
-				if cell.global_position.distance_to(target_shieldee.global_position) <= a_radius + (cell.radius * cell.scale.x):
+				var combined_radius: float = a_radius + (cell.radius * cell.scale.x)
+				if cell.global_position.distance_squared_to(target_shieldee.global_position) <= combined_radius * combined_radius:
 					cell.reflect_chance = 0.5
 					cell.reflect_timer = 10.0
-					cell.queue_redraw()
 
 	# 2. ВИРУС (Приоритет: текущая цель и её соседи)
 	if _ai_virus_cd <= 0 and ai_perk_energy >= sm.VIRUS_ENERGY_COST:
 		# Оптимизация: не ищем по всей карте, а бьем в текущую цель если там есть толпа
 		if current_target_node and is_instance_valid(current_target_node) and current_target_node.owner_type != BaseCell.OwnerType.NEUTRAL:
-			var target_faction_group = _get_group_for_owner(current_target_node.owner_type)
-			var enemies = get_tree().get_nodes_in_group(target_faction_group)
-			
-			if enemies.size() >= virus_min_enemy_count: # Бьем если у врага достаточная кучка
+			var enemy_cluster_size: int = get_tree().get_node_count_in_group(_get_group_for_owner(current_target_node.owner_type))
+			if enemy_cluster_size >= virus_min_enemy_count: # Бьем если у врага достаточная кучка
 				# Ищем нашу ближайшую клетку к цели
 				var nearest = _get_nearest_cell(my_cells, current_target_node.global_position)
 				if nearest:
@@ -391,7 +399,8 @@ func _evaluate_and_use_perks(_delta: float) -> void:
 	# 4. УСКОРЕНИЕ (Приоритет: догнать цель)
 	if _ai_speed_cd <= 0 and ai_perk_energy >= sm.SPEED_ENERGY_COST:
 		var center = _get_center(my_cells)
-		if current_goal_pos != Vector2.ZERO and center.distance_to(current_goal_pos) > speed_boost_distance_threshold:
+		var speed_threshold_sq: float = speed_boost_distance_threshold * speed_boost_distance_threshold
+		if current_goal_pos != Vector2.ZERO and center.distance_squared_to(current_goal_pos) > speed_threshold_sq:
 			# Не ускоряемся, если уже летим на спринте
 			var already_sprinting = false
 			for c in my_cells:

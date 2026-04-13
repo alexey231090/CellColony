@@ -20,8 +20,15 @@ const DEFAULT_ENEMY_TYPES: Array[int] = [
 @export var cell_scene: PackedScene = preload("res://scenes/base_cell/cell.tscn")
 @export var map_size: Vector2 = Vector2(4500, 4500)
 var cell_speed_mult: float = 1.0
+const DEFAULT_BORDER_SEGMENTS: int = 48
+const DEFAULT_ISLAND_SEGMENTS: int = 18
+const BG_SHADER_UPDATE_INTERVAL: float = 0.05
+const BG_SHADER_MOVE_THRESHOLD_SQ: float = 4.0
 
 var playable_polygon_pts: PackedVector2Array = []
+var island_collision_polygons: Array[PackedVector2Array] = []
+var _bg_shader_timer: float = 0.0
+var _last_bg_cam_offset: Vector2 = Vector2.INF
 @onready var camera: Camera2D = $Camera2D
 @onready var bg_rect: ColorRect = $BackgroundLayer/ColorRect
 
@@ -127,10 +134,15 @@ func _get_enemy_start_cell_count(difficulty: String) -> int:
 		_:
 			return 1
 
-func _process(_delta: float) -> void:
-	# Обновляем смещение шейдера для параллакса
-	if bg_rect and camera:
-		bg_rect.material.set_shader_parameter("cam_offset", camera.global_position * 0.15)
+func _process(delta: float) -> void:
+	# Это не острова, а фоновый шейдер. Обновляем его реже, чтобы не дергать материал каждый кадр.
+	if bg_rect and camera and bg_rect.material:
+		_bg_shader_timer += delta
+		var cam_offset: Vector2 = camera.global_position * 0.15
+		if _bg_shader_timer >= BG_SHADER_UPDATE_INTERVAL or _last_bg_cam_offset == Vector2.INF or _last_bg_cam_offset.distance_squared_to(cam_offset) >= BG_SHADER_MOVE_THRESHOLD_SQ:
+			_bg_shader_timer = 0.0
+			_last_bg_cam_offset = cam_offset
+			bg_rect.material.set_shader_parameter("cam_offset", cam_offset)
 
 func _input(event: InputEvent) -> void:
 	if event is InputEventKey and event.pressed and not event.echo:
@@ -240,7 +252,7 @@ func _generate_borders_organic(level_data: Dictionary) -> PackedVector2Array:
 	noise.frequency = float(level_data.get("noise_freq", 0.0012))
 	
 	var amp: float = float(level_data.get("noise_amp", 0.18))
-	var segments: int = 72
+	var segments: int = max(24, int(level_data.get("border_segments", DEFAULT_BORDER_SEGMENTS)))
 	var blob_pts: PackedVector2Array = PackedVector2Array()
 	var outer_wall_color: Color = Color(0.08, 0.19, 0.22, 1.0)
 	var outer_edge_color: Color = Color(0.33, 0.82, 0.88, 0.95)
@@ -364,6 +376,7 @@ func _generate_borders_organic(level_data: Dictionary) -> PackedVector2Array:
 	return blob_pts
 
 func _generate_organic_islands(border_node: StaticBody2D, level_data: Dictionary, center: Vector2, outer_radius: float, wall_color: Color, edge_color: Color, highlight_color: Color, line_width: float, highlight_width: float) -> void:
+	island_collision_polygons.clear()
 	var island_count: int = int(level_data.get("island_count", 4))
 	var island_radius: float = float(level_data.get("island_radius", 620.0))
 	var island_noise_freq: float = float(level_data.get("island_noise_freq", 0.0025))
@@ -377,7 +390,7 @@ func _generate_organic_islands(border_node: StaticBody2D, level_data: Dictionary
 		var island_radius_x: float = float(spec.get("radius_x", island_radius))
 		var island_radius_y: float = float(spec.get("radius_y", island_radius * 0.65))
 		var island_rotation: float = float(spec.get("rotation", 0.0))
-		var island_segments: int = int(spec.get("segments", 24))
+		var island_segments: int = max(12, int(spec.get("segments", int(level_data.get("island_segments", DEFAULT_ISLAND_SEGMENTS)))))
 		var island_local_amp: float = float(spec.get("noise_amp", island_noise_amp))
 		var island_pts: PackedVector2Array = _build_organic_blob_polygon(
 			island_center,
@@ -442,6 +455,7 @@ func _add_organic_island(border_node: StaticBody2D, island_pts: PackedVector2Arr
 	border_node.add_child(fill_poly)
 	
 	var expanded_island_pts: PackedVector2Array = _expand_polygon_from_center(island_pts, 80.0)
+	island_collision_polygons.append(expanded_island_pts)
 	var coll: CollisionPolygon2D = CollisionPolygon2D.new()
 	coll.polygon = expanded_island_pts
 	coll.set_meta("is_island", true)
@@ -486,16 +500,9 @@ func _expand_polygon_from_center(polygon: PackedVector2Array, amount: float) -> 
 	return expanded
 
 func _is_inside_any_island(pos: Vector2) -> bool:
-	var walls: Node = get_node_or_null("BiologicalWalls")
-	if walls == null:
-		return false
-	for child in walls.get_children():
-		if child is CollisionPolygon2D:
-			var coll: CollisionPolygon2D = child
-			if not coll.has_meta("is_island"):
-				continue
-			if Geometry2D.is_point_in_polygon(pos, coll.polygon):
-				return true
+	for island_polygon in island_collision_polygons:
+		if Geometry2D.is_point_in_polygon(pos, island_polygon):
+			return true
 	return false
 
 func _find_safe_pos(target_pos: Vector2, polygon: PackedVector2Array) -> Vector2:

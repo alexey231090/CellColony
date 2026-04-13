@@ -11,8 +11,15 @@ var fire_timer: float = 0.0
 # Параметры автоатаки
 var auto_target: Node2D = null
 var scan_timer: float = 0.0
-const SCAN_INTERVAL: float = 0.4 # Сканируем 2.5 раза в секунду
+const SCAN_INTERVAL: float = 0.6
 const AUTO_SCAN_RANGE: float = 600.0
+const AUTO_SCAN_RANGE_SQ: float = AUTO_SCAN_RANGE * AUTO_SCAN_RANGE
+const TARGET_GROUPS_BY_OWNER := {
+	BaseCell.OwnerType.PLAYER: ["enemy_red_cells", "enemy_green_cells", "enemy_yellow_cells", "neutral_cells"],
+	BaseCell.OwnerType.ENEMY_RED: ["player_cells", "enemy_green_cells", "enemy_yellow_cells", "neutral_cells"],
+	BaseCell.OwnerType.ENEMY_GREEN: ["player_cells", "enemy_red_cells", "enemy_yellow_cells", "neutral_cells"],
+	BaseCell.OwnerType.ENEMY_YELLOW: ["player_cells", "enemy_red_cells", "enemy_green_cells", "neutral_cells"],
+}
 
 func set_target(pos: Vector2, node: Node2D = null) -> void:
 	target_position = pos
@@ -43,7 +50,7 @@ func _process(delta: float) -> void:
 		# Сначала проверяем старую авто-цель (чтобы не скакать между целями)
 		if is_instance_valid(auto_target):
 			if _is_target_valid_for_fire(auto_target, parent_cell) and \
-			   global_position.distance_to(auto_target.global_position) <= AUTO_SCAN_RANGE:
+			   global_position.distance_squared_to(auto_target.global_position) <= AUTO_SCAN_RANGE_SQ:
 				final_target = auto_target
 			else:
 				auto_target = null
@@ -78,16 +85,17 @@ func _is_target_valid_for_fire(node: Node2D, parent: BaseCell) -> bool:
 	return false
 
 func _find_closest_target(parent: BaseCell) -> Node2D:
-	var cells = get_tree().get_nodes_in_group("cells")
-	var closest = null
-	var min_dist = AUTO_SCAN_RANGE
-	
-	for cell in cells:
-		if cell == parent: continue
-		if "owner_type" in cell and cell.owner_type != parent.owner_type:
-			var dist = global_position.distance_to(cell.global_position)
-			if dist < min_dist:
-				min_dist = dist
+	var closest: Node2D = null
+	var min_dist_sq: float = AUTO_SCAN_RANGE_SQ
+	var target_groups: Array = TARGET_GROUPS_BY_OWNER.get(parent.owner_type, ["cells"])
+	for group_name in target_groups:
+		var cells = get_tree().get_nodes_in_group(String(group_name))
+		for cell in cells:
+			if cell == parent or not (cell is Node2D):
+				continue
+			var dist_sq: float = global_position.distance_squared_to(cell.global_position)
+			if dist_sq < min_dist_sq and _is_target_valid_for_fire(cell, parent):
+				min_dist_sq = dist_sq
 				closest = cell
 	return closest
 

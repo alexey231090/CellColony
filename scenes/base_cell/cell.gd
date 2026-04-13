@@ -125,9 +125,10 @@ func _ready() -> void:
 
 func _update_groups() -> void:
 	# Убираем из всех фракционных групп
-	for g in ["player_cells", "enemy_red_cells", "enemy_green_cells", "enemy_yellow_cells"]:
+	for g in ["neutral_cells", "player_cells", "enemy_red_cells", "enemy_green_cells", "enemy_yellow_cells"]:
 		if is_in_group(g): remove_from_group(g)
 	match owner_type:
+		OwnerType.NEUTRAL:      add_to_group("neutral_cells")
 		OwnerType.PLAYER:       add_to_group("player_cells")
 		OwnerType.ENEMY_RED:    add_to_group("enemy_red_cells")
 		OwnerType.ENEMY_GREEN:  add_to_group("enemy_green_cells")
