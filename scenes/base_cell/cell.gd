@@ -49,7 +49,9 @@ var decay_accum: float = 0.0
 
 # Оптимизация: троттлинг перерисовки
 var _redraw_timer: float = 0.0
+var _ui_timer: float = 0.0
 const REDRAW_INTERVAL: float = 0.033 # ~30 FPS для отрисовки (физика остаётся 60)
+const UI_UPDATE_INTERVAL: float = 0.12
 
 # Кеш RNG для отрисовки вен вируса (избегаем аллокации каждый кадр)
 var _vein_rng: RandomNumberGenerator = null
@@ -99,6 +101,8 @@ func _ready() -> void:
 	add_to_group("cells")
 	_update_groups()
 	_update_visuals()
+	_set_energy_ui_visible(false)
+	_set_contribution_ui_visible(false)
 	
 	if shield_overlay and shield_overlay.material:
 		shield_overlay.material = shield_overlay.material.duplicate()
@@ -248,17 +252,21 @@ func _draw() -> void:
 	var breathe_factor = sin(local_time * 3.0) * 0.05 + 1.0 # от 0.95 до 1.05
 	# При попадании клетка слегка вздувается
 	var current_radius = radius * breathe_factor + (hit_intensity * 5.0)
+	var screen_radius: float = _get_screen_radius(current_radius)
+	var is_low_detail: bool = screen_radius < 18.0
+	var is_medium_detail: bool = not is_low_detail and screen_radius < 30.0
+	var organelles_enabled: bool = stats.current_energy > 15.0 and screen_radius >= 10.0
 	
 	# 1. Ламповое мягкое свечение (Glow)
 	# ОПТИМИЗАЦИЯ: Свечение для Спринта и Щита теперь в Шейдере!
 	# Оставляем тут только свечение для скорострельности
-	if rapid_fire_timer > 0:
+	if rapid_fire_timer > 0 and not is_low_detail:
 		var glow_color = Color(1.0, 0.4, 0.1)
 		glow_color.a = 0.15 + sin(local_time * 2.5) * 0.05 
 		draw_circle(Vector2.ZERO, current_radius * 1.5, glow_color)
 	
 	# 2. Основное тело клетки (волнистая мембрана)
-	var num_points: int = 20 # Оптимизация: 20 вместо 32, визуально незаметно
+	var num_points: int = 12 if is_low_detail else (16 if is_medium_detail else 20)
 	var points = PackedVector2Array()
 	var fill_color = display_color.darkened(0.2)
 	
@@ -277,7 +285,7 @@ func _draw() -> void:
 	draw_colored_polygon(points, fill_color)
 	
 	# Отрисовка вен (вирус)
-	if _visual_infection_factor > 0.01:
+	if _visual_infection_factor > 0.01 and not is_low_detail:
 		var vein_color = display_color.darkened(0.9)
 		vein_color.a = _visual_infection_factor * 0.8
 		var seed_val = int(global_position.x * 13.0 + global_position.y * 37.0) 
@@ -308,7 +316,7 @@ func _draw() -> void:
 	draw_polyline(main_points, outline_color, 2.5, true)
 
 	# 3.1 Маркер отставшей клетки: тревожное кольцо и стрелка к центру колонии
-	if is_stranded and has_stranded_return_target and owner_type != OwnerType.NEUTRAL:
+	if is_stranded and has_stranded_return_target and owner_type != OwnerType.NEUTRAL and not is_low_detail:
 		var alert_pulse = (sin(local_time * 8.0) + 1.0) * 0.5
 		var alert_color = Color(1.0, 0.35, 0.2, 0.45 + alert_pulse * 0.25)
 		var ring_radius = current_radius * (1.3 + alert_pulse * 0.08)
@@ -337,12 +345,15 @@ func _draw() -> void:
 		nucleus_color = Color(1.0, 0.6, 0.1) # Раскаленное оранжевое ядро
 	nucleus_color.a = 0.85
 	draw_circle(nucleus_pos, current_radius * 0.4, nucleus_color)
-	# Блик на ядре
+	# Блик на ядре оставляем всегда, чтобы клетка не выглядела пустой на дальнем плане.
 	var highlight_pos = nucleus_pos + Vector2(-current_radius * 0.1, -current_radius * 0.1)
 	draw_circle(highlight_pos, current_radius * 0.1, Color.WHITE)
 	
 	# 5. Органеллы (маленькие точки внутри), которые медленно кружатся (или быстро при спринте)
-	for i in range(3):
+	var organelle_count: int = 0
+	if organelles_enabled:
+		organelle_count = 1 if screen_radius < 20.0 else (2 if is_medium_detail else 3)
+	for i in range(organelle_count):
 		var org_speed = 1.0 + i * 0.2
 		if speed_boost_timer > 0:
 			org_speed *= 4.0 # Завихрение энергии внутри
@@ -440,7 +451,10 @@ func _process(delta: float) -> void:
 		_stranded_damage_timer = 0.0
 	
 	_update_size()
-	_update_ui()
+	_ui_timer += delta
+	if _ui_timer >= UI_UPDATE_INTERVAL:
+		_ui_timer = 0.0
+		_update_ui()
 	
 	# Распад вклада через 10 секунд бездействия
 	var current_time = Time.get_ticks_msec() / 1000.0
@@ -647,23 +661,53 @@ func _update_size() -> void:
 	scale = lerp(scale, Vector2(target_scale, target_scale), 0.1)
 
 func _update_ui() -> void:
+	var screen_radius: float = _get_screen_radius(radius * scale.x)
+	var show_energy: bool = false
+	match owner_type:
+		OwnerType.PLAYER:
+			show_energy = screen_radius >= 14.0
+		OwnerType.NEUTRAL:
+			show_energy = screen_radius >= 26.0
+		_:
+			show_energy = screen_radius >= 20.0
+
 	if energy_label:
-		# roundi() переводит float в красивый int без ".0"
-		energy_label.text = str(roundi(stats.current_energy))
-		# Чтобы текст не расплющивало вместе с желейной физикой:
-		# Используем общий scale клетки, а не её текущий сплющенный scale_x / scale_y
-		var base_scale = max(0.5, 1.0 + (stats.current_energy * stats.size_multiplier))
-		energy_label.scale = Vector2.ONE / base_scale
+		if show_energy:
+			# roundi() переводит float в красивый int без ".0"
+			energy_label.text = str(roundi(stats.current_energy))
+			# Чтобы текст не расплющивало вместе с желейной физикой:
+			# Используем общий scale клетки, а не её текущий сплющенный scale_x / scale_y
+			var base_scale = max(0.5, 1.0 + (stats.current_energy * stats.size_multiplier))
+			energy_label.scale = Vector2.ONE / base_scale
+			_set_energy_ui_visible(true)
+		else:
+			_set_energy_ui_visible(false)
 	
 	if contr_label:
 		var player_cont = contributions.get(OwnerType.PLAYER, 0.0)
-		if player_cont > 0.5:
+		if player_cont > 0.5 and screen_radius >= 24.0:
 			contr_label.text = "+" + str(roundi(player_cont))
-			contr_label.show()
+			_set_contribution_ui_visible(true)
 			# Позиционируем Label за пределами клетки
 			contr_label.position = Vector2(radius * 0.8, -radius * 1.5)
 			
 			var base_scale = max(0.5, 1.0 + (stats.current_energy * stats.size_multiplier))
 			contr_label.scale = Vector2.ONE / base_scale
 		else:
-			contr_label.hide()
+			_set_contribution_ui_visible(false)
+
+func _get_screen_radius(world_radius: float) -> float:
+	var viewport := get_viewport()
+	if viewport == null:
+		return world_radius
+	var canvas_transform: Transform2D = viewport.get_canvas_transform()
+	var screen_offset: Vector2 = canvas_transform.basis_xform(Vector2(world_radius, 0.0))
+	return screen_offset.length()
+
+func _set_energy_ui_visible(visible: bool) -> void:
+	if energy_label and energy_label.visible != visible:
+		energy_label.visible = visible
+
+func _set_contribution_ui_visible(visible: bool) -> void:
+	if contr_label and contr_label.visible != visible:
+		contr_label.visible = visible

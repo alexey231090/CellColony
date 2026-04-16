@@ -1,0 +1,32 @@
+[gd_scene load_steps=2 format=3 uid="uid://d0r1ng0o7m0ma"]
+
+[ext_resource type="Script" path="res://addons/ai_profiler_export/profiler_export_panel.gd" id="1_pj4d8"]
+
+[node name="ProfilerExportPanel" type="VBoxContainer"]
+custom_minimum_size = Vector2(0, 260)
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+script = ExtResource("1_pj4d8")
+
+[node name="Header" type="HBoxContainer" parent="."]
+
+[node name="CopyButton" type="Button" parent="Header"]
+unique_name_in_owner = true
+text = "Copy Markdown Snapshot"
+
+[node name="RefreshButton" type="Button" parent="Header"]
+unique_name_in_owner = true
+text = "Refresh Preview"
+
+[node name="StatusLabel" type="Label" parent="."]
+unique_name_in_owner = true
+text = "Run the game from the editor in debug mode, then copy the snapshot."
+autowrap_mode = 3
+
+[node name="ReportTextEdit" type="TextEdit" parent="."]
+unique_name_in_owner = true
+size_flags_vertical = 3
+editable = false

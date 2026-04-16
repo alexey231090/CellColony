@@ -20,11 +20,16 @@ config/features=PackedStringArray("4.6", "GL Compatibility")
 
 [autoload]
 
+AIProfilerRuntime="*res://addons/ai_profiler_export/runtime/ai_profiler_runtime.gd"
 LevelManager="*res://scripts/core/LevelManager.gd"
 
 [dotnet]
 
 project/assembly_name="CellColony"
+
+[editor_plugins]
+
+enabled=PackedStringArray("res://addons/ai_profiler_export/plugin.cfg")
 
 [rendering]
 

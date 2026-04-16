@@ -16,6 +16,10 @@ var original_owner_type: BaseCell.OwnerType = BaseCell.OwnerType.NEUTRAL
 var trail_points: Array[Vector2] = []
 var trail_timer: float = 0.0
 const MAX_TRAIL_POINTS: int = 15
+const OFFSCREEN_CULL_MARGIN: float = 220.0
+
+var _camera: Camera2D = null
+var _is_on_screen: bool = true
 
 # Жизненный цикл снаряда
 var max_lifetime: float = 5.0
@@ -24,10 +28,15 @@ var fade_start_time: float = 1.0
 
 func _ready() -> void:
 	rotation = direction.angle()
+	_camera = get_viewport().get_camera_2d()
 	# Рисуем фигуру 1 раз при старте
 	queue_redraw()
+	_update_screen_state()
 
 func _draw() -> void:
+	if not _is_on_screen:
+		return
+
 	var current_radius = 5.5
 	
 	# Свечение (Glow)
@@ -84,6 +93,10 @@ func _draw() -> void:
 			draw_circle(p, final_radius * life_factor * 0.7, t_col)
 
 func _process(delta: float) -> void:
+	if _camera == null:
+		_camera = get_viewport().get_camera_2d()
+	_update_screen_state()
+
 	var motion: Vector2 = direction * speed * delta
 	var next_position: Vector2 = position + motion
 	var next_global_position: Vector2 = global_position + motion
@@ -112,7 +125,7 @@ func _process(delta: float) -> void:
 		queue_free()
 	
 	# Обновление шлейфа (только для вируса, троттлинг ~30fps)
-	if is_virus:
+	if is_virus and _is_on_screen:
 		trail_timer += delta
 		if trail_timer >= 0.033:
 			trail_timer = 0.0
@@ -157,10 +170,7 @@ func _impact(cell: BaseCell) -> void:
 			return
 
 	# Создаем вспышку
-	var impact = impact_effect_scene.instantiate()
-	get_tree().current_scene.add_child(impact)
-	impact.global_position = global_position
-	impact.color = projectile_color # Цвет вспышки совпадает с цветом снаряда
+	_spawn_impact_effect(global_position, projectile_color)
 	
 	# Добавляем толчок только если это НЕ союзник
 	if cell.owner_type != owner_type:
@@ -180,10 +190,7 @@ func _impact(cell: BaseCell) -> void:
 	queue_free()
 
 func _impact_wall_at(impact_pos: Vector2) -> void:
-	var impact = impact_effect_scene.instantiate()
-	get_tree().current_scene.add_child(impact)
-	impact.global_position = impact_pos + direction.normalized() * 100.0
-	impact.color = Color(0.28, 0.86, 0.92, 0.9)
+	_spawn_impact_effect(impact_pos + direction.normalized() * 100.0, Color(0.28, 0.86, 0.92, 0.9))
 	queue_free()
 
 func _reflect(cell: BaseCell) -> void:
@@ -197,11 +204,33 @@ func _reflect(cell: BaseCell) -> void:
 	owner_type = cell.owner_type
 	projectile_color = cell._get_cell_color()
 	target_node = null # Сбрасываем цель, пусть летит прямо
-	queue_redraw() # Перерисовываем цветом нового владельца
+	if _is_on_screen:
+		queue_redraw() # Перерисовываем цветом нового владельца
 
 	# Эффект отскока
+	_spawn_impact_effect(global_position, Color.WHITE, Vector2(1.5, 1.5))
+
+func _spawn_impact_effect(pos: Vector2, p_color: Color, p_scale: Vector2 = Vector2.ONE) -> void:
+	if not _is_on_screen:
+		return
 	var impact = impact_effect_scene.instantiate()
 	get_tree().current_scene.add_child(impact)
-	impact.global_position = global_position
-	impact.color = Color.WHITE # Яркая вспышка
-	impact.scale = Vector2(1.5, 1.5)
+	impact.global_position = pos
+	impact.color = p_color
+	impact.scale = p_scale
+
+func _update_screen_state() -> void:
+	if _camera == null:
+		_is_on_screen = true
+		return
+	var viewport_size: Vector2 = get_viewport_rect().size
+	var half_size: Vector2 = viewport_size * 0.5
+	var center: Vector2 = _camera.global_position
+	var margin := Vector2(OFFSCREEN_CULL_MARGIN, OFFSCREEN_CULL_MARGIN)
+	var visible_rect := Rect2(center - half_size - margin, viewport_size + margin * 2.0)
+	var was_on_screen := _is_on_screen
+	_is_on_screen = visible_rect.has_point(global_position)
+	if _is_on_screen and not was_on_screen:
+		queue_redraw()
+	elif not _is_on_screen and was_on_screen:
+		trail_points.clear()
