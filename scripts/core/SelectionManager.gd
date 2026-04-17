@@ -48,6 +48,7 @@ var drag_preview: Node2D = null
 var aim_line: Line2D = null
 var attack_target_line: Line2D = null
 var attack_target_node: BaseCell = null
+var info_focus_cell: BaseCell = null
 
 func _ready() -> void:
 	add_to_group("selection_manager")
@@ -106,6 +107,8 @@ func _update_attack_target_line() -> void:
 		return
 
 	if not is_instance_valid(attack_target_node) or not attack_target_node.is_inside_tree() or attack_target_node.owner_type == BaseCell.OwnerType.PLAYER:
+		if is_instance_valid(info_focus_cell) and info_focus_cell == attack_target_node:
+			_set_info_focus(null)
 		attack_target_node = null
 		attack_target_line.hide()
 		return
@@ -137,6 +140,17 @@ func _clear_attack_target_line() -> void:
 	attack_target_node = null
 	if attack_target_line:
 		attack_target_line.hide()
+
+func _set_info_focus(cell: BaseCell) -> void:
+	if info_focus_cell == cell:
+		return
+
+	if is_instance_valid(info_focus_cell):
+		info_focus_cell.set_info_focus(false)
+
+	info_focus_cell = cell
+	if is_instance_valid(info_focus_cell):
+		info_focus_cell.set_info_focus(true)
 
 func _update_drag_preview() -> void:
 	if is_dragging_perk and drag_cell and is_instance_valid(drag_cell):
@@ -783,6 +797,7 @@ func _handle_selection(pos: Vector2) -> void:
 	# ==================================
 	
 	if clicked_node:
+		_set_info_focus(clicked_node if clicked_node.owner_type != BaseCell.OwnerType.PLAYER else null)
 		# ЦЕЛЬ ЕСТЬ — атакуем/лечим
 		if circle:
 			circle.target_node = clicked_node
@@ -813,6 +828,7 @@ func _handle_selection(pos: Vector2) -> void:
 			# Если кликнули по своей, просто покажем круг выбора на ней (опционально)
 			_clear_attack_target_line()
 	else:
+		_set_info_focus(null)
 		# ЦЕЛИ НЕТ — ПЛЫВЕМ ВСЕЙ КОЛОНИЕЙ ТУДА
 		if circle:
 			circle.target_node = null

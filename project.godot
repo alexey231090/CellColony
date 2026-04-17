@@ -22,6 +22,7 @@ config/features=PackedStringArray("4.6", "GL Compatibility")
 
 AIProfilerRuntime="*res://addons/ai_profiler_export/runtime/ai_profiler_runtime.gd"
 LevelManager="*res://scripts/core/LevelManager.gd"
+LoadingManager="*res://scripts/core/LoadingManager.gd"
 
 [dotnet]
 

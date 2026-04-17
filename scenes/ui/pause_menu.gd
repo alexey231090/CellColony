@@ -171,7 +171,16 @@ func _input(event: InputEvent) -> void:
 
 func _on_main_menu_pressed() -> void:
 	get_tree().paused = false # Снимаем паузу перед переходом
-	get_tree().change_scene_to_file("res://scenes/ui/main_menu/main_menu.tscn")
+	is_open = false
+	if overlay:
+		overlay.visible = false
+		overlay.modulate.a = 0.0
+	if center_panel:
+		center_panel.scale = Vector2.ONE
+	if has_node("/root/LoadingManager"):
+		get_node("/root/LoadingManager").transition_to_scene("res://scenes/ui/main_menu/main_menu.tscn")
+	else:
+		get_tree().change_scene_to_file("res://scenes/ui/main_menu/main_menu.tscn")
 
 func _on_restart_pressed() -> void:
 	get_tree().paused = false
@@ -181,4 +190,11 @@ func _on_restart_pressed() -> void:
 		overlay.modulate.a = 0.0
 	if center_panel:
 		center_panel.scale = Vector2.ONE
-	get_tree().reload_current_scene()
+	var current_scene := get_tree().current_scene
+	var scene_path := ""
+	if current_scene:
+		scene_path = String(current_scene.scene_file_path)
+	if not scene_path.is_empty() and has_node("/root/LoadingManager"):
+		get_node("/root/LoadingManager").transition_to_scene(scene_path)
+	else:
+		get_tree().reload_current_scene()

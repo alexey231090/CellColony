@@ -56,6 +56,7 @@ const UI_UPDATE_INTERVAL: float = 0.12
 # Кеш RNG для отрисовки вен вируса (избегаем аллокации каждый кадр)
 var _vein_rng: RandomNumberGenerator = null
 var _vein_rng_seed: int = 0
+var is_info_focused: bool = false
 
 # Механика "отставшей" клетки
 var is_stranded: bool = false
@@ -167,6 +168,7 @@ func _capture(new_owner: OwnerType) -> void:
 			var sm = get_tree().get_first_node_in_group("selection_manager")
 			if sm and sm.has_method("add_perk_energy"):
 				sm.add_perk_energy(reward)
+			_spawn_reward_popup(reward)
 	elif new_owner != OwnerType.NEUTRAL:
 		# Начисляем энергию ИИ фракции
 		if reward > 0:
@@ -178,6 +180,7 @@ func _capture(new_owner: OwnerType) -> void:
 	
 	# Сбрасываем вклады и баффы (щит, ускорение) после смены владельца
 	contributions.clear()
+	is_info_focused = false
 	reflect_chance = 0.0
 	reflect_timer = 0.0
 	speed_boost_timer = 0.0
@@ -203,6 +206,53 @@ func _capture(new_owner: OwnerType) -> void:
 	owner_type = new_owner
 	_update_groups()
 	_update_visuals()
+	_update_ui()
+
+func set_info_focus(enabled: bool) -> void:
+	if is_info_focused == enabled:
+		return
+	is_info_focused = enabled
+	_update_ui()
+
+func _spawn_reward_popup(amount: float) -> void:
+	var viewport := get_viewport()
+	if viewport == null:
+		return
+
+	var canvas_layer := CanvasLayer.new()
+	canvas_layer.layer = 140
+	get_tree().root.add_child(canvas_layer)
+
+	var popup := Label.new()
+	var display_amount := maxi(1, roundi(amount))
+	popup.text = "+%d" % display_amount
+	popup.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	popup.size = Vector2(140.0, 44.0)
+	popup.pivot_offset = popup.size * 0.5
+	popup.mouse_filter = Control.MOUSE_FILTER_IGNORE
+
+	var settings := LabelSettings.new()
+	settings.font_size = 28
+	settings.font_color = Color(0.26, 0.72, 1.0, 1.0)
+	settings.outline_size = 6
+	settings.outline_color = Color(0.02, 0.06, 0.1, 0.9)
+	settings.shadow_size = 3
+	settings.shadow_color = Color(0.0, 0.0, 0.0, 0.5)
+	settings.shadow_offset = Vector2(0, 2)
+	popup.label_settings = settings
+	canvas_layer.add_child(popup)
+
+	var world_pos := global_position + Vector2(0.0, -radius * scale.x * 1.8)
+	var screen_pos: Vector2 = viewport.get_canvas_transform() * world_pos
+	popup.position = screen_pos - popup.size * 0.5
+	popup.scale = Vector2(0.7, 0.7)
+
+	var tween := create_tween()
+	tween.set_parallel(true)
+	tween.tween_property(popup, "scale", Vector2(1.15, 1.15), 0.14).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+	tween.tween_property(popup, "position:y", popup.position.y - 78.0, 0.72).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
+	tween.tween_property(popup, "modulate:a", 0.0, 0.72).set_trans(Tween.TRANS_EXPO).set_ease(Tween.EASE_IN).set_delay(0.06)
+	tween.chain().tween_callback(canvas_layer.queue_free)
 
 func _draw() -> void:
 	var base_color = _get_cell_color()
@@ -667,9 +717,9 @@ func _update_ui() -> void:
 		OwnerType.PLAYER:
 			show_energy = screen_radius >= 14.0
 		OwnerType.NEUTRAL:
-			show_energy = screen_radius >= 26.0
+			show_energy = is_info_focused
 		_:
-			show_energy = screen_radius >= 20.0
+			show_energy = is_info_focused
 
 	if energy_label:
 		if show_energy:
@@ -685,7 +735,7 @@ func _update_ui() -> void:
 	
 	if contr_label:
 		var player_cont = contributions.get(OwnerType.PLAYER, 0.0)
-		if player_cont > 0.5 and screen_radius >= 24.0:
+		if player_cont > 0.5:
 			contr_label.text = "+" + str(roundi(player_cont))
 			_set_contribution_ui_visible(true)
 			# Позиционируем Label за пределами клетки

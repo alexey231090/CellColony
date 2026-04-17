@@ -8,6 +8,7 @@ const BAR_WIDTH: float = 240.0
 const BAR_HEIGHT: float = 24.0
 const ICON_SIZE: float = 28.0
 const PADDING: float = 8.0
+const DIFFICULTY_TEXT_GAP: float = 24.0
 
 # --- Цвета ---
 const ENERGY_COLOR: Color = Color(0.0, 0.8, 1.0)  # Ярко-голубой
@@ -21,13 +22,14 @@ var max_energy: float = 100.0
 var display_energy: float = 0.0
 var selection_manager: Node = null
 var pulse_time: float = 0.0
+var difficulty_text: String = ""
 
 # --- StyleBoxes (для оптимизации создаем один раз) ---
 var bg_style = StyleBoxFlat.new()
 var fill_style = StyleBoxFlat.new()
 
 func _ready() -> void:
-	custom_minimum_size = Vector2(BAR_WIDTH + PADDING * 4, BAR_HEIGHT + PADDING * 2)
+	custom_minimum_size = Vector2(BAR_WIDTH + PADDING * 4, BAR_HEIGHT + PADDING * 2 + DIFFICULTY_TEXT_GAP)
 	
 	# Конфигурация фона
 	bg_style.bg_color = BG_COLOR
@@ -61,6 +63,11 @@ func _process(delta: float) -> void:
 	if selection_manager:
 		current_energy = selection_manager.perk_energy
 		max_energy = selection_manager.MAX_PERK_ENERGY
+
+	var new_difficulty_text := _get_difficulty_stars_text()
+	if difficulty_text != new_difficulty_text:
+		difficulty_text = new_difficulty_text
+		queue_redraw()
 	
 	if max_energy <= 0.0: max_energy = 1.0 # Защита от деления на 0
 	
@@ -118,6 +125,16 @@ func _draw() -> void:
 	draw_string(font, text_pos + Vector2(1, 1), text, HORIZONTAL_ALIGNMENT_LEFT, -1, font_size, Color(0, 0, 0, 0.8))
 	draw_string(font, text_pos, text, HORIZONTAL_ALIGNMENT_LEFT, -1, font_size, Color.WHITE)
 
+	if difficulty_text != "":
+		var diff_font_size := 16
+		var diff_size = font.get_string_size(difficulty_text, HORIZONTAL_ALIGNMENT_CENTER, -1, diff_font_size)
+		var diff_pos = Vector2(
+			bar_rect.position.x + BAR_WIDTH / 2.0 - diff_size.x / 2.0,
+			bar_rect.position.y + BAR_HEIGHT + DIFFICULTY_TEXT_GAP
+		)
+		draw_string(font, diff_pos + Vector2(1, 1), difficulty_text, HORIZONTAL_ALIGNMENT_LEFT, -1, diff_font_size, Color(0, 0, 0, 0.85))
+		draw_string(font, diff_pos, difficulty_text, HORIZONTAL_ALIGNMENT_LEFT, -1, diff_font_size, Color(1.0, 0.9, 0.45, 0.95))
+
 func _draw_lightning_icon(center: Vector2, size: float) -> void:
 	var s = size * 0.45
 	var color = ENERGY_COLOR
@@ -151,3 +168,17 @@ func _draw_bolt_shape(center: Vector2, s: float, col: Color) -> void:
 		center + Vector2(-s * 0.2, s * 1.1)
 	])
 	draw_colored_polygon(pts2, col)
+
+func _get_difficulty_stars_text() -> String:
+	var level_manager := get_node_or_null("/root/LevelManager")
+	if level_manager == null:
+		return ""
+
+	var difficulty: String = String(level_manager.get_selected_difficulty())
+	match difficulty:
+		"hard":
+			return "Сложность: ★ ★ ★"
+		"medium":
+			return "Сложность: ★ ★ ☆"
+		_:
+			return "Сложность: ★ ☆ ☆"

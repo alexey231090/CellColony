@@ -45,6 +45,8 @@ var virus_min_enemy_count: int = 3
 var rapid_fire_hp_target_threshold: float = 0.4
 ## Порог дистанции до цели для активации ускорения
 var speed_boost_distance_threshold: float = 1200.0
+## На easy щит включается только если игрока заметно больше рядом/на карте
+var shield_player_outnumber_ratio: float = 0.0
 
 func _ready() -> void:
 	add_to_group("ai_faction_managers")
@@ -84,6 +86,8 @@ func apply_difficulty_profile(profile: Dictionary) -> void:
 		rapid_fire_hp_target_threshold = float(profile.rapid_fire_hp_target_threshold)
 	if profile.has("speed_boost_distance_threshold"):
 		speed_boost_distance_threshold = float(profile.speed_boost_distance_threshold)
+	if profile.has("shield_player_outnumber_ratio"):
+		shield_player_outnumber_ratio = float(profile.shield_player_outnumber_ratio)
 	
 	# Стартовый кулдаун перков (perk_delay_mult): 
 	# На Easy/Medium ИИ начинает с перками на откате, на Hard — сразу готов.
@@ -329,38 +333,46 @@ func _evaluate_and_use_perks(_delta: float) -> void:
 	# Исправление бага: фильтруем молодые клетки (max_energy < shield_min_max_energy),
 	# чтобы ИИ не тратил щит на свеже-захваченные нейтралки с малым HP.
 	if _ai_shield_cd <= 0 and ai_perk_energy >= sm.SHIELD_ENERGY_COST:
-		var target_shieldee: BaseCell = null
-		var current_time: float = Time.get_ticks_msec() / 1000.0
-		for cell in my_cells:
-			# Пропускаем молодые клетки — у них мало max_energy, это нормально
-			if cell.stats.max_energy < shield_min_max_energy:
-				continue
+		var can_use_shield := true
+		if shield_player_outnumber_ratio > 0.0:
+			var player_count: int = get_tree().get_node_count_in_group("player_cells")
+			var my_count: int = my_cells.size()
+			if player_count < int(ceili(float(maxi(1, my_count)) * shield_player_outnumber_ratio)):
+				can_use_shield = false
 
-			var damaged_by_enemy: bool = false
-			for attacker_owner in cell.contributions.keys():
-				var attacker_owner_int: int = int(attacker_owner)
-				if attacker_owner_int != int(faction) and attacker_owner_int != int(BaseCell.OwnerType.NEUTRAL) and cell.contributions[attacker_owner] > 0.0:
-					damaged_by_enemy = true
-					break
-
-			# Щит только при реальном бою с другой фракцией, а не при фарме нейтралок.
-			if not cell.is_infected and damaged_by_enemy and cell.stats.current_energy < cell.stats.max_energy * shield_hp_threshold and (current_time - cell.last_damage_time) < 1.5:
-				if cell.reflect_chance < 0.1: # Еще нет щита
-					target_shieldee = cell
-					break
-				
-		if target_shieldee:
-			ai_perk_energy -= sm.SHIELD_ENERGY_COST
-			_ai_shield_cd = max(5.0, sm.SHIELD_COOLDOWN_MAX)
-			
-			# Применяем щит по области (чуть больше радиус для ИИ, чтобы это было заметно)
-			var a_radius = sm.SHIELD_SELECT_RADIUS * 1.5
+		if can_use_shield:
+			var target_shieldee: BaseCell = null
+			var current_time: float = Time.get_ticks_msec() / 1000.0
 			for cell in my_cells:
-				if cell.is_infected: continue
-				var combined_radius: float = a_radius + (cell.radius * cell.scale.x)
-				if cell.global_position.distance_squared_to(target_shieldee.global_position) <= combined_radius * combined_radius:
-					cell.reflect_chance = 0.5
-					cell.reflect_timer = 10.0
+				# Пропускаем молодые клетки — у них мало max_energy, это нормально
+				if cell.stats.max_energy < shield_min_max_energy:
+					continue
+
+				var damaged_by_enemy: bool = false
+				for attacker_owner in cell.contributions.keys():
+					var attacker_owner_int: int = int(attacker_owner)
+					if attacker_owner_int != int(faction) and attacker_owner_int != int(BaseCell.OwnerType.NEUTRAL) and cell.contributions[attacker_owner] > 0.0:
+						damaged_by_enemy = true
+						break
+
+				# Щит только при реальном бою с другой фракцией, а не при фарме нейтралок.
+				if not cell.is_infected and damaged_by_enemy and cell.stats.current_energy < cell.stats.max_energy * shield_hp_threshold and (current_time - cell.last_damage_time) < 1.5:
+					if cell.reflect_chance < 0.1: # Еще нет щита
+						target_shieldee = cell
+						break
+				
+			if target_shieldee:
+				ai_perk_energy -= sm.SHIELD_ENERGY_COST
+				_ai_shield_cd = max(5.0, sm.SHIELD_COOLDOWN_MAX)
+				
+				# Применяем щит по области (чуть больше радиус для ИИ, чтобы это было заметно)
+				var a_radius = sm.SHIELD_SELECT_RADIUS * 1.5
+				for cell in my_cells:
+					if cell.is_infected: continue
+					var combined_radius: float = a_radius + (cell.radius * cell.scale.x)
+					if cell.global_position.distance_squared_to(target_shieldee.global_position) <= combined_radius * combined_radius:
+						cell.reflect_chance = 0.5
+						cell.reflect_timer = 10.0
 
 	# 2. ВИРУС (Приоритет: текущая цель и её соседи)
 	if _ai_virus_cd <= 0 and ai_perk_energy >= sm.VIRUS_ENERGY_COST:

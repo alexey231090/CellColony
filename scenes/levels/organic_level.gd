@@ -24,6 +24,46 @@ const DEFAULT_BORDER_SEGMENTS: int = 48
 const DEFAULT_ISLAND_SEGMENTS: int = 18
 const BG_SHADER_UPDATE_INTERVAL: float = 0.05
 const BG_SHADER_MOVE_THRESHOLD_SQ: float = 4.0
+const CHAPTER_2_PALETTE := {
+	"outer_wall_color": Color(0.11, 0.20, 0.10, 1.0),
+	"outer_edge_color": Color(0.61, 0.95, 0.32, 0.95),
+	"outer_highlight_color": Color(0.88, 1.0, 0.72, 0.34),
+	"island_wall_color": Color(0.12, 0.24, 0.11, 1.0),
+	"island_edge_color": Color(0.48, 0.83, 0.28, 0.92),
+	"island_highlight_color": Color(0.84, 0.98, 0.66, 0.26),
+}
+const CHAPTER_3_PALETTE := {
+	"outer_wall_color": Color(0.24, 0.14, 0.06, 1.0),
+	"outer_edge_color": Color(0.95, 0.67, 0.18, 0.95),
+	"outer_highlight_color": Color(1.0, 0.9, 0.58, 0.34),
+	"island_wall_color": Color(0.28, 0.16, 0.07, 1.0),
+	"island_edge_color": Color(0.86, 0.56, 0.16, 0.92),
+	"island_highlight_color": Color(1.0, 0.84, 0.46, 0.26),
+}
+const CHAPTER_4_PALETTE := {
+	"outer_wall_color": Color(0.16, 0.09, 0.22, 1.0),
+	"outer_edge_color": Color(0.78, 0.36, 0.96, 0.95),
+	"outer_highlight_color": Color(0.96, 0.72, 1.0, 0.34),
+	"island_wall_color": Color(0.18, 0.1, 0.25, 1.0),
+	"island_edge_color": Color(0.66, 0.3, 0.86, 0.92),
+	"island_highlight_color": Color(0.92, 0.64, 0.98, 0.26),
+}
+const CHAPTER_5_PALETTE := {
+	"outer_wall_color": Color(0.25, 0.1, 0.1, 1.0),
+	"outer_edge_color": Color(0.95, 0.46, 0.42, 0.95),
+	"outer_highlight_color": Color(1.0, 0.78, 0.72, 0.34),
+	"island_wall_color": Color(0.29, 0.12, 0.11, 1.0),
+	"island_edge_color": Color(0.86, 0.38, 0.34, 0.92),
+	"island_highlight_color": Color(0.98, 0.7, 0.62, 0.26),
+}
+const CHAPTER_6_PALETTE := {
+	"outer_wall_color": Color(0.08, 0.11, 0.24, 1.0),
+	"outer_edge_color": Color(0.34, 0.68, 1.0, 0.95),
+	"outer_highlight_color": Color(0.82, 0.94, 1.0, 0.34),
+	"island_wall_color": Color(0.09, 0.13, 0.28, 1.0),
+	"island_edge_color": Color(0.28, 0.56, 0.92, 0.92),
+	"island_highlight_color": Color(0.74, 0.9, 1.0, 0.26),
+}
 
 var playable_polygon_pts: PackedVector2Array = []
 var island_collision_polygons: Array[PackedVector2Array] = []
@@ -241,6 +281,7 @@ func _generate_borders_organic(level_data: Dictionary) -> PackedVector2Array:
 	var border_node: StaticBody2D = StaticBody2D.new()
 	border_node.name = "BiologicalWalls"
 	add_child(border_node)
+	var palette := _get_level_palette(level_data)
 	
 	var radius_mult: float = float(level_data.get("play_area_radius_mult", 1.0))
 	var shape_type: String = String(level_data.get("shape_type", "blob"))
@@ -254,12 +295,12 @@ func _generate_borders_organic(level_data: Dictionary) -> PackedVector2Array:
 	var amp: float = float(level_data.get("noise_amp", 0.18))
 	var segments: int = max(24, int(level_data.get("border_segments", DEFAULT_BORDER_SEGMENTS)))
 	var blob_pts: PackedVector2Array = PackedVector2Array()
-	var outer_wall_color: Color = Color(0.08, 0.19, 0.22, 1.0)
-	var outer_edge_color: Color = Color(0.33, 0.82, 0.88, 0.95)
-	var outer_highlight_color: Color = Color(0.82, 0.97, 1.0, 0.34)
-	var island_wall_color: Color = Color(0.09, 0.22, 0.25, 1.0)
-	var island_edge_color: Color = Color(0.26, 0.72, 0.78, 0.92)
-	var island_highlight_color: Color = Color(0.78, 0.95, 1.0, 0.26)
+	var outer_wall_color: Color = palette.outer_wall_color
+	var outer_edge_color: Color = palette.outer_edge_color
+	var outer_highlight_color: Color = palette.outer_highlight_color
+	var island_wall_color: Color = palette.island_wall_color
+	var island_edge_color: Color = palette.island_edge_color
+	var island_highlight_color: Color = palette.island_highlight_color
 	var outer_line_width: float = 110.0
 	var outer_highlight_width: float = 42.0
 	var island_line_width: float = 48.0
@@ -374,6 +415,31 @@ func _generate_borders_organic(level_data: Dictionary) -> PackedVector2Array:
 		)
 	
 	return blob_pts
+
+func _get_level_palette(level_data: Dictionary) -> Dictionary:
+	var chapter: int = int(level_data.get("chapter", 1))
+	var default_palette := {
+		"outer_wall_color": Color(0.08, 0.19, 0.22, 1.0),
+		"outer_edge_color": Color(0.33, 0.82, 0.88, 0.95),
+		"outer_highlight_color": Color(0.82, 0.97, 1.0, 0.34),
+		"island_wall_color": Color(0.09, 0.22, 0.25, 1.0),
+		"island_edge_color": Color(0.26, 0.72, 0.78, 0.92),
+		"island_highlight_color": Color(0.78, 0.95, 1.0, 0.26),
+	}
+
+	match chapter:
+		2:
+			return CHAPTER_2_PALETTE
+		3:
+			return CHAPTER_3_PALETTE
+		4:
+			return CHAPTER_4_PALETTE
+		5:
+			return CHAPTER_5_PALETTE
+		6:
+			return CHAPTER_6_PALETTE
+		_:
+			return default_palette
 
 func _generate_organic_islands(border_node: StaticBody2D, level_data: Dictionary, center: Vector2, outer_radius: float, wall_color: Color, edge_color: Color, highlight_color: Color, line_width: float, highlight_width: float) -> void:
 	island_collision_polygons.clear()
@@ -549,6 +615,7 @@ func _build_difficulty_profile(difficulty: String) -> Dictionary:
 				"enemy_notice_range": 1000.0,
 				"shield_hp_threshold": 0.45,
 				"shield_min_max_energy": 20.0,
+				"shield_player_outnumber_ratio": 1.8,
 				"virus_min_enemy_count": 3,
 				"rapid_fire_hp_target_threshold": 0.4,
 				"speed_boost_distance_threshold": 1200.0,

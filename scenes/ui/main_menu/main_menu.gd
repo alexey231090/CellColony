@@ -103,17 +103,11 @@ func _ready() -> void:
 	# Запускаем пульсацию СВЕЧЕНИЯ и РАЗМЕРА
 	if play_button.has_meta("glow") and play_button.has_meta("wrapper"):
 		var glow = play_button.get_meta("glow")
-		var wrapper = play_button.get_meta("wrapper")
 		
 		var t = create_tween().set_loops().set_parallel(true)
 		# Пульсация свечения
 		t.tween_property(glow, "modulate:a", 0.75, 1.7).from(0.4)
 		t.chain().tween_property(glow, "modulate:a", 0.4, 1.7)
-		
-		# Пульсация размера делаем мягче и медленнее, чтобы дёрганье было менее заметно
-		var t2 = create_tween().set_loops()
-		t2.tween_property(wrapper, "scale", Vector2(1.04, 1.04), 1.7).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN_OUT)
-		t2.tween_property(wrapper, "scale", Vector2(1.0, 1.0), 1.7).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN_OUT)
 
 # ========== ФАБРИКА ЭЛЕМЕНТОВ ==========
 
@@ -439,6 +433,16 @@ func _build_main_screen() -> void:
 	play_tex.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	play_tex.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	play_bg.add_child(play_tex)
+
+	var play_membrane = preload("res://scripts/ui/play_button_membrane.gd").new()
+	play_membrane.name = "PlayMembrane"
+	play_membrane.set_anchors_and_offsets_preset(PRESET_FULL_RECT)
+	play_membrane.offset_left = -18.0
+	play_membrane.offset_top = -14.0
+	play_membrane.offset_right = 18.0
+	play_membrane.offset_bottom = 14.0
+	play_membrane.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	play_wrapper.add_child(play_membrane)
 	
 	# Сама кнопка (прозрачная с рамкой и тенью)
 	play_button = Button.new()
@@ -463,19 +467,99 @@ func _build_main_screen() -> void:
 	play_button.add_theme_color_override("font_color", Color(1.0, 1.0, 1.0, 1.0))
 	play_button.add_theme_color_override("font_hover_color", Color.WHITE)
 	play_button.add_theme_color_override("font_pressed_color", ACCENT_COLOR.lightened(0.5))
+	play_button.add_theme_color_override("font_outline_color", Color(0.02, 0.06, 0.08, 0.96))
+	play_button.add_theme_constant_override("outline_size", 9)
 	play_button.add_theme_font_size_override("font_size", 32)
 	
 	play_button.pressed.connect(_on_play_pressed)
+	play_button.mouse_entered.connect(func(): play_membrane.set_hovered(true))
+	play_button.mouse_exited.connect(func(): play_membrane.set_hovered(false))
 	play_button.set_meta("glow", play_glow)
 	play_button.set_meta("wrapper", play_wrapper)
 	play_wrapper.add_child(play_button)
 	
 	# Кнопка настроек под игрой
+	var settings_container = CenterContainer.new()
+	settings_container.custom_minimum_size = Vector2(280, 82)
+	center_box.add_child(settings_container)
+
+	var settings_wrapper = Control.new()
+	settings_wrapper.custom_minimum_size = Vector2(240, 60)
+	settings_wrapper.pivot_offset = Vector2(120, 30)
+	settings_container.add_child(settings_wrapper)
+
+	var settings_membrane = preload("res://scripts/ui/play_button_membrane.gd").new()
+	settings_membrane.name = "SettingsMembrane"
+	settings_membrane.set_anchors_and_offsets_preset(PRESET_FULL_RECT)
+	settings_membrane.offset_left = -10.0
+	settings_membrane.offset_top = -8.0
+	settings_membrane.offset_right = 10.0
+	settings_membrane.offset_bottom = 8.0
+	settings_membrane.thickness_scale = 0.58
+	settings_membrane.outer_glow_color = Color(0.08, 0.34, 0.62, 0.12)
+	settings_membrane.flesh_color = Color(0.05, 0.16, 0.32, 0.82)
+	settings_membrane.edge_color = Color(0.22, 0.62, 1.0, 0.72)
+	settings_membrane.highlight_color = Color(0.76, 0.9, 1.0, 0.28)
+	settings_membrane.mouse_filter = Control.MOUSE_FILTER_IGNORE
+
+	var settings_bg = Panel.new()
+	settings_bg.set_anchors_and_offsets_preset(PRESET_FULL_RECT)
+	settings_bg.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	settings_bg.clip_children = CanvasItem.CLIP_CHILDREN_ONLY
+	settings_wrapper.add_child(settings_bg)
+
+	var settings_mask_sb = StyleBoxFlat.new()
+	settings_mask_sb.bg_color = Color(1, 1, 1, 1)
+	settings_mask_sb.corner_radius_top_left = 20
+	settings_mask_sb.corner_radius_top_right = 20
+	settings_mask_sb.corner_radius_bottom_left = 20
+	settings_mask_sb.corner_radius_bottom_right = 20
+	settings_bg.add_theme_stylebox_override("panel", settings_mask_sb)
+
+	var settings_grad = Gradient.new()
+	settings_grad.set_color(0, Color(0.06, 0.22, 0.34, 1.0))
+	settings_grad.set_color(1, Color(0.08, 0.36, 0.68, 1.0))
+	var settings_grad_tex = GradientTexture2D.new()
+	settings_grad_tex.gradient = settings_grad
+	settings_grad_tex.fill = GradientTexture2D.FILL_LINEAR
+	settings_grad_tex.fill_from = Vector2(0, 0)
+	settings_grad_tex.fill_to = Vector2(1, 1)
+
+	var settings_tex = TextureRect.new()
+	settings_tex.texture = settings_grad_tex
+	settings_tex.set_anchors_and_offsets_preset(PRESET_FULL_RECT)
+	settings_tex.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	settings_bg.add_child(settings_tex)
+
+	settings_wrapper.add_child(settings_membrane)
+
 	settings_btn = _make_button("⚙  НАСТРОЙКИ", ACCENT_BLUE)
 	settings_btn.custom_minimum_size = Vector2(240, 60)
-	settings_btn.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
+	settings_btn.set_anchors_and_offsets_preset(PRESET_FULL_RECT)
+
+	var settings_normal = _make_stylebox(Color(0.0, 0.0, 0.0, 0.0), 20, 2, ACCENT_BLUE * Color(1, 1, 1, 0.8))
+	settings_normal.shadow_size = 8
+	settings_normal.shadow_color = Color(0.08, 0.34, 0.62, 0.16)
+	settings_btn.add_theme_stylebox_override("normal", settings_normal)
+
+	var settings_hover = _make_stylebox(Color(0.16, 0.5, 0.9, 0.14), 20, 2, Color(0.85, 0.95, 1.0, 0.95))
+	settings_hover.shadow_size = 12
+	settings_hover.shadow_color = Color(0.14, 0.52, 1.0, 0.24)
+	settings_btn.add_theme_stylebox_override("hover", settings_hover)
+	settings_btn.add_theme_stylebox_override("focus", settings_hover.duplicate())
+
+	var settings_pressed = _make_stylebox(Color(0.0, 0.08, 0.18, 0.28), 20, 3, ACCENT_BLUE)
+	settings_pressed.shadow_size = 6
+	settings_pressed.shadow_color = Color(0.08, 0.34, 0.62, 0.2)
+	settings_btn.add_theme_stylebox_override("pressed", settings_pressed)
+
+	settings_btn.add_theme_color_override("font_color", Color(0.96, 0.99, 1.0, 1.0))
+	settings_btn.add_theme_color_override("font_hover_color", Color.WHITE)
+	settings_btn.add_theme_color_override("font_pressed_color", ACCENT_BLUE.lightened(0.45))
 	settings_btn.pressed.connect(_on_settings_open)
-	center_box.add_child(settings_btn)
+	settings_btn.mouse_entered.connect(func(): settings_membrane.set_hovered(true))
+	settings_btn.mouse_exited.connect(func(): settings_membrane.set_hovered(false))
+	settings_wrapper.add_child(settings_btn)
 	
 	var center_spacer_bottom = Control.new()
 	center_spacer_bottom.size_flags_vertical = Control.SIZE_EXPAND_FILL
@@ -826,7 +910,10 @@ func _start_level_with_difficulty(difficulty: String) -> void:
 	var tween = create_tween()
 	tween.tween_interval(0.3)
 	tween.tween_callback(func():
-		get_tree().change_scene_to_file(scene_path)
+		if has_node("/root/LoadingManager"):
+			get_node("/root/LoadingManager").transition_to_scene(scene_path)
+		else:
+			get_tree().change_scene_to_file(scene_path)
 	)
 
 func _on_difficulty_cancel() -> void:
