@@ -849,6 +849,10 @@ func show_floating_message(text_str: String, color: Color = Color.WHITE) -> void
 	var msg = Label.new()
 	msg.text = text_str
 	msg.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	var popup_host: Node = get_tree().current_scene
+	if popup_host == null:
+		popup_host = self
+
 	var settings = LabelSettings.new()
 	settings.font_size = 48
 	settings.font_color = color
@@ -861,7 +865,7 @@ func show_floating_message(text_str: String, color: Color = Color.WHITE) -> void
 	# Создаем CanvasLayer для правильного порядка отрисовки поверх всего UI
 	var cl = CanvasLayer.new()
 	cl.layer = 150
-	get_tree().root.add_child(cl)
+	popup_host.add_child(cl)
 	cl.add_child(msg)
 	
 	var vp_size = get_viewport().get_visible_rect().size

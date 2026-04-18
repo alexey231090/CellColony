@@ -219,9 +219,13 @@ func _spawn_reward_popup(amount: float) -> void:
 	if viewport == null:
 		return
 
+	var popup_host: Node = get_tree().current_scene
+	if popup_host == null:
+		popup_host = self
+
 	var canvas_layer := CanvasLayer.new()
 	canvas_layer.layer = 140
-	get_tree().root.add_child(canvas_layer)
+	popup_host.add_child(canvas_layer)
 
 	var popup := Label.new()
 	var display_amount := maxi(1, roundi(amount))

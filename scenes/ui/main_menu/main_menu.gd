@@ -23,6 +23,7 @@ const BTN_CORNER := 12
 const BTN_MIN_HEIGHT := 56  # Минимальная высота кнопок (удобно для пальца)
 
 # ========== НОДЫ ==========
+var background_underlay: TextureRect
 var background: TextureRect
 var safe_area: MarginContainer
 var main_screen: Control
@@ -32,9 +33,7 @@ var overlay: ColorRect
 
 # Кнопки верхней панели
 var sound_btn: Button
-var music_btn: Button
 var sound_cross: Label
-var music_cross: Label
 var settings_btn: Button
 
 # Центр
@@ -204,14 +203,26 @@ func _make_slider(min_val: float, max_val: float, value: float) -> HSlider:
 # ========== ПОСТРОЕНИЕ UI ==========
 
 func _build_background() -> void:
+	background_underlay = TextureRect.new()
+	background_underlay.name = "BackgroundUnderlay"
+	background_underlay.set_anchors_and_offsets_preset(PRESET_FULL_RECT)
+	background_underlay.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	background_underlay.stretch_mode = TextureRect.STRETCH_SCALE
+	background_underlay.mouse_filter = MOUSE_FILTER_IGNORE
+	background_underlay.texture_filter = CanvasItem.TEXTURE_FILTER_LINEAR
+	background_underlay.texture = load("res://assets/background/backgraund2.jpg")
+	add_child(background_underlay)
+
 	background = TextureRect.new()
 	background.name = "Background"
 	background.set_anchors_and_offsets_preset(PRESET_FULL_RECT)
-	# Возвращаем COVERED для новой картинки, чтобы она была на весь экран
-	background.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_COVERED
+	# Для меню важнее показать весь арт целиком, чем агрессивно обрезать его по высоте.
+	background.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	background.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
 	background.mouse_filter = MOUSE_FILTER_IGNORE
+	background.texture_filter = CanvasItem.TEXTURE_FILTER_LINEAR
 	
-	background.texture = load("res://assets/background/menuBKGD.jpg")
+	background.texture = load("res://assets/background/cellbackgraund2.jpg")
 	add_child(background)
 	
 	_build_fire_particles()
@@ -277,46 +288,10 @@ func _build_main_screen() -> void:
 	main_screen.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	safe_area.add_child(main_screen)
 	
-	# === TOP BAR ===
-	var top_bar = HBoxContainer.new()
-	top_bar.name = "TopBar"
-	top_bar.add_theme_constant_override("separation", 8)
-	main_screen.add_child(top_bar)
-	
-	sound_btn = _make_icon_button("🔊", 80)
-	sound_btn.tooltip_text = "Звуки вкл/выкл"
-	sound_btn.pressed.connect(_on_sound_toggle)
-	top_bar.add_child(sound_btn)
-	
-	sound_cross = _make_label("✕", 48, Color(1.0, 0.3, 0.35, 1.0))
-	sound_cross.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-	sound_cross.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	sound_cross.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
-	sound_cross.add_theme_constant_override("outline_size", 8)
-	sound_cross.add_theme_color_override("font_outline_color", Color.BLACK)
-	sound_cross.mouse_filter = MOUSE_FILTER_IGNORE
-	sound_cross.visible = not is_sound_on
-	sound_btn.add_child(sound_cross)
-	
-	music_btn = _make_icon_button("🎵", 80)
-	music_btn.tooltip_text = "Музыка вкл/выкл"
-	music_btn.pressed.connect(_on_music_toggle)
-	top_bar.add_child(music_btn)
-	
-	music_cross = _make_label("✕", 48, Color(1.0, 0.3, 0.35, 1.0))
-	music_cross.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-	music_cross.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	music_cross.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
-	music_cross.add_theme_constant_override("outline_size", 8)
-	music_cross.add_theme_color_override("font_outline_color", Color.BLACK)
-	music_cross.mouse_filter = MOUSE_FILTER_IGNORE
-	music_cross.visible = not is_music_on
-	music_btn.add_child(music_cross)
-	
 	# === ЦЕНТР: Логотип + Кнопка ===
 	var center_spacer_top = Control.new()
 	center_spacer_top.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	center_spacer_top.size_flags_stretch_ratio = 0.5 # Сдвигаем центр выше
+	center_spacer_top.size_flags_stretch_ratio = 1.35 # Опускаем главный блок еще ниже
 	main_screen.add_child(center_spacer_top)
 	
 	var center_box = VBoxContainer.new()
@@ -326,50 +301,6 @@ func _build_main_screen() -> void:
 	center_box.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
 	main_screen.add_child(center_box)
 	
-	# Контейнер для многослойного заголовка
-	var title_container = MarginContainer.new()
-	title_container.custom_minimum_size = Vector2(800, 110)
-	center_box.add_child(title_container)
-	
-	# Задний план (тень и обводка)
-	var title_bg = Label.new()
-	title_bg.text = "БИТВА КЛЕТОК"
-	title_bg.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	var bg_settings = LabelSettings.new()
-	bg_settings.font_size = 76
-	bg_settings.font_color = Color.TRANSPARENT # Прозрачный текст, только контуры рисуем
-	bg_settings.outline_size = 10
-	bg_settings.outline_color = Color(0.1, 0.0, 0.0, 1.0)
-	bg_settings.shadow_color = Color(1.0, 0.2, 0.0, 0.6)
-	bg_settings.shadow_size = 15
-	bg_settings.shadow_offset = Vector2(0, 8)
-	title_bg.label_settings = bg_settings
-	title_container.add_child(title_bg)
-	
-	# Передний план (текст, который работает как маска)
-	title_label = Label.new()
-	title_label.text = "БИТВА КЛЕТОК"
-	title_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	var fg_settings = LabelSettings.new()
-	fg_settings.font_size = 76
-	fg_settings.font_color = Color.WHITE
-	title_label.label_settings = fg_settings
-	title_label.clip_children = CanvasItem.CLIP_CHILDREN_ONLY
-	title_container.add_child(title_label)
-	
-	# Градиент, который "закрасит" белые буквы
-	var title_grad = Gradient.new()
-	title_grad.set_color(0, Color(1.0, 0.9, 0.2)) # Желтый верх
-	title_grad.set_color(1, Color(1.0, 0.2, 0.2)) # Красный низ
-	var title_grad_tex = GradientTexture2D.new()
-	title_grad_tex.gradient = title_grad
-	title_grad_tex.fill_from = Vector2(0, 0)
-	title_grad_tex.fill_to = Vector2(0, 1)
-	
-	var tex_rect = TextureRect.new()
-	tex_rect.texture = title_grad_tex
-	tex_rect.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-	title_label.add_child(tex_rect)
 	# Обертка-контейнер, которая статична и не дает VBox дёргаться
 	var play_container = CenterContainer.new()
 	play_container.custom_minimum_size = Vector2(320, 100)
@@ -560,10 +491,29 @@ func _build_main_screen() -> void:
 	settings_btn.mouse_entered.connect(func(): settings_membrane.set_hovered(true))
 	settings_btn.mouse_exited.connect(func(): settings_membrane.set_hovered(false))
 	settings_wrapper.add_child(settings_btn)
+
+	var sound_container = CenterContainer.new()
+	sound_container.custom_minimum_size = Vector2(120, 96)
+	center_box.add_child(sound_container)
+
+	sound_btn = _make_icon_button("🔊", 72)
+	sound_btn.tooltip_text = "Звуки вкл/выкл"
+	sound_btn.pressed.connect(_on_sound_toggle)
+	sound_container.add_child(sound_btn)
+
+	sound_cross = _make_label("✕", 44, Color(1.0, 0.3, 0.35, 1.0))
+	sound_cross.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	sound_cross.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	sound_cross.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	sound_cross.add_theme_constant_override("outline_size", 8)
+	sound_cross.add_theme_color_override("font_outline_color", Color.BLACK)
+	sound_cross.mouse_filter = MOUSE_FILTER_IGNORE
+	sound_cross.visible = not is_sound_on
+	sound_btn.add_child(sound_cross)
 	
 	var center_spacer_bottom = Control.new()
 	center_spacer_bottom.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	center_spacer_bottom.size_flags_stretch_ratio = 1.6 # Толкаем контент вверх
+	center_spacer_bottom.size_flags_stretch_ratio = 1.1
 	main_screen.add_child(center_spacer_bottom)
 	
 	# Версия
@@ -1047,26 +997,26 @@ func _on_settings_close() -> void:
 
 func _on_sound_toggle() -> void:
 	is_sound_on = not is_sound_on
-	sound_cross.visible = not is_sound_on
+	if sound_cross:
+		sound_cross.visible = not is_sound_on
 	_apply_sound_volume()
 
 func _on_music_toggle() -> void:
 	is_music_on = not is_music_on
-	music_cross.visible = not is_music_on
 	_apply_music_volume()
 
 func _on_sound_volume_changed(value: float) -> void:
 	sound_volume = value
 	sound_value_label.text = str(int(value)) + "%"
 	is_sound_on = value > 0
-	sound_cross.visible = not is_sound_on
+	if sound_cross:
+		sound_cross.visible = not is_sound_on
 	_apply_sound_volume()
 
 func _on_music_volume_changed(value: float) -> void:
 	music_volume = value
 	music_value_label.text = str(int(value)) + "%"
 	is_music_on = value > 0
-	music_cross.visible = not is_music_on
 	_apply_music_volume()
 
 func _apply_sound_volume() -> void:
