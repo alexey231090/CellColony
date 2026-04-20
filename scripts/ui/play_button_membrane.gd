@@ -47,16 +47,16 @@ func _draw() -> void:
 	loop.append(loop[0])
 
 	var outer_glow := outer_glow_color
-	outer_glow.a += _hover_strength * 0.08
+	outer_glow.a += _hover_strength * 0.18
 	var edge := edge_color
-	edge.a += _hover_strength * 0.12
+	edge.a += _hover_strength * 0.22
 	var highlight := highlight_color
-	highlight.a += _hover_strength * 0.18
+	highlight.a += _hover_strength * 0.28
 
-	draw_polyline(loop, outer_glow, (34.0 + _hover_strength * 5.0) * thickness_scale, true)
-	draw_polyline(loop, flesh_color, (24.0 + _hover_strength * 3.0) * thickness_scale, true)
-	draw_polyline(loop, edge, (14.0 + _hover_strength * 2.0) * thickness_scale, true)
-	draw_polyline(loop, highlight, (4.0 + _hover_strength) * thickness_scale, true)
+	draw_polyline(loop, outer_glow, (34.0 + _hover_strength * 9.0) * thickness_scale, true)
+	draw_polyline(loop, flesh_color, (24.0 + _hover_strength * 4.0) * thickness_scale, true)
+	draw_polyline(loop, edge, (14.0 + _hover_strength * 4.0) * thickness_scale, true)
+	draw_polyline(loop, highlight, (4.0 + _hover_strength * 2.2) * thickness_scale, true)
 
 func _get_superellipse_point(angle: float, radii: Vector2) -> Vector2:
 	var cos_v := cos(angle)

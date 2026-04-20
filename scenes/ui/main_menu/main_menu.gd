@@ -222,7 +222,7 @@ func _build_background() -> void:
 	background.mouse_filter = MOUSE_FILTER_IGNORE
 	background.texture_filter = CanvasItem.TEXTURE_FILTER_LINEAR
 	
-	background.texture = load("res://assets/background/cellbackgraund2.jpg")
+	background.texture = load("res://assets/background/cellbackgraund4.png")
 	add_child(background)
 	
 	_build_fire_particles()
@@ -381,18 +381,20 @@ func _build_main_screen() -> void:
 	play_button.set_anchors_and_offsets_preset(PRESET_FULL_RECT)
 	play_button.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
 	
-	var play_normal = _make_stylebox(Color(0,0,0,0), 24, 2, ACCENT_COLOR) # Прозрачная внутри, зелёная рамка
+	var play_normal = _make_stylebox(Color(0,0,0,0), 24)
 	play_normal.shadow_size = 12
 	play_normal.shadow_color = Color(0.1, 0.85, 0.55, 0.35)
 	play_button.add_theme_stylebox_override("normal", play_normal)
 	
-	var play_hover = _make_stylebox(Color(0.2,0.85,0.55,0.15), 24, 3, Color(1,1,1,1))
+	var play_hover = _make_stylebox(Color(0.2,0.85,0.55,0.12), 24)
 	play_hover.shadow_size = 20
 	play_hover.shadow_color = Color(0.1, 0.85, 0.55, 0.6)
 	play_button.add_theme_stylebox_override("hover", play_hover)
 	play_button.add_theme_stylebox_override("focus", play_hover.duplicate())
 	
-	var play_pressed = _make_stylebox(Color(0,0,0,0.5), 24, 4, ACCENT_COLOR)
+	var play_pressed = _make_stylebox(Color(0,0,0,0.5), 24)
+	play_pressed.shadow_size = 10
+	play_pressed.shadow_color = Color(0.1, 0.85, 0.55, 0.2)
 	play_button.add_theme_stylebox_override("pressed", play_pressed)
 	
 	play_button.add_theme_color_override("font_color", Color(1.0, 1.0, 1.0, 1.0))
@@ -468,18 +470,18 @@ func _build_main_screen() -> void:
 	settings_btn.custom_minimum_size = Vector2(240, 60)
 	settings_btn.set_anchors_and_offsets_preset(PRESET_FULL_RECT)
 
-	var settings_normal = _make_stylebox(Color(0.0, 0.0, 0.0, 0.0), 20, 2, ACCENT_BLUE * Color(1, 1, 1, 0.8))
+	var settings_normal = _make_stylebox(Color(0.0, 0.0, 0.0, 0.0), 20)
 	settings_normal.shadow_size = 8
 	settings_normal.shadow_color = Color(0.08, 0.34, 0.62, 0.16)
 	settings_btn.add_theme_stylebox_override("normal", settings_normal)
 
-	var settings_hover = _make_stylebox(Color(0.16, 0.5, 0.9, 0.14), 20, 2, Color(0.85, 0.95, 1.0, 0.95))
+	var settings_hover = _make_stylebox(Color(0.16, 0.5, 0.9, 0.1), 20)
 	settings_hover.shadow_size = 12
 	settings_hover.shadow_color = Color(0.14, 0.52, 1.0, 0.24)
 	settings_btn.add_theme_stylebox_override("hover", settings_hover)
 	settings_btn.add_theme_stylebox_override("focus", settings_hover.duplicate())
 
-	var settings_pressed = _make_stylebox(Color(0.0, 0.08, 0.18, 0.28), 20, 3, ACCENT_BLUE)
+	var settings_pressed = _make_stylebox(Color(0.0, 0.08, 0.18, 0.28), 20)
 	settings_pressed.shadow_size = 6
 	settings_pressed.shadow_color = Color(0.08, 0.34, 0.62, 0.2)
 	settings_btn.add_theme_stylebox_override("pressed", settings_pressed)

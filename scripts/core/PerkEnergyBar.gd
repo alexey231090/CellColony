@@ -177,8 +177,8 @@ func _get_difficulty_stars_text() -> String:
 	var difficulty: String = String(level_manager.get_selected_difficulty())
 	match difficulty:
 		"hard":
-			return "Сложность: ★ ★ ★"
+			return "★ ★ ★"
 		"medium":
-			return "Сложность: ★ ★ ☆"
+			return "★ ★ ☆"
 		_:
-			return "Сложность: ★ ☆ ☆"
+			return "★ ☆ ☆"

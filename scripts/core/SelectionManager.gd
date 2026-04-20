@@ -6,6 +6,7 @@ extends Node
 var CLICK_FEEDBACK_SCENE = preload("res://scenes/ui/click_feedback.tscn")
 var TARGET_HIGHLIGHT_SCENE = preload("res://scenes/ui/target_highlight.tscn")
 var SHIELD_PERK_EFFECT_SCENE = preload("res://scenes/ui/shield_perk_effect.tscn")
+var MOVE_TARGET_MARKER_SCRIPT = preload("res://scenes/ui/move_target_marker.gd")
 
 @export var perk_energy: float = 0.0 # Пул энергии игрока для перков
 @export var MAX_PERK_ENERGY: float = 100.0 # Максимальная энергия
@@ -36,6 +37,7 @@ var speed_cooldown: float = 0.0
 
 var rapid_fire_cooldown: float = 0.0
 var virus_cooldown: float = 0.0
+@export var MOVE_TARGET_ARRIVAL_DISTANCE: float = 150.0
 
 var virus_outbreak_counter: int = 0 # Уникальный ID для каждой активации вируса
 var cursor_visual: Node2D = null
@@ -48,12 +50,17 @@ var drag_preview: Node2D = null
 var aim_line: Line2D = null
 var attack_target_line: Line2D = null
 var attack_target_node: BaseCell = null
+var move_target_line: Line2D = null
+var move_target_marker: Node2D = null
+var move_target_pos: Vector2 = Vector2.ZERO
+var has_move_target: bool = false
 var info_focus_cell: BaseCell = null
 
 func _ready() -> void:
 	add_to_group("selection_manager")
 	_init_aim_line()
 	_init_attack_target_line()
+	_init_move_target_line()
 	
 	# Твёрдая фиксация баланса (игнорирует случайные изменения в Инспекторе)
 	SHIELD_ENERGY_COST = 50.0
@@ -80,6 +87,17 @@ func _init_attack_target_line() -> void:
 	attack_target_line.hide()
 	add_child(attack_target_line)
 
+func _init_move_target_line() -> void:
+	move_target_line = Line2D.new()
+	move_target_line.width = 2.2
+	move_target_line.default_color = Color(0.84, 0.87, 0.92, 0.2)
+	move_target_line.joint_mode = Line2D.LINE_JOINT_ROUND
+	move_target_line.begin_cap_mode = Line2D.LINE_CAP_ROUND
+	move_target_line.end_cap_mode = Line2D.LINE_CAP_ROUND
+	move_target_line.z_index = 5
+	move_target_line.hide()
+	add_child(move_target_line)
+
 func add_perk_energy(amount: float) -> void:
 	perk_energy += amount
 	# Ограничиваем максимумом
@@ -101,6 +119,7 @@ func _process(delta: float) -> void:
 	_update_cursor_visual()
 	_update_drag_preview()
 	_update_attack_target_line()
+	_update_move_target_visual()
 
 func _update_attack_target_line() -> void:
 	if attack_target_line == null:
@@ -140,6 +159,66 @@ func _clear_attack_target_line() -> void:
 	attack_target_node = null
 	if attack_target_line:
 		attack_target_line.hide()
+
+func _ensure_move_target_marker() -> void:
+	if is_instance_valid(move_target_marker):
+		return
+	move_target_marker = Node2D.new()
+	move_target_marker.set_script(MOVE_TARGET_MARKER_SCRIPT)
+	move_target_marker.z_index = 9
+	add_child(move_target_marker)
+
+func _set_move_target(target_pos: Vector2) -> void:
+	move_target_pos = target_pos
+	has_move_target = true
+	_ensure_move_target_marker()
+	if is_instance_valid(move_target_marker):
+		move_target_marker.global_position = move_target_pos
+		move_target_marker.show()
+	if move_target_line:
+		move_target_line.show()
+
+func _clear_move_target_visual() -> void:
+	has_move_target = false
+	if move_target_line:
+		move_target_line.hide()
+	if is_instance_valid(move_target_marker):
+		move_target_marker.hide()
+
+func _update_move_target_visual() -> void:
+	if move_target_line == null:
+		return
+
+	if not has_move_target:
+		move_target_line.hide()
+		if is_instance_valid(move_target_marker):
+			move_target_marker.hide()
+		return
+
+	var player_cells_raw = get_tree().get_nodes_in_group("player_cells")
+	var player_cells: Array[BaseCell] = []
+	for node in player_cells_raw:
+		var cell := node as BaseCell
+		if cell:
+			player_cells.append(cell)
+
+	if player_cells.is_empty():
+		_clear_move_target_visual()
+		return
+
+	var colony_center := BaseCell.get_colony_center(get_tree(), BaseCell.OwnerType.PLAYER)
+	if colony_center.distance_to(move_target_pos) <= MOVE_TARGET_ARRIVAL_DISTANCE:
+		_clear_move_target_visual()
+		return
+
+	move_target_line.clear_points()
+	move_target_line.add_point(colony_center)
+	move_target_line.add_point(move_target_pos)
+	move_target_line.show()
+	_ensure_move_target_marker()
+	if is_instance_valid(move_target_marker):
+		move_target_marker.global_position = move_target_pos
+		move_target_marker.show()
 
 func _set_info_focus(cell: BaseCell) -> void:
 	if info_focus_cell == cell:
@@ -806,6 +885,7 @@ func _handle_selection(pos: Vector2) -> void:
 		# ИСПРАВЛЕНИЕ: Если кликнули по СВОЕЙ клетке (например, для перка),
 		# не заставляем всю остальную колонию бросать дела и целиться в неё.
 		if clicked_node.owner_type != BaseCell.OwnerType.PLAYER:
+			_clear_move_target_visual()
 			attack_target_node = clicked_node
 			for p_cell in player_cells:
 				if p_cell is BaseCell:
@@ -834,6 +914,7 @@ func _handle_selection(pos: Vector2) -> void:
 			circle.target_node = null
 			circle.hide()
 		_clear_attack_target_line()
+		_set_move_target(pos)
 
 		for p_cell in player_cells:
 			if p_cell is BaseCell:

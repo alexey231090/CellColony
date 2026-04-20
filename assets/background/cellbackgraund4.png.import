@@ -2,16 +2,16 @@
 
 importer="texture"
 type="CompressedTexture2D"
-uid="uid://c1snoe7xql3kd"
-path="res://.godot/imported/CellColloniy.png-27d0c97a3acd6d3d8652527897a55515.ctex"
+uid="uid://v6odmlvlurf8"
+path="res://.godot/imported/cellbackgraund4.png-784fa6f73230ec828276cc76b5a20d73.ctex"
 metadata={
 "vram_texture": false
 }
 
 [deps]
 
-source_file="res://assets/background/CellColloniy.png"
-dest_files=["res://.godot/imported/CellColloniy.png-27d0c97a3acd6d3d8652527897a55515.ctex"]
+source_file="res://assets/background/cellbackgraund4.png"
+dest_files=["res://.godot/imported/cellbackgraund4.png-784fa6f73230ec828276cc76b5a20d73.ctex"]
 
 [params]
 
