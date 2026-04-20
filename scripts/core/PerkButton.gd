@@ -6,6 +6,8 @@ class_name PerkButton
 # --- Константы ---
 const BUTTON_SIZE: float = 68.0
 const ICON_SIZE: float = 24.0
+const SHIELD_ICON_HALF_SIZE: float = 30.0
+const SHIELD_ICON := preload("res://assets/sprites/ChatGPT Image 20 апр. 2026 г., 23_34_05.png")
 
 # --- Параметры перка ---
 var perk_name: String = ""
@@ -133,11 +135,9 @@ func _draw_perk_icon(center: Vector2, col: Color) -> void:
 		draw_rect(Rect2(center.x - gap/2.0 - bar_w, center.y - s*0.6, bar_w, s*1.2), col)
 		draw_rect(Rect2(center.x + gap/2.0, center.y - s*0.6, bar_w, s*1.2), col)
 	elif perk_name == "shield":
-		var pts = PackedVector2Array([
-			center + Vector2(-s*0.7, -s*0.8), center + Vector2(s*0.7, -s*0.8),
-			center + Vector2(s*0.7, s*0.2), center + Vector2(0, s), center + Vector2(-s*0.7, s*0.2)
-		])
-		draw_colored_polygon(pts, col)
+		if SHIELD_ICON != null:
+			var icon_rect := Rect2(center - Vector2(SHIELD_ICON_HALF_SIZE, SHIELD_ICON_HALF_SIZE), Vector2(SHIELD_ICON_HALF_SIZE * 2.0, SHIELD_ICON_HALF_SIZE * 2.0))
+			draw_texture_rect(SHIELD_ICON, icon_rect, false, col)
 	elif perk_name == "virus":
 		# Стилизованный вирус (круг с шипами)
 		draw_circle(center, s * 0.6, col)

@@ -12,6 +12,8 @@ const STABILITY_TIME: float = 0.5
 const DRAG_THRESHOLD: float = 25.0
 const HYSTERESIS_RATIO: float = 1.5
 const DEAD_ZONE_DISTANCE: float = 140.0    # Увеличено для лучшего разделения
+const SHIELD_ICON := preload("res://assets/sprites/ChatGPT Image 20 апр. 2026 г., 23_34_05.png")
+const SHIELD_ICON_SCALE: float = 1.25
 
 # --- Физика (Liquid Motion) ---
 const SPRING_STIFFNESS: float = 120.0
@@ -365,11 +367,10 @@ func _draw_button(pos: Vector2, r: float, perk: String, is_ready: bool, cd: floa
 
 func _draw_symbol(pos: Vector2, s: float, type: String, col: Color, zoom: float) -> void:
 	if type == "shield":
-		var pts = PackedVector2Array([
-			pos + Vector2(-s, -s*0.85), pos + Vector2(s, -s*0.85),
-			pos + Vector2(s, s*0.25), pos + Vector2(0, s), pos + Vector2(-s, s*0.25)
-		])
-		draw_colored_polygon(pts, col)
+		if SHIELD_ICON != null:
+			var shield_half_size := s * SHIELD_ICON_SCALE
+			var icon_rect := Rect2(pos - Vector2(shield_half_size, shield_half_size), Vector2(shield_half_size * 2.0, shield_half_size * 2.0))
+			draw_texture_rect(SHIELD_ICON, icon_rect, false, col)
 	elif type == "virus":
 		# Символ вируса: Череп (упрощенный)
 		# 1. Основной круг головы

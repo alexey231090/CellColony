@@ -1,5 +1,7 @@
 extends Node2D
 
+const VICTORY_MENU_SCENE := preload("res://scenes/ui/victory_menu.gd")
+
 const SPAWN_SLOTS_NORMALIZED: Array[Vector2] = [
 	Vector2(-0.68, -0.68),
 	Vector2(0.68, 0.68),
@@ -69,6 +71,11 @@ var playable_polygon_pts: PackedVector2Array = []
 var island_collision_polygons: Array[PackedVector2Array] = []
 var _bg_shader_timer: float = 0.0
 var _last_bg_cam_offset: Vector2 = Vector2.INF
+var _victory_ready: bool = false
+var _victory_triggered: bool = false
+var _victory_check_delay: float = 0.0
+var _victory_menu: VictoryMenu = null
+var _pause_menu: PauseMenu = null
 @onready var camera: Camera2D = $Camera2D
 @onready var bg_rect: ColorRect = $BackgroundLayer/ColorRect
 
@@ -159,9 +166,12 @@ func _ready() -> void:
 	# 4. Свободная камера
 	_setup_dev_camera()
 	_setup_pause_ui()
+	_setup_victory_menu()
 	
 	# 5. Применяем профиль сложности ИИ (deferred, чтобы AIFactionManager был готов)
 	call_deferred("_apply_ai_difficulty", difficulty)
+	_victory_check_delay = 0.4
+	_victory_ready = true
 	
 	print("--- ORGANIC LEVEL LOADED: Чистое пространство (0,0), сложность: %s ---" % difficulty)
 
@@ -183,6 +193,12 @@ func _process(delta: float) -> void:
 			_bg_shader_timer = 0.0
 			_last_bg_cam_offset = cam_offset
 			bg_rect.material.set_shader_parameter("cam_offset", cam_offset)
+
+	if _victory_ready and not _victory_triggered:
+		if _victory_check_delay > 0.0:
+			_victory_check_delay -= delta
+		else:
+			_check_victory_condition()
 
 func _input(event: InputEvent) -> void:
 	if event is InputEventKey and event.pressed and not event.echo:
@@ -255,6 +271,7 @@ func _setup_pause_ui() -> void:
 	var pause_menu = preload("res://scenes/ui/pause_menu.gd").new()
 	pause_menu.name = "PauseMenu"
 	add_child(pause_menu)
+	_pause_menu = pause_menu
 	
 	var pause_hud: CanvasLayer = CanvasLayer.new()
 	pause_hud.name = "PauseHUD"
@@ -276,6 +293,56 @@ func _setup_pause_ui() -> void:
 	
 	pause_btn.pressed_btn.connect(pause_menu.toggle_pause)
 	pause_hud.add_child(pause_btn)
+
+func _setup_victory_menu() -> void:
+	_victory_menu = VICTORY_MENU_SCENE.new()
+	_victory_menu.name = "VictoryMenu"
+	add_child(_victory_menu)
+
+func _check_victory_condition() -> void:
+	var player_cells := get_tree().get_nodes_in_group("player_cells")
+	if player_cells.is_empty():
+		return
+
+	var enemy_groups := ["enemy_red_cells", "enemy_green_cells", "enemy_yellow_cells"]
+	for group_name in enemy_groups:
+		if not get_tree().get_nodes_in_group(group_name).is_empty():
+			return
+
+	_trigger_victory()
+
+func _trigger_victory() -> void:
+	if _victory_triggered:
+		return
+	_victory_triggered = true
+	var level_manager := get_node_or_null("/root/LevelManager")
+	var current_level_num := 1
+	var has_next_level := false
+	var next_level_num := 1
+	var difficulty_stars := "★ ☆ ☆"
+
+	if level_manager != null:
+		current_level_num = int(level_manager.current_level)
+		level_manager.complete_current_level()
+		has_next_level = bool(level_manager.has_next_level())
+		next_level_num = int(level_manager.get_next_level_number())
+		match String(level_manager.get_selected_difficulty()):
+			"hard":
+				difficulty_stars = "★ ★ ★"
+			"medium":
+				difficulty_stars = "★ ★ ☆"
+			_:
+				difficulty_stars = "★ ☆ ☆"
+
+	if _pause_menu != null:
+		_pause_menu.is_open = false
+		_pause_menu.overlay.visible = false
+		_pause_menu.process_mode = Node.PROCESS_MODE_DISABLED
+
+	get_tree().paused = true
+	if _victory_menu != null:
+		_victory_menu.setup(current_level_num, difficulty_stars, has_next_level, next_level_num)
+		_victory_menu.show_victory()
 
 func _generate_borders_organic(level_data: Dictionary) -> PackedVector2Array:
 	var border_node: StaticBody2D = StaticBody2D.new()

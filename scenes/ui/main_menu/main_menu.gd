@@ -21,6 +21,7 @@ const SHADOW_COLOR := Color(0.0, 0.0, 0.0, 0.5)
 const CORNER_RADIUS := 16
 const BTN_CORNER := 12
 const BTN_MIN_HEIGHT := 56  # Минимальная высота кнопок (удобно для пальца)
+const DEV_CONSOLE_SCENE := preload("res://scenes/ui/dev_console.tscn")
 
 # ========== НОДЫ ==========
 var background_underlay: TextureRect
@@ -92,6 +93,7 @@ func _ready() -> void:
 	_build_level_panel()
 	_build_difficulty_panel()
 	_build_settings_panel()
+	_build_dev_console()
 	
 	# Элементы основного экрана (начальное состояние)
 	level_panel.visible = false
@@ -270,6 +272,13 @@ func _build_overlay() -> void:
 	overlay.color = Color(0, 0, 0, 0.6)
 	overlay.mouse_filter = MOUSE_FILTER_STOP
 	add_child(overlay)
+
+func _build_dev_console() -> void:
+	if DEV_CONSOLE_SCENE == null:
+		return
+	var dev_console := DEV_CONSOLE_SCENE.instantiate()
+	dev_console.name = "DevConsole"
+	add_child(dev_console)
 
 func _build_safe_area() -> void:
 	safe_area = MarginContainer.new()
@@ -512,6 +521,7 @@ func _build_main_screen() -> void:
 	sound_cross.mouse_filter = MOUSE_FILTER_IGNORE
 	sound_cross.visible = not is_sound_on
 	sound_btn.add_child(sound_cross)
+
 	
 	var center_spacer_bottom = Control.new()
 	center_spacer_bottom.size_flags_vertical = Control.SIZE_EXPAND_FILL
@@ -997,6 +1007,14 @@ func _on_settings_open() -> void:
 func _on_settings_close() -> void:
 	_hide_panel(settings_panel)
 
+func refresh_unlocked_levels() -> void:
+	if has_node("/root/LevelManager"):
+		var lm: Node = get_node("/root/LevelManager")
+		unlocked_levels = lm.unlocked_levels
+		total_levels = lm.get_total_levels()
+	if level_list:
+		_populate_levels()
+
 func _on_sound_toggle() -> void:
 	is_sound_on = not is_sound_on
 	if sound_cross:
@@ -1036,6 +1054,10 @@ func _apply_music_volume() -> void:
 	pass
 
 func _input(event: InputEvent) -> void:
+	var dev = get_tree().get_first_node_in_group("dev_console")
+	if dev and dev._is_open:
+		return
+
 	# ESC закрывает открытые панели
 	if event is InputEventKey and event.pressed and event.keycode == KEY_ESCAPE:
 		if settings_panel.visible:

@@ -75,6 +75,14 @@ func _apply_closed_position() -> void:
 	
 func _build_settings() -> void:
 	_settings.clear()
+	var level_manager := get_node_or_null("/root/LevelManager")
+	var unlock_all_enabled := false
+	if level_manager != null:
+		if level_manager.has_method("are_all_levels_unlocked"):
+			unlock_all_enabled = bool(level_manager.are_all_levels_unlocked())
+		else:
+			unlock_all_enabled = int(level_manager.unlocked_levels) >= int(level_manager.get_total_levels())
+
 	_settings.append({
 		"id": "camera_mode",
 		"name": "Режим Камеры",
@@ -92,6 +100,14 @@ func _build_settings() -> void:
 		"value": true,
 		"desc": "Enter/←→ — переключить.",
 		"apply": Callable(self, "_apply_show_fps")
+	})
+	_settings.append({
+		"id": "unlock_all_levels",
+		"name": "Разблокировать все уровни",
+		"type": "bool",
+		"value": unlock_all_enabled,
+		"desc": "ON — открыть все уровни. OFF — вернуть только 1 уровень.",
+		"apply": Callable(self, "_apply_unlock_all_levels")
 	})
 	_settings.append({
 		"id": "time_scale",
@@ -407,3 +423,17 @@ func _apply_ai_prop_recursive(n: Node, prop: StringName, v: float) -> void:
 		n.set(prop, v)
 	for c in n.get_children():
 		_apply_ai_prop_recursive(c, prop, v)
+
+func _apply_unlock_all_levels(enabled: bool) -> void:
+	var level_manager := get_node_or_null("/root/LevelManager")
+	if level_manager == null:
+		return
+
+	if enabled:
+		level_manager.unlock_all_levels()
+	else:
+		level_manager.reset_level_unlocks()
+
+	var root := get_tree().current_scene
+	if root != null and root.has_method("refresh_unlocked_levels"):
+		root.refresh_unlocked_levels()

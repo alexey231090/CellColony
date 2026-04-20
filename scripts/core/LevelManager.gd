@@ -6,7 +6,7 @@ const DIFFICULTY_HARD := "hard"
 const CHAPTER_SIZE := 5
 
 var current_level: int = 1
-var unlocked_levels: int = 30
+var unlocked_levels: int = 1
 var selected_difficulty: String = DIFFICULTY_EASY
 
 const DEFAULT_LEVEL_DATA := {
@@ -2256,6 +2256,29 @@ func _ensure_level_count(target_count: int) -> void:
 
 func get_total_levels() -> int:
 	return levels.size()
+
+func has_next_level() -> bool:
+	return current_level < get_total_levels()
+
+func get_next_level_number() -> int:
+	if not has_next_level():
+		return current_level
+	return current_level + 1
+
+func complete_current_level() -> void:
+	unlocked_levels = max(unlocked_levels, current_level)
+	if has_next_level():
+		unlocked_levels = max(unlocked_levels, get_next_level_number())
+	unlocked_levels = clampi(unlocked_levels, 1, get_total_levels())
+
+func unlock_all_levels() -> void:
+	unlocked_levels = max(1, get_total_levels())
+
+func reset_level_unlocks() -> void:
+	unlocked_levels = 1
+
+func are_all_levels_unlocked() -> bool:
+	return unlocked_levels >= get_total_levels()
 
 func get_total_chapters() -> int:
 	return int(ceili(float(get_total_levels()) / float(CHAPTER_SIZE)))
