@@ -12,8 +12,14 @@ const STABILITY_TIME: float = 0.5
 const DRAG_THRESHOLD: float = 25.0
 const HYSTERESIS_RATIO: float = 1.5
 const DEAD_ZONE_DISTANCE: float = 140.0    # Увеличено для лучшего разделения
-const SHIELD_ICON := preload("res://assets/sprites/ChatGPT Image 20 апр. 2026 г., 23_34_05.png")
+const COOLDOWN_ICON_COLOR := Color(0.55, 0.55, 0.58, 1.0)
+const NO_ENERGY_ICON_COLOR := Color(0.28, 0.28, 0.3, 0.92)
+const SHIELD_ICON := preload("res://assets/sprites/shield.png")
 const SHIELD_ICON_SCALE: float = 1.25
+const RAPID_FIRE_ICON := preload("res://assets/sprites/speedfire2.png")
+const RAPID_FIRE_ICON_SCALE: float = 1.25
+const SPEED_ICON := preload("res://assets/sprites/speed.png")
+const SPEED_ICON_SCALE: float = 1.25
 
 # --- Физика (Liquid Motion) ---
 const SPRING_STIFFNESS: float = 120.0
@@ -334,11 +340,12 @@ func _draw() -> void:
 		
 		var cd = sm.get_perk_cooldown_ratio(icon.perk_name) as float
 		var energy_cost = sm.get_perk_energy_cost(icon.perk_name)
-		var is_ready = (cd <= 0.0 and sm.perk_energy >= energy_cost)
+		var has_enough_energy := sm.perk_energy >= energy_cost
+		var is_ready = (cd <= 0.0 and has_enough_energy)
 		
-		_draw_button(d_pos, r, icon.perk_name, is_ready, cd, zoom, alpha_mult)
+		_draw_button(d_pos, r, icon.perk_name, is_ready, cd, has_enough_energy, zoom, alpha_mult)
 
-func _draw_button(pos: Vector2, r: float, perk: String, is_ready: bool, cd: float, zoom: float, alpha: float = 1.0) -> void:
+func _draw_button(pos: Vector2, r: float, perk: String, is_ready: bool, cd: float, has_enough_energy: bool, zoom: float, alpha: float = 1.0) -> void:
 	var col = Color(0.2, 0.8, 1.0) # Синий для щита
 	if perk == "virus":
 		col = Color(0.9, 0.1, 0.1) # Красный для вируса
@@ -348,6 +355,9 @@ func _draw_button(pos: Vector2, r: float, perk: String, is_ready: bool, cd: floa
 		col = Color(1.0, 0.9, 0.1) # Желтоватый для спринта
 	else:
 		col = Color(0.0, 1.0, 0.5) # Зеленый (дефолт)
+
+	if cd <= 0.0 and not has_enough_energy:
+		col = Color(0.14, 0.14, 0.17)
 	
 	# Тень/Обводка с учётом прозрачности
 	draw_circle(pos, r * 1.25, Color(0, 0, 0, 0.7 * alpha))
@@ -361,7 +371,11 @@ func _draw_button(pos: Vector2, r: float, perk: String, is_ready: bool, cd: floa
 		var cd_col = Color(1, 1, 1, 0.5 * alpha)
 		draw_arc(pos, r + 3.0/zoom, -PI/2, -PI/2 + TAU * cd, 32, cd_col, 5.0/zoom, true)
 
-	var icon_col = col if cd <= 0.0 else Color(0.5, 0.5, 0.5)
+	var icon_col = col
+	if cd > 0.0:
+		icon_col = COOLDOWN_ICON_COLOR
+	elif not has_enough_energy:
+		icon_col = NO_ENERGY_ICON_COLOR
 	icon_col.a *= alpha
 	_draw_symbol(pos, r * 0.6, perk, icon_col, zoom)
 
@@ -389,26 +403,15 @@ func _draw_symbol(pos: Vector2, s: float, type: String, col: Color, zoom: float)
 		draw_line(pos + Vector2(-s*0.1, s*0.4), pos + Vector2(-s*0.1, s*0.7), bg, 1.5/zoom)
 		draw_line(pos + Vector2(s*0.1, s*0.4), pos + Vector2(s*0.1, s*0.7), bg, 1.5/zoom)
 	elif type == "rapid_fire":
-		# Символ скорострельности: три стрелки/пули вверх
-		for offset in [-s*0.6, 0, s*0.6]:
-			var pts = PackedVector2Array([
-				pos + Vector2(offset, -s*0.8), 
-				pos + Vector2(offset + s*0.3, s*0.2), 
-				pos + Vector2(offset - s*0.3, s*0.2)
-			])
-			draw_colored_polygon(pts, col)
-		draw_rect(Rect2(pos.x - s*0.8, pos.y + s*0.3, s*1.6, s*0.2), col)
+		if RAPID_FIRE_ICON != null:
+			var rapid_fire_half_size := s * RAPID_FIRE_ICON_SCALE
+			var icon_rect := Rect2(pos - Vector2(rapid_fire_half_size, rapid_fire_half_size), Vector2(rapid_fire_half_size * 2.0, rapid_fire_half_size * 2.0))
+			draw_texture_rect(RAPID_FIRE_ICON, icon_rect, false, col)
 	else:
-		# Молния
-		var pts = PackedVector2Array([
-			pos + Vector2(s*0.3, -s),      # Верхний правый угол
-			pos + Vector2(-s*0.5, s*0.2), # Сгиб слева сверху
-			pos + Vector2(s*0.1, s*0.2),  # Вход в центр справа
-			pos + Vector2(-s*0.3, s),     # Нижний левый угол
-			pos + Vector2(s*0.5, -s*0.2), # Сгиб справа снизу
-			pos + Vector2(-s*0.1, -s*0.2) # Вход в центр слева
-		])
-		draw_colored_polygon(pts, col)
+		if SPEED_ICON != null:
+			var speed_half_size := s * SPEED_ICON_SCALE
+			var icon_rect := Rect2(pos - Vector2(speed_half_size, speed_half_size), Vector2(speed_half_size * 2.0, speed_half_size * 2.0))
+			draw_texture_rect(SPEED_ICON, icon_rect, false, col)
 
 # --- Ввод ---
 

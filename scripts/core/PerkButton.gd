@@ -7,7 +7,13 @@ class_name PerkButton
 const BUTTON_SIZE: float = 68.0
 const ICON_SIZE: float = 24.0
 const SHIELD_ICON_HALF_SIZE: float = 30.0
-const SHIELD_ICON := preload("res://assets/sprites/ChatGPT Image 20 апр. 2026 г., 23_34_05.png")
+const RAPID_FIRE_ICON_HALF_SIZE: float = 30.0
+const SPEED_ICON_HALF_SIZE: float = 30.0
+const COOLDOWN_ICON_COLOR := Color(0.55, 0.55, 0.58, 1.0)
+const NO_ENERGY_ICON_COLOR := Color(0.28, 0.28, 0.3, 0.92)
+const SHIELD_ICON := preload("res://assets/sprites/shield.png")
+const RAPID_FIRE_ICON := preload("res://assets/sprites/speedfire2.png")
+const SPEED_ICON := preload("res://assets/sprites/speed.png")
 
 # --- Параметры перка ---
 var perk_name: String = ""
@@ -81,13 +87,19 @@ func _draw() -> void:
 	
 	var is_ready = false
 	var cooldown_ratio = 0.0
+	var has_enough_energy = false
+	var energy_cost = 0.0
 	
 	if selection_manager:
 		is_ready = selection_manager._is_perk_ready(perk_name)
 		cooldown_ratio = selection_manager.get_perk_cooldown_ratio(perk_name)
+		energy_cost = selection_manager.get_perk_energy_cost(perk_name)
+		has_enough_energy = selection_manager.perk_energy >= energy_cost
 	
 	# 1. Основной фон кнопки (StyleBox)
 	var main_color = perk_color if is_ready else Color(0.2, 0.2, 0.25)
+	if cooldown_ratio <= 0.0 and not has_enough_energy:
+		main_color = Color(0.14, 0.14, 0.17)
 	var rect = Rect2(Vector2.ZERO, size)
 	
 	style_circle.bg_color = main_color
@@ -111,19 +123,24 @@ func _draw() -> void:
 		# Затемняющий слой
 		draw_circle(center, radius, Color(0, 0, 0, 0.4))
 	
-	# 4. Иконка с тенью
-	_draw_perk_icon_with_shadow(center)
+	# 4. Иконка с тенью/состоянием
+	var icon_color := Color.WHITE
+	if cooldown_ratio > 0.0:
+		icon_color = COOLDOWN_ICON_COLOR
+	elif not has_enough_energy:
+		icon_color = NO_ENERGY_ICON_COLOR
+	_draw_perk_icon_with_shadow(center, icon_color)
 	
 	# 5. Свечение готовности
 	if is_ready:
 		var pulse = (sin(Time.get_ticks_msec() / 250.0) + 1.0) * 0.5
 		draw_arc(center, radius + 4.0 + pulse * 4.0, 0, TAU, 32, Color(perk_color.r, perk_color.g, perk_color.b, 0.3 - pulse * 0.3), 2.0)
 
-func _draw_perk_icon_with_shadow(center: Vector2) -> void:
+func _draw_perk_icon_with_shadow(center: Vector2, icon_color: Color) -> void:
 	# Тень иконки
 	_draw_perk_icon(center + Vector2(1, 2), Color(0, 0, 0, 0.5))
 	# Сама иконка
-	_draw_perk_icon(center, Color.WHITE)
+	_draw_perk_icon(center, icon_color)
 
 func _draw_perk_icon(center: Vector2, col: Color) -> void:
 	var s = ICON_SIZE
@@ -147,23 +164,13 @@ func _draw_perk_icon(center: Vector2, col: Color) -> void:
 			var p2 = center + Vector2(cos(angle), sin(angle)) * s * 1.0
 			draw_line(p1, p2, col, 3.0)
 	elif perk_name == "rapid_fire":
-		# Три пули/молнии вверх
-		for ox in [-s*0.5, 0, s*0.5]:
-			var pts = PackedVector2Array([
-				center + Vector2(ox, -s), center + Vector2(ox + s*0.25, s*0.2), center + Vector2(ox - s*0.25, s*0.2)
-			])
-			draw_colored_polygon(pts, col)
+		if RAPID_FIRE_ICON != null:
+			var icon_rect := Rect2(center - Vector2(RAPID_FIRE_ICON_HALF_SIZE, RAPID_FIRE_ICON_HALF_SIZE), Vector2(RAPID_FIRE_ICON_HALF_SIZE * 2.0, RAPID_FIRE_ICON_HALF_SIZE * 2.0))
+			draw_texture_rect(RAPID_FIRE_ICON, icon_rect, false, col)
 	else: # speed
-		# Крыло или шевроны
-		for oy in [-s*0.4, 0, s*0.4]:
-			var pts = PackedVector2Array([
-				center + Vector2(-s*0.8, oy - s*0.3), center + Vector2(s*0.2, oy), center + Vector2(-s*0.8, oy + s*0.3)
-			])
-			draw_colored_polygon(pts, col)
-			var pts2 = PackedVector2Array([
-				center + Vector2(-s*0.3, oy - s*0.3), center + Vector2(s*0.7, oy), center + Vector2(-s*0.3, oy + s*0.3)
-			])
-			draw_colored_polygon(pts2, col)
+		if SPEED_ICON != null:
+			var icon_rect := Rect2(center - Vector2(SPEED_ICON_HALF_SIZE, SPEED_ICON_HALF_SIZE), Vector2(SPEED_ICON_HALF_SIZE * 2.0, SPEED_ICON_HALF_SIZE * 2.0))
+			draw_texture_rect(SPEED_ICON, icon_rect, false, col)
 
 func _on_gui_input(event: InputEvent) -> void:
 	if event is InputEventMouseButton:

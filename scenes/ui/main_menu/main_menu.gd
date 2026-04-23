@@ -22,6 +22,81 @@ const CORNER_RADIUS := 16
 const BTN_CORNER := 12
 const BTN_MIN_HEIGHT := 56  # Минимальная высота кнопок (удобно для пальца)
 const DEV_CONSOLE_SCENE := preload("res://scenes/ui/dev_console.tscn")
+const SHIELD_ICON := preload("res://assets/sprites/shield.png")
+const RAPID_FIRE_ICON := preload("res://assets/sprites/speedfire2.png")
+const SPEED_ICON := preload("res://assets/sprites/speed.png")
+
+class MenuPerkIcon extends Control:
+	var perk_id: String = ""
+	var icon_texture: Texture2D = null
+	var icon_color: Color = Color.WHITE
+
+	func _ready() -> void:
+		mouse_filter = Control.MOUSE_FILTER_IGNORE
+
+	func _draw() -> void:
+		var rect := Rect2(Vector2.ZERO, size)
+		if icon_texture != null:
+			draw_texture_rect(icon_texture, rect, false, Color.WHITE)
+			return
+
+		if perk_id == "virus":
+			var center := size * 0.5
+			var s := minf(size.x, size.y) * 0.28
+			draw_circle(center + Vector2(0, -s * 0.2), s * 0.7, icon_color)
+			var jaw := PackedVector2Array([
+				center + Vector2(-s * 0.4, s * 0.2), center + Vector2(s * 0.4, s * 0.2),
+				center + Vector2(s * 0.3, s * 0.8), center + Vector2(-s * 0.3, s * 0.8)
+			])
+			draw_colored_polygon(jaw, icon_color)
+			var bg := Color(0, 0, 0, 0.35)
+			draw_circle(center + Vector2(-s * 0.3, -s * 0.2), s * 0.15, bg)
+			draw_circle(center + Vector2(s * 0.3, -s * 0.2), s * 0.15, bg)
+			draw_line(center + Vector2(-s * 0.1, s * 0.4), center + Vector2(-s * 0.1, s * 0.7), bg, 2.0)
+			draw_line(center + Vector2(s * 0.1, s * 0.4), center + Vector2(s * 0.1, s * 0.7), bg, 2.0)
+
+const PERK_INFO: Array[Dictionary] = [
+	{
+		"id": "shield",
+		"title": "ЩИТ",
+		"subtitle": "Щит колонии",
+		"color": Color(0.2, 0.8, 1.0, 1.0),
+		"icon": SHIELD_ICON,
+		"desc": "Создает защиту вокруг центра колонии и прикрывает соседние клетки. Щит отражает обычные снаряды и помогает пережить вражеский залп.",
+		"cost": "50",
+		"cooldown": "12с",
+	},
+	{
+		"id": "speed",
+		"title": "СПРИНТ",
+		"subtitle": "Общий буст",
+		"color": Color(1.0, 0.9, 0.1, 1.0),
+		"icon": SPEED_ICON,
+		"desc": "Временно ускоряет всю колонию. Идеален для маневров, быстрого сближения и резкого нападения, когда нужно навязать бой первым.",
+		"cost": "30",
+		"cooldown": "18с",
+	},
+	{
+		"id": "rapid_fire",
+		"title": "СКОРОСТРЕЛЬНОСТЬ",
+		"subtitle": "Темп огня",
+		"color": Color(1.0, 0.5, 0.1, 1.0),
+		"icon": RAPID_FIRE_ICON,
+		"desc": "Временно ускоряет стрельбу всей колонии. Лучше всего раскрывается перед добиванием вражеской группы или во время общего пуша.",
+		"cost": "50",
+		"cooldown": "15с",
+	},
+	{
+		"id": "virus",
+		"title": "ВИРУС",
+		"subtitle": "Автоцель",
+		"color": Color(0.9, 0.1, 0.1, 1.0),
+		"icon": null,
+		"desc": "Запускает вирус в ближайшего врага. Зараженная клетка теряет контроль, слабеет и может передать заражение соседям своей фракции.",
+		"cost": "100",
+		"cooldown": "20с",
+	},
+]
 
 # ========== НОДЫ ==========
 var background_underlay: TextureRect
@@ -30,12 +105,14 @@ var safe_area: MarginContainer
 var main_screen: Control
 var level_panel: Control
 var settings_panel: Control
+var perks_panel: Control
 var overlay: ColorRect
 
 # Кнопки верхней панели
 var sound_btn: Button
 var sound_cross: Label
 var settings_btn: Button
+var perks_btn: Button
 
 # Центр
 var title_label: Label
@@ -54,6 +131,11 @@ var music_slider: HSlider
 var sound_value_label: Label
 var music_value_label: Label
 var settings_close_btn: Button
+var perks_desc_title: Label
+var perks_desc_body: Label
+var perks_desc_meta: Label
+var perk_card_buttons: Dictionary = {}
+var selected_perk_id: String = "shield"
 
 # Состояние
 var is_sound_on: bool = true
@@ -93,12 +175,14 @@ func _ready() -> void:
 	_build_level_panel()
 	_build_difficulty_panel()
 	_build_settings_panel()
+	_build_perks_panel()
 	_build_dev_console()
 	
 	# Элементы основного экрана (начальное состояние)
 	level_panel.visible = false
 	difficulty_panel.visible = false
 	settings_panel.visible = false
+	perks_panel.visible = false
 	overlay.visible = false
 	
 	# Запускаем пульсацию СВЕЧЕНИЯ и РАЗМЕРА
@@ -212,7 +296,7 @@ func _build_background() -> void:
 	background_underlay.stretch_mode = TextureRect.STRETCH_SCALE
 	background_underlay.mouse_filter = MOUSE_FILTER_IGNORE
 	background_underlay.texture_filter = CanvasItem.TEXTURE_FILTER_LINEAR
-	background_underlay.texture = load("res://assets/background/backgraund2.jpg")
+	background_underlay.texture = load("res://assets/background/backgraund3.jpg")
 	add_child(background_underlay)
 
 	background = TextureRect.new()
@@ -309,6 +393,10 @@ func _build_main_screen() -> void:
 	center_box.add_theme_constant_override("separation", 32)
 	center_box.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
 	main_screen.add_child(center_box)
+
+	var buttons_offset = Control.new()
+	buttons_offset.custom_minimum_size = Vector2(0, 200)
+	center_box.add_child(buttons_offset)
 	
 	# Обертка-контейнер, которая статична и не дает VBox дёргаться
 	var play_container = CenterContainer.new()
@@ -503,6 +591,15 @@ func _build_main_screen() -> void:
 	settings_btn.mouse_exited.connect(func(): settings_membrane.set_hovered(false))
 	settings_wrapper.add_child(settings_btn)
 
+	var perks_container = CenterContainer.new()
+	perks_container.custom_minimum_size = Vector2(220, 74)
+	center_box.add_child(perks_container)
+
+	perks_btn = _make_button("✦  ПЕРКИ", Color(0.92, 0.78, 0.28, 1.0))
+	perks_btn.custom_minimum_size = Vector2(220, 56)
+	perks_btn.pressed.connect(_on_perks_open)
+	perks_container.add_child(perks_btn)
+
 	var sound_container = CenterContainer.new()
 	sound_container.custom_minimum_size = Vector2(120, 96)
 	center_box.add_child(sound_container)
@@ -658,7 +755,7 @@ func _build_level_button(level_num: int, is_unlocked: bool) -> Button:
 	stars_lbl.set_anchors_and_offsets_preset(Control.PRESET_BOTTOM_WIDE)
 	stars_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	stars_lbl.position.y = -32
-	stars_lbl.size.y = 24
+	stars_lbl.custom_minimum_size.y = 24
 	stars_lbl.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	
 	var stars_set = LabelSettings.new()
@@ -965,6 +1062,158 @@ func _build_settings_panel() -> void:
 	settings_close_btn.pressed.connect(_on_settings_close)
 	vbox.add_child(settings_close_btn)
 
+func _build_perks_panel() -> void:
+	perks_panel = CenterContainer.new()
+	perks_panel.name = "PerksPanel"
+	perks_panel.set_anchors_and_offsets_preset(PRESET_FULL_RECT)
+	perks_panel.mouse_filter = MOUSE_FILTER_IGNORE
+	add_child(perks_panel)
+
+	var panel_box = PanelContainer.new()
+	panel_box.name = "PerksPanelBox"
+	panel_box.custom_minimum_size = Vector2(980, 560)
+	var panel_sb = _make_stylebox(PANEL_BG, CORNER_RADIUS, 2, Color(0.92, 0.78, 0.28, 0.42))
+	panel_sb.shadow_size = 22
+	panel_sb.shadow_color = Color(0.0, 0.0, 0.0, 0.64)
+	panel_sb.content_margin_left = 28
+	panel_sb.content_margin_right = 28
+	panel_sb.content_margin_top = 24
+	panel_sb.content_margin_bottom = 24
+	panel_box.add_theme_stylebox_override("panel", panel_sb)
+	perks_panel.add_child(panel_box)
+
+	var vbox = VBoxContainer.new()
+	vbox.add_theme_constant_override("separation", 20)
+	panel_box.add_child(vbox)
+
+	var header = _make_label("✦  ПЕРКИ", 28, Color(0.96, 0.84, 0.34, 1.0))
+	header.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	vbox.add_child(header)
+
+	var subtitle = _make_label("Нажми на перк, чтобы прочитать как он работает", 18, TEXT_DIM.lightened(0.18))
+	subtitle.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	vbox.add_child(subtitle)
+
+	var cards_row = HBoxContainer.new()
+	cards_row.add_theme_constant_override("separation", 14)
+	vbox.add_child(cards_row)
+
+	perk_card_buttons.clear()
+	for perk in PERK_INFO:
+		var card = _build_perk_card(perk)
+		cards_row.add_child(card)
+		perk_card_buttons[String(perk.id)] = card
+
+	var desc_panel = PanelContainer.new()
+	desc_panel.custom_minimum_size = Vector2(920, 250)
+	desc_panel.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	var desc_sb = _make_stylebox(Color(0.08, 0.11, 0.16, 0.9), CORNER_RADIUS, 1, Color(1, 1, 1, 0.08))
+	desc_sb.content_margin_left = 22
+	desc_sb.content_margin_right = 22
+	desc_sb.content_margin_top = 20
+	desc_sb.content_margin_bottom = 20
+	desc_panel.add_theme_stylebox_override("panel", desc_sb)
+	vbox.add_child(desc_panel)
+
+	var desc_box = VBoxContainer.new()
+	desc_box.add_theme_constant_override("separation", 12)
+	desc_panel.add_child(desc_box)
+
+	perks_desc_title = _make_label("", 26, TEXT_COLOR)
+	perks_desc_title.horizontal_alignment = HORIZONTAL_ALIGNMENT_LEFT
+	desc_box.add_child(perks_desc_title)
+
+	perks_desc_meta = _make_label("", 18, Color(0.96, 0.84, 0.34, 0.96))
+	perks_desc_meta.horizontal_alignment = HORIZONTAL_ALIGNMENT_LEFT
+	perks_desc_meta.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	perks_desc_meta.custom_minimum_size = Vector2(860, 28)
+	desc_box.add_child(perks_desc_meta)
+
+	perks_desc_body = _make_label("", 18, TEXT_DIM.lightened(0.28))
+	perks_desc_body.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	perks_desc_body.custom_minimum_size = Vector2(860, 190)
+	desc_box.add_child(perks_desc_body)
+
+	var close_btn = _make_button("← НАЗАД", ACCENT_BLUE)
+	close_btn.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
+	close_btn.pressed.connect(_on_perks_close)
+	vbox.add_child(close_btn)
+
+	_select_perk_card(selected_perk_id)
+
+func _build_perk_card(perk: Dictionary) -> Button:
+	var accent: Color = perk.color
+	var btn = Button.new()
+	btn.custom_minimum_size = Vector2(0, 180)
+	btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	btn.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
+
+	var normal_sb = _make_stylebox(Color(accent.r * 0.1, accent.g * 0.1, accent.b * 0.1, 0.82), BTN_CORNER, 2, accent * Color(1, 1, 1, 0.26))
+	normal_sb.shadow_size = 10
+	normal_sb.shadow_color = Color(0.0, 0.0, 0.0, 0.35)
+	btn.add_theme_stylebox_override("normal", normal_sb)
+
+	var hover_sb = _make_stylebox(Color(accent.r * 0.16, accent.g * 0.16, accent.b * 0.16, 0.96), BTN_CORNER, 2, accent * Color(1, 1, 1, 0.85))
+	hover_sb.shadow_size = 14
+	hover_sb.shadow_color = accent * Color(1, 1, 1, 0.22)
+	btn.add_theme_stylebox_override("hover", hover_sb)
+	btn.add_theme_stylebox_override("focus", hover_sb.duplicate())
+	btn.add_theme_stylebox_override("pressed", _make_stylebox(Color(accent.r * 0.12, accent.g * 0.12, accent.b * 0.12, 0.92), BTN_CORNER, 3, accent))
+
+	var card_box = VBoxContainer.new()
+	card_box.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	card_box.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	card_box.alignment = BoxContainer.ALIGNMENT_CENTER
+	card_box.add_theme_constant_override("separation", 8)
+	btn.add_child(card_box)
+
+	var icon_holder = CenterContainer.new()
+	icon_holder.custom_minimum_size = Vector2(0, 88)
+	card_box.add_child(icon_holder)
+
+	var icon_preview := MenuPerkIcon.new()
+	icon_preview.perk_id = String(perk.id)
+	icon_preview.icon_texture = perk.get("icon")
+	icon_preview.icon_color = accent
+	icon_preview.custom_minimum_size = Vector2(72, 72)
+	icon_holder.add_child(icon_preview)
+
+	var title_lbl = _make_label(String(perk.title), 20, accent)
+	title_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	card_box.add_child(title_lbl)
+
+	var sub_lbl = _make_label(String(perk.subtitle), 15, TEXT_DIM.lightened(0.22))
+	sub_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	card_box.add_child(sub_lbl)
+
+	btn.pressed.connect(_select_perk_card.bind(String(perk.id)))
+	return btn
+
+func _select_perk_card(perk_id: String) -> void:
+	selected_perk_id = perk_id
+	for perk in PERK_INFO:
+		if String(perk.id) == perk_id:
+			perks_desc_title.text = String(perk.title)
+			perks_desc_meta.text = "⚡ %s   |   ⏱ %s" % [String(perk.cost), String(perk.cooldown)]
+			perks_desc_body.text = String(perk.desc)
+			break
+
+	for perk in PERK_INFO:
+		var card: Button = perk_card_buttons.get(String(perk.id), null)
+		if card == null:
+			continue
+		var accent: Color = perk.color
+		var is_selected := String(perk.id) == perk_id
+		var normal_sb = _make_stylebox(
+			Color(accent.r * (0.18 if is_selected else 0.1), accent.g * (0.18 if is_selected else 0.1), accent.b * (0.18 if is_selected else 0.1), 0.92 if is_selected else 0.82),
+			BTN_CORNER,
+			2 if not is_selected else 3,
+			accent * Color(1, 1, 1, 1.0 if is_selected else 0.26)
+		)
+		normal_sb.shadow_size = 16 if is_selected else 10
+		normal_sb.shadow_color = accent * Color(1, 1, 1, 0.28 if is_selected else 0.14)
+		card.add_theme_stylebox_override("normal", normal_sb)
+
 # ========== АНИМАЦИИ ==========
 
 func _show_panel(panel: Control) -> void:
@@ -1006,6 +1255,12 @@ func _on_settings_open() -> void:
 
 func _on_settings_close() -> void:
 	_hide_panel(settings_panel)
+
+func _on_perks_open() -> void:
+	_show_panel(perks_panel)
+
+func _on_perks_close() -> void:
+	_hide_panel(perks_panel)
 
 func refresh_unlocked_levels() -> void:
 	if has_node("/root/LevelManager"):
@@ -1062,6 +1317,9 @@ func _input(event: InputEvent) -> void:
 	if event is InputEventKey and event.pressed and event.keycode == KEY_ESCAPE:
 		if settings_panel.visible:
 			_on_settings_close()
+			get_viewport().set_input_as_handled()
+		elif perks_panel.visible:
+			_on_perks_close()
 			get_viewport().set_input_as_handled()
 		elif difficulty_panel.visible:
 			_on_difficulty_cancel()

@@ -114,7 +114,6 @@ func _draw() -> void:
 	
 	# 4. Текст (теперь в абсолютных единицах для прозрачности)
 	var text = "%d / %d" % [int(current_energy), int(max_energy)]
-	if current_energy >= max_energy: text = "READY (100)"
 	
 	var font = ThemeDB.fallback_font
 	var font_size = 14
