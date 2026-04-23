@@ -2,16 +2,16 @@
 
 importer="texture"
 type="CompressedTexture2D"
-uid="uid://bdak85jppv7uh"
-path="res://.godot/imported/ChatGPT Image 20 апр. 2026 г., 23_34_05.png-5c03c5412d176b6e18270090ec49e373.ctex"
+uid="uid://cgqj41ghbjn8p"
+path="res://.godot/imported/speedfire.png-e22266fc7819825e843e881a09d7caf9.ctex"
 metadata={
 "vram_texture": false
 }
 
 [deps]
 
-source_file="res://assets/sprites/ChatGPT Image 20 апр. 2026 г., 23_34_05.png"
-dest_files=["res://.godot/imported/ChatGPT Image 20 апр. 2026 г., 23_34_05.png-5c03c5412d176b6e18270090ec49e373.ctex"]
+source_file="res://assets/sprites/speedfire.png"
+dest_files=["res://.godot/imported/speedfire.png-e22266fc7819825e843e881a09d7caf9.ctex"]
 
 [params]
 
