@@ -190,12 +190,11 @@ func _on_next_pressed() -> void:
 		_on_menu_pressed()
 		return
 
-	level_manager.set_current_level(_next_level_num)
-	var scene_path := String(level_manager.get_current_level_scene_path())
+	level_manager.queue_level_selection(_next_level_num)
 	if has_node("/root/LoadingManager"):
-		get_node("/root/LoadingManager").transition_to_scene(scene_path)
+		get_node("/root/LoadingManager").transition_to_scene("res://scenes/ui/main_menu/main_menu.tscn")
 	else:
-		get_tree().change_scene_to_file(scene_path)
+		get_tree().change_scene_to_file("res://scenes/ui/main_menu/main_menu.tscn")
 
 func _on_replay_pressed() -> void:
 	var current_scene := get_tree().current_scene

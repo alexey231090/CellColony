@@ -4,10 +4,13 @@ const DIFFICULTY_EASY := "easy"
 const DIFFICULTY_MEDIUM := "medium"
 const DIFFICULTY_HARD := "hard"
 const CHAPTER_SIZE := 5
+const MAX_STARS_PER_LEVEL := 3
 
 var current_level: int = 1
 var unlocked_levels: int = 1
 var selected_difficulty: String = DIFFICULTY_EASY
+var level_best_stars: Dictionary = {}
+var pending_level_selection: int = 0
 
 const DEFAULT_LEVEL_DATA := {
 	"scene_path": "res://scenes/levels/organic_level.tscn",
@@ -26,6 +29,9 @@ const BASE_LEVELS: Array[Dictionary] = [
 		"id": 1,
 		"chapter": 1,
 		"title": "Первые Деления",
+		"is_tutorial": true,
+		"skip_difficulty_select": true,
+		"force_difficulty": DIFFICULTY_EASY,
 		"scene_path": "res://scenes/levels/organic_level.tscn",
 		"num_enemies": 1,
 		"has_islands": true,
@@ -33,6 +39,7 @@ const BASE_LEVELS: Array[Dictionary] = [
 		"map_scale": 1.1,
 		"num_neutrals": 61,
 		"seed": 101,
+		"fixed_neutral_seed": 1101,
 		"shape_type": "rounded_box",
 		"shape_size": Vector2(7200, 5000),
 		"shape_power": 4.6,
@@ -2234,6 +2241,10 @@ var levels: Array[Dictionary] = []
 func _ready() -> void:
 	levels = BASE_LEVELS.duplicate(true)
 	_ensure_level_count(30)
+	_reset_runtime_progress()
+
+func _reset_runtime_progress() -> void:
+	level_best_stars.clear()
 
 func _ensure_level_count(target_count: int) -> void:
 	if levels.size() >= target_count:
@@ -2258,24 +2269,104 @@ func get_total_levels() -> int:
 	return levels.size()
 
 func has_next_level() -> bool:
-	return current_level < get_total_levels()
+	return get_next_level_number() != current_level
 
 func get_next_level_number() -> int:
-	if not has_next_level():
+	var next_level := current_level + 1
+	if next_level > get_total_levels():
 		return current_level
-	return current_level + 1
+	if not is_level_available(next_level):
+		return current_level
+	return next_level
 
 func complete_current_level() -> void:
 	unlocked_levels = max(unlocked_levels, current_level)
-	if has_next_level():
-		unlocked_levels = max(unlocked_levels, get_next_level_number())
+	if current_level < get_total_levels():
+		unlocked_levels = max(unlocked_levels, current_level + 1)
 	unlocked_levels = clampi(unlocked_levels, 1, get_total_levels())
+
+func get_stars_for_difficulty(difficulty: String, level_num: int = current_level) -> int:
+	var level_data := get_level_data(level_num)
+	if bool(level_data.get("is_tutorial", false)):
+		return MAX_STARS_PER_LEVEL
+
+	match difficulty:
+		DIFFICULTY_HARD:
+			return 3
+		DIFFICULTY_MEDIUM:
+			return 2
+		_:
+			return 1
+
+func get_current_level_star_reward() -> int:
+	return get_stars_for_difficulty(String(get_current_level_data().get("selected_difficulty", DIFFICULTY_EASY)), current_level)
+
+func get_level_best_stars(level_num: int) -> int:
+	if level_num < 1 or level_num > get_total_levels():
+		return 0
+	return int(level_best_stars.get(level_num, 0))
+
+func set_level_best_stars(level_num: int, stars: int) -> bool:
+	if level_num < 1 or level_num > get_total_levels():
+		return false
+	var clamped_stars := clampi(stars, 0, MAX_STARS_PER_LEVEL)
+	var previous_stars := get_level_best_stars(level_num)
+	if clamped_stars <= previous_stars:
+		return false
+	level_best_stars[level_num] = clamped_stars
+	return true
+
+func register_level_completion(level_num: int, stars: int) -> Dictionary:
+	set_current_level(level_num)
+	var previous_best := get_level_best_stars(level_num)
+	var updated := set_level_best_stars(level_num, stars)
+	complete_current_level()
+	return {
+		"earned_stars": clampi(stars, 0, MAX_STARS_PER_LEVEL),
+		"previous_best_stars": previous_best,
+		"best_stars": get_level_best_stars(level_num),
+		"is_new_best": updated,
+		"total_stars": get_total_stars(),
+	}
+
+func get_total_stars() -> int:
+	var total := 0
+	for level_num in level_best_stars.keys():
+		total += int(level_best_stars[level_num])
+	return total
+
+func get_required_stars_for_chapter(chapter_index: int) -> int:
+	if chapter_index <= 1:
+		return 0
+	return 7 * (chapter_index - 1)
+
+func is_chapter_unlocked(chapter_index: int) -> bool:
+	if chapter_index <= 1:
+		return true
+	return get_total_stars() >= get_required_stars_for_chapter(chapter_index)
+
+func is_level_available(level_num: int) -> bool:
+	if level_num < 1 or level_num > get_total_levels():
+		return false
+	var chapter_index := int(get_level_data(level_num).get("chapter", 1))
+	if not is_chapter_unlocked(chapter_index):
+		return false
+	return level_num <= unlocked_levels
+
+func get_chapter_star_progress(chapter_index: int) -> Dictionary:
+	return {
+		"chapter": chapter_index,
+		"required_stars": get_required_stars_for_chapter(chapter_index),
+		"total_stars": get_total_stars(),
+		"is_unlocked": is_chapter_unlocked(chapter_index),
+	}
 
 func unlock_all_levels() -> void:
 	unlocked_levels = max(1, get_total_levels())
 
 func reset_level_unlocks() -> void:
 	unlocked_levels = 1
+	_reset_runtime_progress()
 
 func are_all_levels_unlocked() -> bool:
 	return unlocked_levels >= get_total_levels()
@@ -2290,7 +2381,8 @@ func get_level_data(level_num: int) -> Dictionary:
 
 func get_current_level_data() -> Dictionary:
 	var data := get_level_data(current_level)
-	data["selected_difficulty"] = selected_difficulty
+	var forced_difficulty := String(data.get("force_difficulty", ""))
+	data["selected_difficulty"] = forced_difficulty if not forced_difficulty.is_empty() else selected_difficulty
 	return data
 
 func get_current_level_scene_path() -> String:
@@ -2308,6 +2400,34 @@ func set_selected_difficulty(difficulty: String) -> void:
 
 func get_selected_difficulty() -> String:
 	return selected_difficulty
+
+func queue_level_selection(level_num: int) -> void:
+	pending_level_selection = clampi(level_num, 1, get_total_levels())
+
+func consume_pending_level_selection() -> int:
+	var level_num := pending_level_selection
+	pending_level_selection = 0
+	return level_num
+
+func export_progress_state() -> Dictionary:
+	return {
+		"current_level": current_level,
+		"unlocked_levels": unlocked_levels,
+		"selected_difficulty": selected_difficulty,
+		"level_best_stars": level_best_stars.duplicate(true),
+	}
+
+func import_progress_state(data: Dictionary) -> void:
+	current_level = clampi(int(data.get("current_level", current_level)), 1, max(1, get_total_levels()))
+	unlocked_levels = clampi(int(data.get("unlocked_levels", unlocked_levels)), 1, get_total_levels())
+	set_selected_difficulty(String(data.get("selected_difficulty", selected_difficulty)))
+	level_best_stars.clear()
+	var imported_stars: Dictionary = data.get("level_best_stars", {})
+	for key in imported_stars.keys():
+		var level_num := int(key)
+		var stars := clampi(int(imported_stars[key]), 0, MAX_STARS_PER_LEVEL)
+		if level_num >= 1 and level_num <= get_total_levels() and stars > 0:
+			level_best_stars[level_num] = stars
 
 func get_chapter_range(chapter_index: int) -> Vector2i:
 	var start_level := (chapter_index - 1) * CHAPTER_SIZE + 1

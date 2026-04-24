@@ -103,7 +103,10 @@ func _ready() -> void:
 	
 	seed(level_data.seed)
 	var neutral_rng := RandomNumberGenerator.new()
-	neutral_rng.randomize()
+	if bool(level_data.get("is_tutorial", false)):
+		neutral_rng.seed = int(level_data.get("fixed_neutral_seed", int(level_data.get("seed", 0)) + 1000))
+	else:
+		neutral_rng.randomize()
 	map_size *= float(level_data.get("map_scale", 1.0))
 	
 	# 1. Генерация органических физических границ уровня
@@ -320,19 +323,15 @@ func _trigger_victory() -> void:
 	var has_next_level := false
 	var next_level_num := 1
 	var difficulty_stars := "★ ☆ ☆"
+	var earned_stars := 1
 
 	if level_manager != null:
 		current_level_num = int(level_manager.current_level)
-		level_manager.complete_current_level()
+		earned_stars = int(level_manager.get_current_level_star_reward())
+		level_manager.register_level_completion(current_level_num, earned_stars)
 		has_next_level = bool(level_manager.has_next_level())
 		next_level_num = int(level_manager.get_next_level_number())
-		match String(level_manager.get_selected_difficulty()):
-			"hard":
-				difficulty_stars = "★ ★ ★"
-			"medium":
-				difficulty_stars = "★ ★ ☆"
-			_:
-				difficulty_stars = "★ ☆ ☆"
+		difficulty_stars = _stars_to_text(earned_stars)
 
 	if _pause_menu != null:
 		_pause_menu.is_open = false
@@ -343,6 +342,17 @@ func _trigger_victory() -> void:
 	if _victory_menu != null:
 		_victory_menu.setup(current_level_num, difficulty_stars, has_next_level, next_level_num)
 		_victory_menu.show_victory()
+
+func _stars_to_text(stars: int) -> String:
+	match clampi(stars, 0, 3):
+		3:
+			return "★ ★ ★"
+		2:
+			return "★ ★ ☆"
+		1:
+			return "★ ☆ ☆"
+		_:
+			return "☆ ☆ ☆"
 
 func _generate_borders_organic(level_data: Dictionary) -> PackedVector2Array:
 	var border_node: StaticBody2D = StaticBody2D.new()

@@ -184,6 +184,7 @@ func _ready() -> void:
 	settings_panel.visible = false
 	perks_panel.visible = false
 	overlay.visible = false
+	call_deferred("_open_pending_level_selection")
 	
 	# Запускаем пульсацию СВЕЧЕНИЯ и РАЗМЕРА
 	if play_button.has_meta("glow") and play_button.has_meta("wrapper"):
@@ -701,18 +702,37 @@ func _populate_levels() -> void:
 		child.queue_free()
 
 	var chapters := int(ceili(float(total_levels) / 5.0))
+	var level_manager := get_node_or_null("/root/LevelManager")
 	for chapter_index in range(1, chapters + 1):
 		var chapter_box = VBoxContainer.new()
 		chapter_box.add_theme_constant_override("separation", 14)
 		level_list.add_child(chapter_box)
 
-		var chapter_title = _make_label("ГЛАВА %d" % chapter_index, 28, ACCENT_BLUE)
+		var chapter_unlocked := true
+		var required_stars := 0
+		var total_stars_now := 0
+		if level_manager != null:
+			chapter_unlocked = bool(level_manager.is_chapter_unlocked(chapter_index))
+			required_stars = int(level_manager.get_required_stars_for_chapter(chapter_index))
+			total_stars_now = int(level_manager.get_total_stars())
+
+		var chapter_title_color := ACCENT_BLUE if chapter_unlocked else LOCKED_COLOR.lightened(0.15)
+		var chapter_title = _make_label("ГЛАВА %d" % chapter_index, 28, chapter_title_color)
 		chapter_title.horizontal_alignment = HORIZONTAL_ALIGNMENT_LEFT
 		chapter_box.add_child(chapter_title)
 
-		var subtitle = _make_label("Уровни %d-%d" % [((chapter_index - 1) * 5) + 1, mini(chapter_index * 5, total_levels)], 16, TEXT_DIM)
+		var subtitle_text := "Уровни %d-%d" % [((chapter_index - 1) * 5) + 1, mini(chapter_index * 5, total_levels)]
+		if chapter_index > 1:
+			subtitle_text += "  •  Звезды: %d / %d" % [min(total_stars_now, required_stars), required_stars]
+		var subtitle_color := TEXT_DIM if chapter_unlocked else LOCKED_COLOR.lightened(0.1)
+		var subtitle = _make_label(subtitle_text, 16, subtitle_color)
 		subtitle.horizontal_alignment = HORIZONTAL_ALIGNMENT_LEFT
 		chapter_box.add_child(subtitle)
+
+		if not chapter_unlocked:
+			var locked_hint = _make_label("Глава откроется, когда наберешь еще %d звезд" % max(0, required_stars - total_stars_now), 15, ACCENT_RED * Color(1, 1, 1, 0.85))
+			locked_hint.horizontal_alignment = HORIZONTAL_ALIGNMENT_LEFT
+			chapter_box.add_child(locked_hint)
 
 		var chapter_grid = GridContainer.new()
 		chapter_grid.columns = 5
@@ -723,9 +743,18 @@ func _populate_levels() -> void:
 		var start_level := (chapter_index - 1) * 5 + 1
 		var end_level := mini(chapter_index * 5, total_levels)
 		for level_num in range(start_level, end_level + 1):
-			chapter_grid.add_child(_build_level_button(level_num, level_num <= unlocked_levels))
+			var is_available := level_num <= unlocked_levels
+			if level_manager != null:
+				is_available = bool(level_manager.is_level_available(level_num))
+			chapter_grid.add_child(_build_level_button(level_num, is_available))
 
 func _build_level_button(level_num: int, is_unlocked: bool) -> Button:
+	var level_manager := get_node_or_null("/root/LevelManager")
+	var best_stars := 0
+	if level_manager != null:
+		best_stars = int(level_manager.get_level_best_stars(level_num))
+	var stars_text := _stars_to_text(best_stars)
+
 	var btn = Button.new()
 	btn.custom_minimum_size = Vector2(140, 150)
 	btn.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND if is_unlocked else Control.CURSOR_FORBIDDEN
@@ -751,7 +780,7 @@ func _build_level_button(level_num: int, is_unlocked: bool) -> Button:
 	icon_lbl.mouse_filter = Control.MOUSE_FILTER_IGNORE
 
 	var stars_lbl = Label.new()
-	stars_lbl.text = "☆ ☆ ☆"
+	stars_lbl.text = stars_text
 	stars_lbl.set_anchors_and_offsets_preset(Control.PRESET_BOTTOM_WIDE)
 	stars_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	stars_lbl.position.y = -32
@@ -767,11 +796,10 @@ func _build_level_button(level_num: int, is_unlocked: bool) -> Button:
 		icon_lbl.modulate.a = 0.32
 		num_settings.font_color = ACCENT_COLOR * Color(1, 1, 1, 0.9)
 		icon_lbl.add_theme_color_override("font_color", Color(0.92, 0.98, 1.0, 0.95))
-		
-		stars_set.font_color = Color(1.0, 0.9, 0.4, 0.8) # Золотые звезды
+		stars_set.font_color = Color(1.0, 0.9, 0.4, 0.85) if best_stars > 0 else Color(0.75, 0.8, 0.9, 0.5)
 		stars_set.outline_size = 4
-		stars_set.outline_color = Color(1.0, 0.5, 0.0, 0.5)
-		stars_set.shadow_color = Color(1.0, 0.8, 0.2, 0.6)
+		stars_set.outline_color = Color(1.0, 0.5, 0.0, 0.5) if best_stars > 0 else Color(0.0, 0.0, 0.0, 0.35)
+		stars_set.shadow_color = Color(1.0, 0.8, 0.2, 0.6) if best_stars > 0 else Color(0.0, 0.0, 0.0, 0.25)
 		stars_set.shadow_size = 8
 
 		btn.mouse_entered.connect(func():
@@ -800,7 +828,9 @@ func _build_level_button(level_num: int, is_unlocked: bool) -> Button:
 		icon_lbl.text = "🔒"
 		num_settings.font_color = LOCKED_COLOR
 		icon_lbl.add_theme_color_override("font_color", LOCKED_COLOR)
-		stars_set.font_color = LOCKED_COLOR * Color(1,1,1, 0.5)
+		stars_set.font_color = LOCKED_COLOR * Color(1, 1, 1, 0.5)
+		stars_set.outline_size = 4
+		stars_set.outline_color = Color(0.0, 0.0, 0.0, 0.28)
 		btn.disabled = true
 		var locked_sb = _make_stylebox(Color(0.08, 0.1, 0.12, 0.7), BTN_CORNER, 1, LOCKED_COLOR * Color(1, 1, 1, 0.2))
 		btn.add_theme_stylebox_override("normal", locked_sb)
@@ -811,6 +841,26 @@ func _build_level_button(level_num: int, is_unlocked: bool) -> Button:
 	btn.add_child(stars_lbl)
 	btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	return btn
+
+func _stars_to_text(stars: int) -> String:
+	match clampi(stars, 0, 3):
+		3:
+			return "★ ★ ★"
+		2:
+			return "★ ★ ☆"
+		1:
+			return "★ ☆ ☆"
+		_:
+			return "☆ ☆ ☆"
+
+func _open_pending_level_selection() -> void:
+	var lm := get_node_or_null("/root/LevelManager")
+	if lm == null:
+		return
+	var level_num := int(lm.consume_pending_level_selection())
+	if level_num <= 0:
+		return
+	_open_difficulty_panel(level_num)
 
 func _build_difficulty_panel() -> void:
 	difficulty_panel = CenterContainer.new()
@@ -948,6 +998,10 @@ func _make_difficulty_button(title_text: String, stars_text: String, desc_text: 
 	return btn
 
 func _open_difficulty_panel(level_num: int) -> void:
+	if _should_skip_difficulty_panel(level_num):
+		_start_level(level_num, "easy")
+		return
+
 	pending_level_num = level_num
 	_hide_panel(level_panel)
 	var tween = create_tween()
@@ -958,10 +1012,13 @@ func _open_difficulty_panel(level_num: int) -> void:
 
 func _start_level_with_difficulty(difficulty: String) -> void:
 	print("Выбран уровень: ", pending_level_num, ", сложность: ", difficulty)
+	_start_level(pending_level_num, difficulty)
+
+func _start_level(level_num: int, difficulty: String) -> void:
 	var scene_path := "res://scenes/main.tscn"
 	if has_node("/root/LevelManager"):
 		var lm: Node = get_node("/root/LevelManager")
-		lm.set_current_level(pending_level_num)
+		lm.set_current_level(level_num)
 		lm.set_selected_difficulty(difficulty)
 		scene_path = lm.get_current_level_scene_path()
 
@@ -974,6 +1031,12 @@ func _start_level_with_difficulty(difficulty: String) -> void:
 		else:
 			get_tree().change_scene_to_file(scene_path)
 	)
+
+func _should_skip_difficulty_panel(level_num: int) -> bool:
+	var lm := get_node_or_null("/root/LevelManager")
+	if lm == null:
+		return false
+	return bool(lm.get_level_data(level_num).get("skip_difficulty_select", false))
 
 func _on_difficulty_cancel() -> void:
 	_hide_panel(difficulty_panel)
