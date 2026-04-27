@@ -41,8 +41,12 @@ var shield_hp_threshold: float = 0.45
 var shield_min_max_energy: float = 20.0
 ## Минимальное количество врагов для активации вируса
 var virus_min_enemy_count: int = 3
+## Разрешено ли ИИ использовать вирусный перк
+var allow_virus_perk: bool = true
 ## Порог HP цели (доля от max_energy) для скорострельности
 var rapid_fire_hp_target_threshold: float = 0.4
+## Минимальный личный кулдаун скорострельности у ИИ
+var rapid_fire_min_cd: float = 5.0
 ## Порог дистанции до цели для активации ускорения
 var speed_boost_distance_threshold: float = 1200.0
 ## На easy щит включается только если игрока заметно больше рядом/на карте
@@ -82,8 +86,12 @@ func apply_difficulty_profile(profile: Dictionary) -> void:
 		shield_min_max_energy = float(profile.shield_min_max_energy)
 	if profile.has("virus_min_enemy_count"):
 		virus_min_enemy_count = int(profile.virus_min_enemy_count)
+	if profile.has("allow_virus_perk"):
+		allow_virus_perk = bool(profile.allow_virus_perk)
 	if profile.has("rapid_fire_hp_target_threshold"):
 		rapid_fire_hp_target_threshold = float(profile.rapid_fire_hp_target_threshold)
+	if profile.has("rapid_fire_min_cd"):
+		rapid_fire_min_cd = float(profile.rapid_fire_min_cd)
 	if profile.has("speed_boost_distance_threshold"):
 		speed_boost_distance_threshold = float(profile.speed_boost_distance_threshold)
 	if profile.has("shield_player_outnumber_ratio"):
@@ -375,7 +383,7 @@ func _evaluate_and_use_perks(_delta: float) -> void:
 						cell.reflect_timer = 10.0
 
 	# 2. ВИРУС (Приоритет: текущая цель и её соседи)
-	if _ai_virus_cd <= 0 and ai_perk_energy >= sm.VIRUS_ENERGY_COST:
+	if allow_virus_perk and _ai_virus_cd <= 0 and ai_perk_energy >= sm.VIRUS_ENERGY_COST:
 		# Оптимизация: не ищем по всей карте, а бьем в текущую цель если там есть толпа
 		if current_target_node and is_instance_valid(current_target_node) and current_target_node.owner_type != BaseCell.OwnerType.NEUTRAL:
 			var enemy_cluster_size: int = get_tree().get_node_count_in_group(_get_group_for_owner(current_target_node.owner_type))
@@ -403,7 +411,7 @@ func _evaluate_and_use_perks(_delta: float) -> void:
 				
 				if not already_raging:
 					ai_perk_energy -= sm.RAPID_FIRE_ENERGY_COST
-					_ai_rapid_fire_cd = max(5.0, sm.RAPID_FIRE_COOLDOWN_MAX)
+					_ai_rapid_fire_cd = max(rapid_fire_min_cd, sm.RAPID_FIRE_COOLDOWN_MAX)
 					for c in my_cells:
 						if c is BaseCell and not c.is_infected:
 							c.apply_rapid_fire(sm.RAPID_FIRE_DURATION, sm.RAPID_FIRE_MULTIPLIER)

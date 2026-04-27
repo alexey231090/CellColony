@@ -2335,6 +2335,31 @@ func get_total_stars() -> int:
 		total += int(level_best_stars[level_num])
 	return total
 
+func clear_all_stars() -> void:
+	level_best_stars.clear()
+
+func set_level_stars_for_debug(level_num: int, stars: int) -> void:
+	if level_num < 1 or level_num > get_total_levels():
+		return
+	var clamped_stars := clampi(stars, 0, MAX_STARS_PER_LEVEL)
+	if clamped_stars <= 0:
+		level_best_stars.erase(level_num)
+		return
+	level_best_stars[level_num] = clamped_stars
+
+func fill_unlocked_levels_with_stars(stars: int) -> void:
+	var clamped_stars := clampi(stars, 0, MAX_STARS_PER_LEVEL)
+	for level_num in range(1, unlocked_levels + 1):
+		if level_num > get_total_levels():
+			break
+		var level_data := get_level_data(level_num)
+		if bool(level_data.get("is_tutorial", false)):
+			level_best_stars[level_num] = MAX_STARS_PER_LEVEL
+		elif clamped_stars <= 0:
+			level_best_stars.erase(level_num)
+		else:
+			level_best_stars[level_num] = clamped_stars
+
 func get_required_stars_for_chapter(chapter_index: int) -> int:
 	if chapter_index <= 1:
 		return 0

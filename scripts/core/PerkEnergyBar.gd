@@ -172,6 +172,9 @@ func _get_difficulty_stars_text() -> String:
 	var level_manager := get_node_or_null("/root/LevelManager")
 	if level_manager == null:
 		return ""
+	var level_data: Dictionary = level_manager.get_current_level_data()
+	if bool(level_data.get("is_tutorial", false)):
+		return ""
 
 	var difficulty: String = String(level_manager.get_selected_difficulty())
 	match difficulty:

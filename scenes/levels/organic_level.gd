@@ -694,7 +694,9 @@ func _build_difficulty_profile(difficulty: String) -> Dictionary:
 				"shield_min_max_energy": 20.0,
 				"shield_player_outnumber_ratio": 1.8,
 				"virus_min_enemy_count": 3,
+				"allow_virus_perk": false,
 				"rapid_fire_hp_target_threshold": 0.4,
+				"rapid_fire_min_cd": 60.0,
 				"speed_boost_distance_threshold": 1200.0,
 			}
 		"hard":

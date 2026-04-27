@@ -42,18 +42,14 @@ class MenuPerkIcon extends Control:
 
 		if perk_id == "virus":
 			var center := size * 0.5
-			var s := minf(size.x, size.y) * 0.28
-			draw_circle(center + Vector2(0, -s * 0.2), s * 0.7, icon_color)
-			var jaw := PackedVector2Array([
-				center + Vector2(-s * 0.4, s * 0.2), center + Vector2(s * 0.4, s * 0.2),
-				center + Vector2(s * 0.3, s * 0.8), center + Vector2(-s * 0.3, s * 0.8)
-			])
-			draw_colored_polygon(jaw, icon_color)
-			var bg := Color(0, 0, 0, 0.35)
-			draw_circle(center + Vector2(-s * 0.3, -s * 0.2), s * 0.15, bg)
-			draw_circle(center + Vector2(s * 0.3, -s * 0.2), s * 0.15, bg)
-			draw_line(center + Vector2(-s * 0.1, s * 0.4), center + Vector2(-s * 0.1, s * 0.7), bg, 2.0)
-			draw_line(center + Vector2(s * 0.1, s * 0.4), center + Vector2(s * 0.1, s * 0.7), bg, 2.0)
+			var s := minf(size.x, size.y) * 0.32
+			draw_circle(center, s * 0.68, icon_color)
+			for i in range(8):
+				var angle := i * PI / 4.0
+				var p1 := center + Vector2(cos(angle), sin(angle)) * s * 0.5
+				var p2 := center + Vector2(cos(angle), sin(angle)) * s * 1.08
+				draw_line(p1, p2, icon_color, 3.4)
+			return
 
 const PERK_INFO: Array[Dictionary] = [
 	{
@@ -90,7 +86,7 @@ const PERK_INFO: Array[Dictionary] = [
 		"id": "virus",
 		"title": "ВИРУС",
 		"subtitle": "Автоцель",
-		"color": Color(0.9, 0.1, 0.1, 1.0),
+		"color": Color(1.0, 0.22, 0.26, 1.0),
 		"icon": null,
 		"desc": "Запускает вирус в ближайшего врага. Зараженная клетка теряет контроль, слабеет и может передать заражение соседям своей фракции.",
 		"cost": "100",

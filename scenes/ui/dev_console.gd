@@ -109,6 +109,65 @@ func _build_settings() -> void:
 		"desc": "ON — открыть все уровни. OFF — вернуть только 1 уровень.",
 		"apply": Callable(self, "_apply_unlock_all_levels")
 	})
+	var total_stars := 0
+	var current_level_stars := 0
+	var current_level_num := 1
+	if level_manager != null:
+		total_stars = int(level_manager.get_total_stars())
+		current_level_num = int(level_manager.current_level)
+		current_level_stars = int(level_manager.get_level_best_stars(current_level_num))
+	_settings.append({
+		"id": "total_stars_info",
+		"name": "Всего звезд",
+		"type": "int",
+		"value": total_stars,
+		"min": 0,
+		"max": 999,
+		"desc": "Только для чтения. Общая сумма лучших звезд по уровням.",
+		"apply": Callable(self, "_apply_total_stars_info")
+	})
+	_settings.append({
+		"id": "current_level_stars",
+		"name": "Звезды текущего уровня",
+		"type": "int",
+		"value": current_level_stars,
+		"min": 0,
+		"max": 3,
+		"desc": "Enter — ввод. Меняет лучшие звезды для текущего уровня прямо из Dev Panel.",
+		"apply": Callable(self, "_apply_current_level_stars")
+	})
+	_settings.append({
+		"id": "clear_all_stars",
+		"name": "Сбросить все звезды",
+		"type": "bool",
+		"value": false,
+		"desc": "Временный триггер. ON — очистить весь runtime-звездный прогресс.",
+		"apply": Callable(self, "_apply_clear_all_stars")
+	})
+	_settings.append({
+		"id": "fill_easy_stars",
+		"name": "Открытые уровни: easy",
+		"type": "bool",
+		"value": false,
+		"desc": "Временный триггер. Выставляет 1 звезду всем открытым уровням, кроме tutorial-уровня 1 (он остается на 3).",
+		"apply": Callable(self, "_apply_fill_easy_stars")
+	})
+	_settings.append({
+		"id": "fill_medium_stars",
+		"name": "Открытые уровни: medium",
+		"type": "bool",
+		"value": false,
+		"desc": "Временный триггер. Выставляет 2 звезды всем открытым уровням, кроме tutorial-уровня 1 (он остается на 3).",
+		"apply": Callable(self, "_apply_fill_medium_stars")
+	})
+	_settings.append({
+		"id": "fill_hard_stars",
+		"name": "Открытые уровни: hard",
+		"type": "bool",
+		"value": false,
+		"desc": "Временный триггер. Выставляет 3 звезды всем открытым уровням.",
+		"apply": Callable(self, "_apply_fill_hard_stars")
+	})
 	_settings.append({
 		"id": "time_scale",
 		"name": "Скорость времени",
@@ -437,3 +496,66 @@ func _apply_unlock_all_levels(enabled: bool) -> void:
 	var root := get_tree().current_scene
 	if root != null and root.has_method("refresh_unlocked_levels"):
 		root.refresh_unlocked_levels()
+	_refresh_star_settings_from_manager()
+
+func _apply_total_stars_info(_value: int) -> void:
+	_refresh_star_settings_from_manager()
+
+func _apply_current_level_stars(value: int) -> void:
+	var level_manager := get_node_or_null("/root/LevelManager")
+	if level_manager == null:
+		return
+	level_manager.set_level_stars_for_debug(int(level_manager.current_level), value)
+	_refresh_progress_views()
+
+func _apply_clear_all_stars(enabled: bool) -> void:
+	if not enabled:
+		return
+	var level_manager := get_node_or_null("/root/LevelManager")
+	if level_manager == null:
+		return
+	level_manager.clear_all_stars()
+	_refresh_progress_views()
+	_set_setting_value_by_id("clear_all_stars", false)
+
+func _apply_fill_easy_stars(enabled: bool) -> void:
+	_apply_fill_stars_trigger(enabled, 1, "fill_easy_stars")
+
+func _apply_fill_medium_stars(enabled: bool) -> void:
+	_apply_fill_stars_trigger(enabled, 2, "fill_medium_stars")
+
+func _apply_fill_hard_stars(enabled: bool) -> void:
+	_apply_fill_stars_trigger(enabled, 3, "fill_hard_stars")
+
+func _apply_fill_stars_trigger(enabled: bool, stars: int, setting_id: String) -> void:
+	if not enabled:
+		return
+	var level_manager := get_node_or_null("/root/LevelManager")
+	if level_manager == null:
+		return
+	level_manager.fill_unlocked_levels_with_stars(stars)
+	_refresh_progress_views()
+	_set_setting_value_by_id(setting_id, false)
+
+func _refresh_progress_views() -> void:
+	var root := get_tree().current_scene
+	if root != null and root.has_method("refresh_unlocked_levels"):
+		root.refresh_unlocked_levels()
+	_refresh_star_settings_from_manager()
+
+func _refresh_star_settings_from_manager() -> void:
+	var level_manager := get_node_or_null("/root/LevelManager")
+	if level_manager == null:
+		return
+	_set_setting_value_by_id("total_stars_info", int(level_manager.get_total_stars()), false)
+	_set_setting_value_by_id("current_level_stars", int(level_manager.get_level_best_stars(int(level_manager.current_level))), false)
+
+func _set_setting_value_by_id(setting_id: String, value: Variant, refresh_ui: bool = true) -> void:
+	for i in range(_settings.size()):
+		if String(_settings[i].get("id", "")) != setting_id:
+			continue
+		_settings[i]["value"] = value
+		if refresh_ui:
+			_refresh_options()
+			_refresh_help()
+		return
