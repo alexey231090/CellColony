@@ -1,6 +1,7 @@
 extends Node2D
 
 const VICTORY_MENU_SCENE := preload("res://scenes/ui/victory_menu.gd")
+const TUTORIAL_MANAGER_SCRIPT := preload("res://scripts/core/TutorialManager.gd")
 
 const SPAWN_SLOTS_NORMALIZED: Array[Vector2] = [
 	Vector2(-0.68, -0.68),
@@ -76,6 +77,7 @@ var _victory_triggered: bool = false
 var _victory_check_delay: float = 0.0
 var _victory_menu: VictoryMenu = null
 var _pause_menu: PauseMenu = null
+var _tutorial_manager: Node = null
 @onready var camera: Camera2D = $Camera2D
 @onready var bg_rect: ColorRect = $BackgroundLayer/ColorRect
 
@@ -170,6 +172,7 @@ func _ready() -> void:
 	_setup_dev_camera()
 	_setup_pause_ui()
 	_setup_victory_menu()
+	_setup_tutorial(level_data, player_cell)
 	
 	# 5. Применяем профиль сложности ИИ (deferred, чтобы AIFactionManager был готов)
 	call_deferred("_apply_ai_difficulty", difficulty)
@@ -301,6 +304,21 @@ func _setup_victory_menu() -> void:
 	_victory_menu = VICTORY_MENU_SCENE.new()
 	_victory_menu.name = "VictoryMenu"
 	add_child(_victory_menu)
+
+func _setup_tutorial(level_data: Dictionary, player_cell: BaseCell) -> void:
+	if not bool(level_data.get("is_tutorial", false)):
+		return
+
+	var selection_manager := get_node_or_null("SelectionManager")
+	var perk_panel := get_node_or_null("PerkButtonPanel") as PerkButtonPanel
+	if selection_manager == null or camera == null or perk_panel == null or player_cell == null:
+		return
+
+	_tutorial_manager = TUTORIAL_MANAGER_SCRIPT.new()
+	_tutorial_manager.name = "TutorialManager"
+	add_child(_tutorial_manager)
+	selection_manager.tutorial_manager = _tutorial_manager
+	_tutorial_manager.setup(selection_manager, camera, perk_panel, player_cell, level_data)
 
 func _check_victory_condition() -> void:
 	var player_cells := get_tree().get_nodes_in_group("player_cells")

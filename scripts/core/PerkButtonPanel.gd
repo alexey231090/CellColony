@@ -20,6 +20,7 @@ var perk_configs: Array = [
 # --- Кнопки ---
 var buttons: Array[PerkButton] = []
 var container: Control = null
+var buttons_by_name: Dictionary = {}
 
 func _ready() -> void:
 	layer = 110  # Поверх всего
@@ -47,6 +48,11 @@ func _create_buttons() -> void:
 		
 		container.add_child(button)
 		buttons.append(button)
+		buttons_by_name[button.perk_name] = button
+
+func get_button_by_perk_name(perk_name: String) -> PerkButton:
+	var button_variant: Variant = buttons_by_name.get(perk_name, null)
+	return button_variant as PerkButton
 
 func _arrange_buttons() -> void:
 	## Расставляет кнопки вертикально слева внизу

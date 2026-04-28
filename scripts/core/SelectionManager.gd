@@ -55,6 +55,7 @@ var move_target_marker: Node2D = null
 var move_target_pos: Vector2 = Vector2.ZERO
 var has_move_target: bool = false
 var info_focus_cell: BaseCell = null
+var tutorial_manager: Node = null
 
 func _ready() -> void:
 	add_to_group("selection_manager")
@@ -357,6 +358,45 @@ func get_perk_energy_cost(perk_name: String) -> float:
 		"virus": return VIRUS_ENERGY_COST
 	return 0.0
 
+func _can_tutorial_select_cell(cell: BaseCell) -> bool:
+	if tutorial_manager == null or not is_instance_valid(tutorial_manager):
+		return true
+	if tutorial_manager.has_method("can_select_cell"):
+		return bool(tutorial_manager.call("can_select_cell", cell))
+	return true
+
+func _can_tutorial_move_to(pos: Vector2) -> bool:
+	if tutorial_manager == null or not is_instance_valid(tutorial_manager):
+		return true
+	if tutorial_manager.has_method("can_move_to"):
+		return bool(tutorial_manager.call("can_move_to", pos))
+	return true
+
+func _can_tutorial_activate_perk(perk_name: String) -> bool:
+	if tutorial_manager == null or not is_instance_valid(tutorial_manager):
+		return true
+	if tutorial_manager.has_method("can_activate_perk"):
+		return bool(tutorial_manager.call("can_activate_perk", perk_name))
+	return true
+
+func _notify_tutorial_cell_clicked(cell: BaseCell) -> void:
+	if tutorial_manager == null or not is_instance_valid(tutorial_manager):
+		return
+	if tutorial_manager.has_method("notify_cell_clicked"):
+		tutorial_manager.call("notify_cell_clicked", cell)
+
+func _notify_tutorial_move_command(pos: Vector2) -> void:
+	if tutorial_manager == null or not is_instance_valid(tutorial_manager):
+		return
+	if tutorial_manager.has_method("notify_move_command"):
+		tutorial_manager.call("notify_move_command", pos)
+
+func _notify_tutorial_perk_activated(perk_name: String) -> void:
+	if tutorial_manager == null or not is_instance_valid(tutorial_manager):
+		return
+	if tutorial_manager.has_method("notify_perk_activated"):
+		tutorial_manager.call("notify_perk_activated", perk_name)
+
 func _handle_double_click(pos: Vector2) -> bool:
 	var clicked_node: BaseCell = _get_cell_at_pos(pos)
 	if clicked_node and clicked_node.owner_type == BaseCell.OwnerType.PLAYER:
@@ -500,6 +540,9 @@ func try_activate_cell_perk(cell: BaseCell, custom_pos: Vector2 = Vector2.ZERO) 
 	return false
 
 func activate_perk(perk_name: String) -> void:
+	if not _can_tutorial_activate_perk(perk_name):
+		return
+
 	# Проверка на наличие ресурсов и КД
 	if perk_name == "shield":
 		if perk_energy < SHIELD_ENERGY_COST or shield_cooldown > 0:
@@ -540,6 +583,7 @@ func activate_perk(perk_name: String) -> void:
 			SPEED_ENERGY_COST,
 			SPEED_COOLDOWN_MAX
 		])
+		_notify_tutorial_perk_activated("speed")
 	elif perk_name == "rapid_fire":
 		if perk_energy < RAPID_FIRE_ENERGY_COST or rapid_fire_cooldown > 0:
 			print("Нет энергии или КД для скорострельности")
@@ -876,6 +920,9 @@ func _handle_selection(pos: Vector2) -> void:
 	# ==================================
 	
 	if clicked_node:
+		if not _can_tutorial_select_cell(clicked_node):
+			return
+		_notify_tutorial_cell_clicked(clicked_node)
 		_set_info_focus(clicked_node if clicked_node.owner_type != BaseCell.OwnerType.PLAYER else null)
 		# ЦЕЛЬ ЕСТЬ — атакуем/лечим
 		if circle:
@@ -908,6 +955,9 @@ func _handle_selection(pos: Vector2) -> void:
 			# Если кликнули по своей, просто покажем круг выбора на ней (опционально)
 			_clear_attack_target_line()
 	else:
+		if not _can_tutorial_move_to(pos):
+			return
+		_notify_tutorial_move_command(pos)
 		_set_info_focus(null)
 		# ЦЕЛИ НЕТ — ПЛЫВЕМ ВСЕЙ КОЛОНИЕЙ ТУДА
 		if circle:
