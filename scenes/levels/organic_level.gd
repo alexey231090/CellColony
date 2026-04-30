@@ -314,7 +314,8 @@ func _setup_tutorial(level_data: Dictionary, player_cell: BaseCell) -> void:
 	if selection_manager == null or camera == null or perk_panel == null or player_cell == null:
 		return
 
-	_tutorial_manager = TUTORIAL_MANAGER_SCRIPT.new()
+	_tutorial_manager = Node.new()
+	_tutorial_manager.set_script(TUTORIAL_MANAGER_SCRIPT)
 	_tutorial_manager.name = "TutorialManager"
 	add_child(_tutorial_manager)
 	selection_manager.tutorial_manager = _tutorial_manager

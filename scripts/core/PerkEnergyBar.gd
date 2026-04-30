@@ -23,6 +23,7 @@ var display_energy: float = 0.0
 var selection_manager: Node = null
 var pulse_time: float = 0.0
 var difficulty_text: String = ""
+var tutorial_highlight: bool = false
 
 # --- StyleBoxes (для оптимизации создаем один раз) ---
 var bg_style = StyleBoxFlat.new()
@@ -88,6 +89,11 @@ func _draw() -> void:
 	
 	# 1. Отрисовка фона через StyleBox
 	draw_style_box(bg_style, bar_rect)
+	if tutorial_highlight:
+		var tutorial_pulse := (sin(Time.get_ticks_msec() / 180.0) + 1.0) * 0.5
+		var glow_rect := bar_rect.grow(12.0 + tutorial_pulse * 4.0)
+		draw_rect(glow_rect, Color(1.0, 0.88, 0.34, 0.08 + tutorial_pulse * 0.05), true)
+		draw_rect(bar_rect.grow(6.0 + tutorial_pulse * 2.0), Color(1.0, 0.92, 0.46, 0.2 + tutorial_pulse * 0.08), false, 2.0)
 	
 	# 2. Отрисовка заливки энергии
 	var fill_ratio = clamp(display_energy / max_energy, 0.0, 1.0)
@@ -184,3 +190,9 @@ func _get_difficulty_stars_text() -> String:
 			return "★ ★ ☆"
 		_:
 			return "★ ☆ ☆"
+
+func set_tutorial_highlight(enabled: bool) -> void:
+	if tutorial_highlight == enabled:
+		return
+	tutorial_highlight = enabled
+	queue_redraw()

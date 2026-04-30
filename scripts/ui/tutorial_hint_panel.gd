@@ -1,7 +1,8 @@
 extends Control
 
-const PANEL_SIZE := Vector2(760.0, 120.0)
-const TOP_MARGIN := 42.0
+const PANEL_SIZE := Vector2(820.0, 160.0)
+const TOP_MARGIN := 92.0
+const HUD_TOP_MARGIN := 136.0
 const BOTTOM_MARGIN := 160.0
 
 var label: Label = null
@@ -19,13 +20,13 @@ func _ready() -> void:
 func _create_label() -> void:
 	label = Label.new()
 	label.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	label.position = Vector2(34.0, 22.0)
-	label.size = PANEL_SIZE - Vector2(68.0, 44.0)
+	label.position = Vector2(34.0, 20.0)
+	label.size = PANEL_SIZE - Vector2(68.0, 40.0)
 	label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
 	var settings := LabelSettings.new()
-	settings.font_size = 28
+	settings.font_size = 24
 	settings.font_color = Color(0.92, 0.98, 1.0, 1.0)
 	settings.outline_size = 5
 	settings.outline_color = Color(0.03, 0.08, 0.14, 0.85)
@@ -58,6 +59,10 @@ func set_bottom_mode() -> void:
 	anchor_mode = "bottom"
 	_update_layout()
 
+func set_hud_top_mode() -> void:
+	anchor_mode = "hud_top"
+	_update_layout()
+
 func _animate_show() -> void:
 	show()
 	_update_layout()
@@ -74,6 +79,8 @@ func _update_layout() -> void:
 	position.x = (viewport_size.x - size.x) * 0.5
 	if anchor_mode == "bottom":
 		position.y = viewport_size.y - size.y - BOTTOM_MARGIN
+	elif anchor_mode == "hud_top":
+		position.y = HUD_TOP_MARGIN
 	else:
 		position.y = TOP_MARGIN
 	queue_redraw()

@@ -23,6 +23,7 @@ var current_target_node: BaseCell = null
 var current_goal_pos: Vector2 = Vector2.ZERO
 var goal_lock_timer: float = 0.0
 var _selection_manager: Node = null
+var tutorial_paused: bool = false
 
 # === ПЕРКИ ИИ ===
 @export var ai_perk_energy: float = 0.0
@@ -115,6 +116,8 @@ func apply_difficulty_profile(profile: Dictionary) -> void:
 func _process(delta: float) -> void:
 	if faction == BaseCell.OwnerType.NEUTRAL or faction == BaseCell.OwnerType.PLAYER:
 		return
+	if tutorial_paused:
+		return
 		
 	# Охлаждение перков
 	if _ai_shield_cd > 0: _ai_shield_cd = max(0.0, _ai_shield_cd - delta)
@@ -127,6 +130,11 @@ func _process(delta: float) -> void:
 		decision_timer = decision_interval
 		_tick_ai()
 		_evaluate_and_use_perks(delta)
+
+func set_tutorial_paused(paused: bool) -> void:
+	if tutorial_paused == paused:
+		return
+	tutorial_paused = paused
 
 func add_perk_energy(amount: float) -> void:
 	ai_perk_energy += amount

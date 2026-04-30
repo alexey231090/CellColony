@@ -57,6 +57,7 @@ const UI_UPDATE_INTERVAL: float = 0.12
 var _vein_rng: RandomNumberGenerator = null
 var _vein_rng_seed: int = 0
 var is_info_focused: bool = false
+var tutorial_highlight: bool = false
 
 # Механика "отставшей" клетки
 var is_stranded: bool = false
@@ -213,6 +214,12 @@ func set_info_focus(enabled: bool) -> void:
 		return
 	is_info_focused = enabled
 	_update_ui()
+
+func set_tutorial_highlight(enabled: bool) -> void:
+	if tutorial_highlight == enabled:
+		return
+	tutorial_highlight = enabled
+	queue_redraw()
 
 func _spawn_reward_popup(amount: float) -> void:
 	var viewport := get_viewport()
@@ -389,6 +396,13 @@ func _draw() -> void:
 			])
 			draw_colored_polygon(pointer_points, Color(1.0, 0.55, 0.2, 0.95))
 			draw_polyline(pointer_points + PackedVector2Array([pointer_tip]), Color(1.0, 0.9, 0.7, 0.85), 1.5, true)
+
+	if tutorial_highlight and owner_type == OwnerType.NEUTRAL and not is_low_detail:
+		var tutorial_pulse = (sin(local_time * 4.6) + 1.0) * 0.5
+		var tutorial_glow = Color(0.78, 0.96, 1.0, 0.12 + tutorial_pulse * 0.08)
+		var tutorial_ring = Color(0.72, 0.94, 1.0, 0.38 + tutorial_pulse * 0.22)
+		draw_circle(Vector2.ZERO, current_radius * (1.45 + tutorial_pulse * 0.08), tutorial_glow)
+		draw_arc(Vector2.ZERO, current_radius * (1.28 + tutorial_pulse * 0.06), 0.0, TAU, 40, tutorial_ring, 2.6, true)
 	
 	# 4. ЭНЕРГЕТИЧЕСКИЙ КУПОЛ (ЩИТ / СПРИНТ) - визуализация перенесена в _process
 	
