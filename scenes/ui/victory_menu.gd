@@ -40,8 +40,9 @@ func show_victory() -> void:
 	overlay.visible = true
 	overlay.modulate.a = 0.0
 	center_panel.modulate.a = 0.0
-	center_panel.scale = Vector2(0.86, 0.86)
+	center_panel.scale = Vector2(0.82, 0.82)
 	center_panel.pivot_offset = center_panel.size * 0.5
+	center_panel.position = Vector2.ZERO
 	stars_label.modulate.a = 0.0
 	next_btn.modulate.a = 0.0
 	replay_btn.modulate.a = 0.0
@@ -50,13 +51,13 @@ func show_victory() -> void:
 	var tween := create_tween()
 	tween.set_pause_mode(Tween.TWEEN_PAUSE_PROCESS)
 	tween.set_parallel(true)
-	tween.tween_property(overlay, "modulate:a", 1.0, 0.22)
-	tween.tween_property(center_panel, "modulate:a", 1.0, 0.18)
-	tween.tween_property(center_panel, "scale", Vector2.ONE, 0.32).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
-	tween.chain().tween_property(stars_label, "modulate:a", 1.0, 0.16)
-	tween.parallel().tween_property(next_btn, "modulate:a", 1.0, 0.14)
-	tween.parallel().tween_property(replay_btn, "modulate:a", 1.0, 0.14)
-	tween.parallel().tween_property(menu_btn, "modulate:a", 1.0, 0.14)
+	tween.tween_property(overlay, "modulate:a", 1.0, 0.3)
+	tween.tween_property(center_panel, "modulate:a", 1.0, 0.24)
+	tween.tween_property(center_panel, "scale", Vector2.ONE, 0.42).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+	tween.chain().tween_property(stars_label, "modulate:a", 1.0, 0.18)
+	tween.parallel().tween_property(next_btn, "modulate:a", 1.0, 0.16)
+	tween.parallel().tween_property(replay_btn, "modulate:a", 1.0, 0.16)
+	tween.parallel().tween_property(menu_btn, "modulate:a", 1.0, 0.16)
 
 func _build_ui() -> void:
 	overlay = ColorRect.new()

@@ -5,7 +5,7 @@ const MODE_NONE: int = 0
 const MODE_WORLD_NODE: int = 1
 const MODE_WORLD_POS: int = 2
 const MODE_UI_CONTROL: int = 3
-const HAND_DRAW_SIZE: Vector2 = Vector2(78.0, 78.0)
+const HAND_DRAW_SIZE: Vector2 = Vector2(96.0, 96.0)
 const FINGER_TIP_LOCAL_OFFSET: Vector2 = Vector2(18.0, 18.0)
 
 var mode: int = MODE_NONE
@@ -17,6 +17,8 @@ var visual_offset: Vector2 = Vector2(-22.0, -38.0)
 var pulse_time: float = 0.0
 var tap_anim_time: float = 0.0
 var show_pulse_rings: bool = true
+var hand_calibration_offset: Vector2 = Vector2.ZERO
+var pulse_calibration_offset: Vector2 = Vector2.ZERO
 var _has_target: bool = false
 
 func _ready() -> void:
@@ -39,11 +41,23 @@ func clear_target() -> void:
 	ui_target = null
 	camera_ref = null
 	show_pulse_rings = true
+	hand_calibration_offset = Vector2.ZERO
+	pulse_calibration_offset = Vector2.ZERO
 	_has_target = false
 	hide_pointer()
 
 func set_pulse_rings_enabled(enabled: bool) -> void:
 	show_pulse_rings = enabled
+	queue_redraw()
+
+func set_calibration(hand_offset: Vector2, pulse_offset: Vector2) -> void:
+	hand_calibration_offset = hand_offset
+	pulse_calibration_offset = pulse_offset
+	queue_redraw()
+
+func reset_calibration() -> void:
+	hand_calibration_offset = Vector2.ZERO
+	pulse_calibration_offset = Vector2.ZERO
 	queue_redraw()
 
 func set_world_target(target: Node2D, camera: Camera2D) -> void:
@@ -120,20 +134,21 @@ func _draw() -> void:
 	var pulse := 0.5 + 0.5 * sin(pulse_time * 5.2)
 	var tap_ratio := tap_anim_time / 0.22 if tap_anim_time > 0.0 else 0.0
 	var tap_offset := lerpf(0.0, 7.0, sin(tap_ratio * PI))
-	var hand_center := center + Vector2(0.0, tap_offset)
-	var finger_tip_point := hand_center + FINGER_TIP_LOCAL_OFFSET
+	var base_center := center + Vector2(0.0, tap_offset)
+	var hand_center := base_center + hand_calibration_offset
+	var finger_tip_point := base_center + FINGER_TIP_LOCAL_OFFSET + pulse_calibration_offset
 	var glow_color := Color(0.65, 0.92, 1.0, 0.14 + pulse * 0.1)
 	var outline_color := Color(0.48, 0.88, 1.0, 0.75)
 	var hand_shadow_color := Color(0.02, 0.05, 0.09, 0.22)
 
 	if show_pulse_rings:
-		draw_circle(finger_tip_point, 22.0 + pulse * 5.0, glow_color)
-		draw_arc(finger_tip_point, 20.0 + pulse * 7.0, 0.0, TAU, 48, outline_color, 2.0)
+		draw_circle(finger_tip_point, 44.0 + pulse * 10.0, glow_color)
+		draw_arc(finger_tip_point, 40.0 + pulse * 14.0, 0.0, TAU, 64, outline_color, 3.0)
 
 	if HAND_TEXTURE != null:
 		var texture_size := HAND_TEXTURE.get_size()
 		if texture_size.x > 0.0 and texture_size.y > 0.0:
-			var draw_pos := finger_tip_point - FINGER_TIP_LOCAL_OFFSET - HAND_DRAW_SIZE * 0.5
+			var draw_pos := hand_center - HAND_DRAW_SIZE * 0.5
 			var shadow_rect := Rect2(draw_pos + Vector2(4.0, 6.0), HAND_DRAW_SIZE)
 			var hand_rect := Rect2(draw_pos, HAND_DRAW_SIZE)
 			draw_texture_rect(HAND_TEXTURE, shadow_rect, false, hand_shadow_color)

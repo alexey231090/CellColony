@@ -90,10 +90,39 @@ func _draw() -> void:
 	# 1. Отрисовка фона через StyleBox
 	draw_style_box(bg_style, bar_rect)
 	if tutorial_highlight:
-		var tutorial_pulse := (sin(Time.get_ticks_msec() / 180.0) + 1.0) * 0.5
-		var glow_rect := bar_rect.grow(12.0 + tutorial_pulse * 4.0)
-		draw_rect(glow_rect, Color(1.0, 0.88, 0.34, 0.08 + tutorial_pulse * 0.05), true)
-		draw_rect(bar_rect.grow(6.0 + tutorial_pulse * 2.0), Color(1.0, 0.92, 0.46, 0.2 + tutorial_pulse * 0.08), false, 2.0)
+		var tutorial_pulse := (sin(Time.get_ticks_msec() / 120.0) + 1.0) * 0.5
+		var highlight_rect := bar_rect.grow(8.0 + tutorial_pulse * 4.0)
+		var corner_radius := 18
+		var outer_glow_style := StyleBoxFlat.new()
+		outer_glow_style.bg_color = Color(0.0, 0.0, 0.0, 0.0)
+		outer_glow_style.draw_center = false
+		outer_glow_style.set_corner_radius_all(corner_radius + 2)
+		outer_glow_style.border_width_left = 2
+		outer_glow_style.border_width_top = 2
+		outer_glow_style.border_width_right = 2
+		outer_glow_style.border_width_bottom = 2
+		outer_glow_style.border_color = Color(1.0, 0.9, 0.24, 0.2 + tutorial_pulse * 0.22)
+		draw_style_box(outer_glow_style, bar_rect.grow(10.0 + tutorial_pulse * 4.0))
+		var outline_style := StyleBoxFlat.new()
+		outline_style.bg_color = Color(0.0, 0.0, 0.0, 0.0)
+		outline_style.draw_center = false
+		outline_style.set_corner_radius_all(corner_radius)
+		outline_style.border_width_left = 5
+		outline_style.border_width_top = 5
+		outline_style.border_width_right = 5
+		outline_style.border_width_bottom = 5
+		outline_style.border_color = Color(1.0, 0.9, 0.16, 0.62 + tutorial_pulse * 0.36)
+		draw_style_box(outline_style, highlight_rect)
+		var inner_glow_style := StyleBoxFlat.new()
+		inner_glow_style.bg_color = Color(0.0, 0.0, 0.0, 0.0)
+		inner_glow_style.draw_center = false
+		inner_glow_style.set_corner_radius_all(14)
+		inner_glow_style.border_width_left = 2
+		inner_glow_style.border_width_top = 2
+		inner_glow_style.border_width_right = 2
+		inner_glow_style.border_width_bottom = 2
+		inner_glow_style.border_color = Color(1.0, 0.98, 0.78, 0.42 + tutorial_pulse * 0.3)
+		draw_style_box(inner_glow_style, bar_rect.grow(2.0 + tutorial_pulse * 1.0))
 	
 	# 2. Отрисовка заливки энергии
 	var fill_ratio = clamp(display_energy / max_energy, 0.0, 1.0)

@@ -27,9 +27,9 @@ func _ready() -> void:
 	_refresh_help()
 
 func _input(event: InputEvent) -> void:
-	if event is InputEventKey and event.pressed and not event.echo:
+	if event is InputEventKey and event.pressed:
 		var key_event := event as InputEventKey
-		if key_event.physical_keycode == KEY_QUOTELEFT:
+		if key_event.physical_keycode == KEY_QUOTELEFT and not key_event.echo:
 			_toggle()
 			get_viewport().set_input_as_handled()
 			return
@@ -201,6 +201,61 @@ func _build_settings() -> void:
 		"desc": "Влияет на все AIFactionManager. Enter — ввод. ←→ — шаг 0.1.",
 		"apply": Callable(self, "_apply_ai_decision_interval")
 	})
+	_settings.append({
+		"id": "tutorial_calibration_step",
+		"name": "Tutorial: шаг",
+		"type": "int",
+		"value": 1,
+		"min": 1,
+		"max": 4,
+		"desc": "1 - своя колония, 2 - bar энергии, 3 - кнопка speed, 4 - move. ←→ меняет активный шаг калибровки.",
+		"apply": Callable(self, "_apply_tutorial_calibration_step")
+	})
+	_settings.append({
+		"id": "tutorial_hand_x",
+		"name": "Tutorial: hand X",
+		"type": "float",
+		"value": 0.0,
+		"step": 1.0,
+		"desc": "Смещение руки по X в пикселях. Enter — ввод. ←→ — шаг 1, удержание ускоряет.",
+		"apply": Callable(self, "_apply_tutorial_hand_x")
+	})
+	_settings.append({
+		"id": "tutorial_hand_y",
+		"name": "Tutorial: hand Y",
+		"type": "float",
+		"value": 0.0,
+		"step": 1.0,
+		"desc": "Смещение руки по Y в пикселях. Enter — ввод. ←→ — шаг 1, удержание ускоряет.",
+		"apply": Callable(self, "_apply_tutorial_hand_y")
+	})
+	_settings.append({
+		"id": "tutorial_pulse_x",
+		"name": "Tutorial: pulse X",
+		"type": "float",
+		"value": 0.0,
+		"step": 1.0,
+		"desc": "Смещение круга/пульса по X в пикселях. Enter — ввод. ←→ — шаг 1, удержание ускоряет.",
+		"apply": Callable(self, "_apply_tutorial_pulse_x")
+	})
+	_settings.append({
+		"id": "tutorial_pulse_y",
+		"name": "Tutorial: pulse Y",
+		"type": "float",
+		"value": 0.0,
+		"step": 1.0,
+		"desc": "Смещение круга/пульса по Y в пикселях. Enter — ввод. ←→ — шаг 1, удержание ускоряет.",
+		"apply": Callable(self, "_apply_tutorial_pulse_y")
+	})
+	_settings.append({
+		"id": "tutorial_print_calibration",
+		"name": "Tutorial: вывести в лог",
+		"type": "bool",
+		"value": false,
+		"desc": "Печатает текущую калибровку tutorial pointer готовым блоком для копирования.",
+		"apply": Callable(self, "_apply_tutorial_print_calibration")
+	})
+	_refresh_tutorial_calibration_settings_from_manager()
 	
 func _refresh_options() -> void:
 	options.clear()
@@ -208,6 +263,7 @@ func _refresh_options() -> void:
 		options.add_item(_format_line(i))
 	if options.get_item_count() > 0:
 		options.select(_selected)
+		call_deferred("_ensure_selected_option_visible")
 
 func _format_line(i: int) -> String:
 	var s := _settings[i]
@@ -246,7 +302,14 @@ func _select_index(i: int) -> void:
 	_selected = clampi(i, 0, _settings.size() - 1)
 	if options.get_item_count() > 0:
 		options.select(_selected)
-		options.ensure_current_is_visible()
+		call_deferred("_ensure_selected_option_visible")
+
+func _ensure_selected_option_visible() -> void:
+	if options == null:
+		return
+	if _selected < 0 or _selected >= options.get_item_count():
+		return
+	options.ensure_current_is_visible()
 
 func _refresh_help() -> void:
 	if _settings.is_empty():
@@ -306,7 +369,7 @@ func _handle_key(e: InputEventKey) -> void:
 		if _is_editing:
 			return
 		var dir := -1 if e.keycode == KEY_LEFT else 1
-		_adjust_selected(dir)
+		_adjust_selected(dir, e.echo)
 		return
 	
 	if _is_editing:
@@ -334,7 +397,7 @@ func _activate_selected() -> void:
 		else:
 			_start_edit_with("")
 
-func _adjust_selected(dir: int) -> void:
+func _adjust_selected(dir: int, fast_repeat: bool = false) -> void:
 	var s := _settings[_selected]
 	var type := String(s.get("type", ""))
 	if type == "bool":
@@ -343,6 +406,8 @@ func _adjust_selected(dir: int) -> void:
 	
 	if type == "int" or type == "float":
 		var step := float(s.get("step", 1.0))
+		if fast_repeat:
+			step *= 5.0
 		var min_v := float(s.get("min", -INF))
 		var max_v := float(s.get("max", INF))
 		var new_v := float(s.get("value", 0.0)) + step * float(dir)
@@ -476,6 +541,81 @@ func _apply_ai_decision_interval(v: float) -> void:
 	if root == null:
 		return
 	_apply_ai_prop_recursive(root, "decision_interval", v)
+
+func _get_tutorial_manager() -> Node:
+	return get_tree().get_first_node_in_group("tutorial_manager")
+
+func _get_selected_tutorial_step_key() -> String:
+	var raw_step := int(_get_setting_value_by_id("tutorial_calibration_step", 1))
+	match raw_step:
+		2:
+			return "energy_bar"
+		3:
+			return "speed_button"
+		4:
+			return "move_anywhere"
+		_:
+			return "intro_colony"
+
+func _apply_tutorial_calibration_step(_value: int) -> void:
+	_refresh_tutorial_calibration_settings_from_manager()
+
+func _apply_tutorial_hand_x(value: float) -> void:
+	_apply_tutorial_calibration_axis("hand", "x", value)
+
+func _apply_tutorial_hand_y(value: float) -> void:
+	_apply_tutorial_calibration_axis("hand", "y", value)
+
+func _apply_tutorial_pulse_x(value: float) -> void:
+	_apply_tutorial_calibration_axis("pulse", "x", value)
+
+func _apply_tutorial_pulse_y(value: float) -> void:
+	_apply_tutorial_calibration_axis("pulse", "y", value)
+
+func _apply_tutorial_calibration_axis(target: String, axis: String, value: float) -> void:
+	var tutorial_manager := _get_tutorial_manager()
+	if tutorial_manager == null or not tutorial_manager.has_method("set_pointer_calibration_axis"):
+		print("[TUTORIAL CALIBRATION] TutorialManager не найден. Открой tutorial-уровень 1.")
+		return
+	tutorial_manager.set_pointer_calibration_axis(_get_selected_tutorial_step_key(), target, axis, value)
+
+func _apply_tutorial_print_calibration(enabled: bool) -> void:
+	if not enabled:
+		return
+	var tutorial_manager := _get_tutorial_manager()
+	if tutorial_manager == null or not tutorial_manager.has_method("get_pointer_calibration"):
+		print("[TUTORIAL CALIBRATION] TutorialManager не найден. Открой tutorial-уровень 1.")
+		_set_setting_value_by_id("tutorial_print_calibration", false)
+		return
+	var step_key := _get_selected_tutorial_step_key()
+	var config: Dictionary = tutorial_manager.get_pointer_calibration(step_key)
+	var hand: Vector2 = config.get("hand", Vector2.ZERO)
+	var pulse: Vector2 = config.get("pulse", Vector2.ZERO)
+	print("[TUTORIAL CALIBRATION] Скопируй этот блок в DEFAULT_POINTER_CALIBRATIONS:")
+	print('"%s": {' % step_key)
+	print('\t"hand": Vector2(%.1f, %.1f),' % [hand.x, hand.y])
+	print('\t"pulse": Vector2(%.1f, %.1f),' % [pulse.x, pulse.y])
+	print('},')
+	_set_setting_value_by_id("tutorial_print_calibration", false)
+
+func _refresh_tutorial_calibration_settings_from_manager() -> void:
+	var tutorial_manager := _get_tutorial_manager()
+	if tutorial_manager == null or not tutorial_manager.has_method("get_pointer_calibration"):
+		help_label.text = "TutorialManager не найден. Для калибровки открой tutorial-уровень 1."
+		return
+	var config: Dictionary = tutorial_manager.get_pointer_calibration(_get_selected_tutorial_step_key())
+	_set_setting_value_by_id("tutorial_hand_x", float(config.get("hand", Vector2.ZERO).x), false)
+	_set_setting_value_by_id("tutorial_hand_y", float(config.get("hand", Vector2.ZERO).y), false)
+	_set_setting_value_by_id("tutorial_pulse_x", float(config.get("pulse", Vector2.ZERO).x), false)
+	_set_setting_value_by_id("tutorial_pulse_y", float(config.get("pulse", Vector2.ZERO).y), false)
+	_refresh_options()
+	_refresh_help()
+
+func _get_setting_value_by_id(setting_id: String, default_value: Variant = null) -> Variant:
+	for i in range(_settings.size()):
+		if String(_settings[i].get("id", "")) == setting_id:
+			return _settings[i].get("value", default_value)
+	return default_value
 
 func _apply_ai_prop_recursive(n: Node, prop: StringName, v: float) -> void:
 	if prop in n:

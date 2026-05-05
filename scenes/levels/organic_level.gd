@@ -2,6 +2,8 @@ extends Node2D
 
 const VICTORY_MENU_SCENE := preload("res://scenes/ui/victory_menu.gd")
 const TUTORIAL_MANAGER_SCRIPT := preload("res://scripts/core/TutorialManager.gd")
+const VICTORY_SLOWMO_DURATION: float = 1.0
+const VICTORY_SLOWMO_SCALE: float = 0.35
 
 const SPAWN_SLOTS_NORMALIZED: Array[Vector2] = [
 	Vector2(-0.68, -0.68),
@@ -75,6 +77,9 @@ var _last_bg_cam_offset: Vector2 = Vector2.INF
 var _victory_ready: bool = false
 var _victory_triggered: bool = false
 var _victory_check_delay: float = 0.0
+var _victory_menu_pending: bool = false
+var _victory_menu_delay: float = 0.0
+var _victory_payload: Dictionary = {}
 var _victory_menu: VictoryMenu = null
 var _pause_menu: PauseMenu = null
 var _tutorial_manager: Node = null
@@ -206,6 +211,11 @@ func _process(delta: float) -> void:
 		else:
 			_check_victory_condition()
 
+	if _victory_menu_pending:
+		_victory_menu_delay -= delta
+		if _victory_menu_delay <= 0.0:
+			_show_delayed_victory_menu()
+
 func _input(event: InputEvent) -> void:
 	if event is InputEventKey and event.pressed and not event.echo:
 		if event.physical_keycode == KEY_QUOTELEFT:
@@ -305,6 +315,9 @@ func _setup_victory_menu() -> void:
 	_victory_menu.name = "VictoryMenu"
 	add_child(_victory_menu)
 
+func _exit_tree() -> void:
+	Engine.time_scale = 1.0
+
 func _setup_tutorial(level_data: Dictionary, player_cell: BaseCell) -> void:
 	if not bool(level_data.get("is_tutorial", false)):
 		return
@@ -337,6 +350,8 @@ func _trigger_victory() -> void:
 	if _victory_triggered:
 		return
 	_victory_triggered = true
+	_victory_menu_pending = true
+	_victory_menu_delay = VICTORY_SLOWMO_DURATION
 	var level_manager := get_node_or_null("/root/LevelManager")
 	var current_level_num := 1
 	var has_next_level := false
@@ -357,9 +372,28 @@ func _trigger_victory() -> void:
 		_pause_menu.overlay.visible = false
 		_pause_menu.process_mode = Node.PROCESS_MODE_DISABLED
 
+	_victory_payload = {
+		"current_level_num": current_level_num,
+		"difficulty_stars": difficulty_stars,
+		"has_next_level": has_next_level,
+		"next_level_num": next_level_num,
+	}
+	Engine.time_scale = VICTORY_SLOWMO_SCALE
+
+func _show_delayed_victory_menu() -> void:
+	if not _victory_menu_pending:
+		return
+	_victory_menu_pending = false
+	_victory_menu_delay = 0.0
+	Engine.time_scale = 1.0
 	get_tree().paused = true
 	if _victory_menu != null:
-		_victory_menu.setup(current_level_num, difficulty_stars, has_next_level, next_level_num)
+		_victory_menu.setup(
+			int(_victory_payload.get("current_level_num", 1)),
+			String(_victory_payload.get("difficulty_stars", "★ ☆ ☆")),
+			bool(_victory_payload.get("has_next_level", false)),
+			int(_victory_payload.get("next_level_num", 1))
+		)
 		_victory_menu.show_victory()
 
 func _stars_to_text(stars: int) -> String:

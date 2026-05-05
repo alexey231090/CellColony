@@ -398,11 +398,23 @@ func _draw() -> void:
 			draw_polyline(pointer_points + PackedVector2Array([pointer_tip]), Color(1.0, 0.9, 0.7, 0.85), 1.5, true)
 
 	if tutorial_highlight and owner_type == OwnerType.NEUTRAL and not is_low_detail:
-		var tutorial_pulse = (sin(local_time * 4.6) + 1.0) * 0.5
-		var tutorial_glow = Color(0.78, 0.96, 1.0, 0.12 + tutorial_pulse * 0.08)
-		var tutorial_ring = Color(0.72, 0.94, 1.0, 0.38 + tutorial_pulse * 0.22)
-		draw_circle(Vector2.ZERO, current_radius * (1.45 + tutorial_pulse * 0.08), tutorial_glow)
-		draw_arc(Vector2.ZERO, current_radius * (1.28 + tutorial_pulse * 0.06), 0.0, TAU, 40, tutorial_ring, 2.6, true)
+		# Tutorial-подсветка синхронизирована для всех нейтралов и делает паузу между импульсами,
+		# чтобы экран не мерцал слишком часто и цель читалась спокойнее.
+		var tutorial_cycle_time := 2.2
+		var tutorial_pause_time := 1.0
+		var tutorial_phase := fmod(time, tutorial_cycle_time)
+		var tutorial_pulse := 0.0
+		if tutorial_phase > tutorial_pause_time:
+			var active_ratio := (tutorial_phase - tutorial_pause_time) / (tutorial_cycle_time - tutorial_pause_time)
+			tutorial_pulse = sin(active_ratio * PI)
+		var tutorial_core_glow = Color(1.0, 0.86, 0.18, 0.14 + tutorial_pulse * 0.1)
+		var tutorial_outer_glow = Color(1.0, 0.95, 0.42, 0.08 + tutorial_pulse * 0.06)
+		var tutorial_ring = Color(1.0, 0.94, 0.34, 0.42 + tutorial_pulse * 0.24)
+		var tutorial_ring_soft = Color(1.0, 0.98, 0.72, 0.2 + tutorial_pulse * 0.16)
+		draw_circle(Vector2.ZERO, current_radius * (1.46 + tutorial_pulse * 0.08), tutorial_outer_glow)
+		draw_circle(Vector2.ZERO, current_radius * (1.28 + tutorial_pulse * 0.05), tutorial_core_glow)
+		draw_arc(Vector2.ZERO, current_radius * (1.22 + tutorial_pulse * 0.06), 0.0, TAU, 48, tutorial_ring, 3.4, true)
+		draw_arc(Vector2.ZERO, current_radius * (1.36 + tutorial_pulse * 0.08), 0.0, TAU, 48, tutorial_ring_soft, 1.8, true)
 	
 	# 4. ЭНЕРГЕТИЧЕСКИЙ КУПОЛ (ЩИТ / СПРИНТ) - визуализация перенесена в _process
 	
