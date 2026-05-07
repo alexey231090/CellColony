@@ -9,6 +9,15 @@ const PANEL_BORDER := Color(0.25, 0.95, 0.72, 0.34)
 const BTN_BG := Color(0.12, 0.16, 0.22, 0.94)
 const BTN_HOVER := Color(0.18, 0.24, 0.32, 0.98)
 const BTN_PRESSED := Color(0.08, 0.11, 0.16, 1.0)
+const FIREWORK_SEQUENCE_DURATION: float = 5.0
+const FIREWORK_BURST_INTERVAL: float = 0.45
+const FIREWORK_BURST_LIFETIME: float = 1.6
+const FIREWORK_COLORS := [
+	Color(1.0, 0.88, 0.42, 1.0),
+	Color(0.24, 0.86, 1.0, 1.0),
+	Color(0.36, 1.0, 0.68, 1.0),
+	Color(1.0, 0.54, 0.78, 1.0),
+]
 
 var overlay: ColorRect
 var center_panel: PanelContainer
@@ -18,6 +27,7 @@ var stars_label: Label
 var next_btn: Button
 var replay_btn: Button
 var menu_btn: Button
+var fireworks_layer: Control
 
 var _next_level_num: int = 0
 var _has_next_level: bool = false
@@ -37,27 +47,9 @@ func setup(current_level: int, difficulty_stars: String, has_next_level: bool, n
 
 func show_victory() -> void:
 	visible = true
-	overlay.visible = true
-	overlay.modulate.a = 0.0
-	center_panel.modulate.a = 0.0
-	center_panel.scale = Vector2(0.82, 0.82)
-	center_panel.pivot_offset = center_panel.size * 0.5
-	center_panel.position = Vector2.ZERO
-	stars_label.modulate.a = 0.0
-	next_btn.modulate.a = 0.0
-	replay_btn.modulate.a = 0.0
-	menu_btn.modulate.a = 0.0
-
-	var tween := create_tween()
-	tween.set_pause_mode(Tween.TWEEN_PAUSE_PROCESS)
-	tween.set_parallel(true)
-	tween.tween_property(overlay, "modulate:a", 1.0, 0.3)
-	tween.tween_property(center_panel, "modulate:a", 1.0, 0.24)
-	tween.tween_property(center_panel, "scale", Vector2.ONE, 0.42).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
-	tween.chain().tween_property(stars_label, "modulate:a", 1.0, 0.18)
-	tween.parallel().tween_property(next_btn, "modulate:a", 1.0, 0.16)
-	tween.parallel().tween_property(replay_btn, "modulate:a", 1.0, 0.16)
-	tween.parallel().tween_property(menu_btn, "modulate:a", 1.0, 0.16)
+	_reset_victory_visuals()
+	_animate_victory_panel()
+	_play_fireworks_sequence()
 
 func _build_ui() -> void:
 	overlay = ColorRect.new()
@@ -65,6 +57,12 @@ func _build_ui() -> void:
 	overlay.color = Color(0.0, 0.0, 0.0, 0.72)
 	overlay.mouse_filter = Control.MOUSE_FILTER_STOP
 	add_child(overlay)
+
+	fireworks_layer = Control.new()
+	fireworks_layer.name = "FireworksLayer"
+	fireworks_layer.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	fireworks_layer.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	overlay.add_child(fireworks_layer)
 
 	var center := CenterContainer.new()
 	center.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
@@ -146,6 +144,101 @@ func _build_ui() -> void:
 	menu_btn = _make_button("В МЕНЮ", Color(1.0, 0.52, 0.42, 1.0))
 	menu_btn.pressed.connect(_on_menu_pressed)
 	buttons.add_child(menu_btn)
+
+func _reset_victory_visuals() -> void:
+	overlay.visible = true
+	overlay.modulate.a = 0.0
+	center_panel.modulate.a = 0.0
+	center_panel.scale = Vector2(0.82, 0.82)
+	center_panel.pivot_offset = center_panel.size * 0.5
+	center_panel.position = Vector2.ZERO
+	stars_label.modulate.a = 0.0
+	next_btn.modulate.a = 0.0
+	replay_btn.modulate.a = 0.0
+	menu_btn.modulate.a = 0.0
+	_clear_fireworks()
+
+func _animate_victory_panel() -> void:
+	var tween := create_tween()
+	tween.set_pause_mode(Tween.TWEEN_PAUSE_PROCESS)
+	tween.set_parallel(true)
+	tween.tween_property(overlay, "modulate:a", 1.0, 0.3)
+	tween.tween_property(center_panel, "modulate:a", 1.0, 0.24)
+	tween.tween_property(center_panel, "scale", Vector2.ONE, 0.42).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+	tween.chain().tween_property(stars_label, "modulate:a", 1.0, 0.18)
+	tween.parallel().tween_property(next_btn, "modulate:a", 1.0, 0.16)
+	tween.parallel().tween_property(replay_btn, "modulate:a", 1.0, 0.16)
+	tween.parallel().tween_property(menu_btn, "modulate:a", 1.0, 0.16)
+
+func _clear_fireworks() -> void:
+	if fireworks_layer == null:
+		return
+	for child in fireworks_layer.get_children():
+		child.queue_free()
+
+
+func _play_fireworks_sequence() -> void:
+	if fireworks_layer == null:
+		return
+	_clear_fireworks()
+	var viewport_size := get_viewport().get_visible_rect().size
+	var firework_positions := [
+		Vector2(viewport_size.x * 0.22, viewport_size.y * 0.24),
+		Vector2(viewport_size.x * 0.78, viewport_size.y * 0.2),
+		Vector2(viewport_size.x * 0.32, viewport_size.y * 0.38),
+		Vector2(viewport_size.x * 0.7, viewport_size.y * 0.36),
+		Vector2(viewport_size.x * 0.5, viewport_size.y * 0.18),
+	]
+	var burst_count := int(ceil(FIREWORK_SEQUENCE_DURATION / FIREWORK_BURST_INTERVAL))
+	for i in range(burst_count):
+		var burst_pos: Vector2 = firework_positions[i % firework_positions.size()]
+		var burst_color: Color = FIREWORK_COLORS[i % FIREWORK_COLORS.size()]
+		_spawn_firework_burst(burst_pos, burst_color, FIREWORK_BURST_INTERVAL * i)
+
+func _spawn_firework_burst(position: Vector2, color: Color, delay: float) -> void:
+	var particles := _make_firework_particles(color, FIREWORK_BURST_LIFETIME, 42)
+	particles.position = position
+	particles.emitting = false
+	fireworks_layer.add_child(particles)
+	var start_tween := create_tween()
+	start_tween.set_pause_mode(Tween.TWEEN_PAUSE_PROCESS)
+	start_tween.tween_interval(delay)
+	start_tween.tween_callback(func() -> void:
+		if is_instance_valid(particles):
+			particles.restart()
+			particles.emitting = true
+	)
+
+func _make_firework_particles(color: Color, lifetime: float, amount: int) -> CPUParticles2D:
+	var particles := CPUParticles2D.new()
+	particles.emitting = false
+	particles.one_shot = true
+	particles.amount = amount
+	particles.lifetime = lifetime
+	particles.explosiveness = 1.0
+	particles.randomness = 0.45
+	particles.local_coords = false
+	particles.direction = Vector2.UP
+	particles.spread = 180.0
+	particles.initial_velocity_min = 140.0
+	particles.initial_velocity_max = 300.0
+	particles.gravity = Vector2(0.0, 180.0)
+	particles.scale_amount_min = 0.8
+	particles.scale_amount_max = 1.6
+	particles.color = color
+	particles.color_ramp = _make_firework_ramp(color)
+	particles.modulate = color
+	return particles
+
+func _make_firework_ramp(color: Color) -> Gradient:
+	var gradient := Gradient.new()
+	gradient.offsets = PackedFloat32Array([0.0, 0.55, 1.0])
+	gradient.colors = PackedColorArray([
+		color.lightened(0.2),
+		color,
+		Color(color.r, color.g, color.b, 0.0),
+	])
+	return gradient
 
 func _make_button(text: String, accent: Color) -> Button:
 	var btn := Button.new()

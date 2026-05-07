@@ -80,7 +80,7 @@ var _victory_check_delay: float = 0.0
 var _victory_menu_pending: bool = false
 var _victory_menu_delay: float = 0.0
 var _victory_payload: Dictionary = {}
-var _victory_menu: VictoryMenu = null
+var _victory_menu: CanvasLayer = null
 var _pause_menu: PauseMenu = null
 var _tutorial_manager: Node = null
 @onready var camera: Camera2D = $Camera2D
@@ -352,6 +352,16 @@ func _trigger_victory() -> void:
 	_victory_triggered = true
 	_victory_menu_pending = true
 	_victory_menu_delay = VICTORY_SLOWMO_DURATION
+	_victory_payload = _build_victory_payload()
+
+	if _pause_menu != null:
+		_pause_menu.is_open = false
+		_pause_menu.overlay.visible = false
+		_pause_menu.process_mode = Node.PROCESS_MODE_DISABLED
+
+	Engine.time_scale = VICTORY_SLOWMO_SCALE
+
+func _build_victory_payload() -> Dictionary:
 	var level_manager := get_node_or_null("/root/LevelManager")
 	var current_level_num := 1
 	var has_next_level := false
@@ -367,18 +377,12 @@ func _trigger_victory() -> void:
 		next_level_num = int(level_manager.get_next_level_number())
 		difficulty_stars = _stars_to_text(earned_stars)
 
-	if _pause_menu != null:
-		_pause_menu.is_open = false
-		_pause_menu.overlay.visible = false
-		_pause_menu.process_mode = Node.PROCESS_MODE_DISABLED
-
-	_victory_payload = {
+	return {
 		"current_level_num": current_level_num,
 		"difficulty_stars": difficulty_stars,
 		"has_next_level": has_next_level,
 		"next_level_num": next_level_num,
 	}
-	Engine.time_scale = VICTORY_SLOWMO_SCALE
 
 func _show_delayed_victory_menu() -> void:
 	if not _victory_menu_pending:
