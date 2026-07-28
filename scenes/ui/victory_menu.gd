@@ -18,6 +18,11 @@ const FIREWORK_COLORS := [
 	Color(0.36, 1.0, 0.68, 1.0),
 	Color(1.0, 0.54, 0.78, 1.0),
 ]
+const DEFEAT_COLORS := [
+	Color(0.82, 0.22, 0.28, 0.85),
+	Color(0.48, 0.18, 0.28, 0.6),
+	Color(0.24, 0.22, 0.3, 0.42),
+]
 
 var overlay: ColorRect
 var center_panel: PanelContainer
@@ -31,6 +36,10 @@ var fireworks_layer: Control
 
 var _next_level_num: int = 0
 var _has_next_level: bool = false
+var _result_mode: String = "victory"
+var _defeat_fx_layer: Control = null
+var _defeat_fx_time: float = 0.0
+var _defeat_fx_particles: Array[Dictionary] = []
 
 func _ready() -> void:
 	layer = 130
@@ -39,17 +48,43 @@ func _ready() -> void:
 	visible = false
 
 func setup(current_level: int, difficulty_stars: String, has_next_level: bool, next_level_num: int) -> void:
+	_result_mode = "victory"
 	_has_next_level = has_next_level
 	_next_level_num = next_level_num
-	stars_label.text = difficulty_stars
+	title_label.text = "ПОБЕДА"
+	title_label.label_settings.font_color = ACCENT_COLOR
+	title_label.label_settings.shadow_color = Color(0.1, 0.9, 0.58, 0.22)
 	subtitle_label.text = "Уровень %d завершен" % current_level
+	stars_label.text = difficulty_stars
 	next_btn.text = "СЛЕДУЮЩИЙ УРОВЕНЬ" if _has_next_level else "В ГЛАВНОЕ МЕНЮ"
+	stars_label.visible = true
+	next_btn.visible = true
+	_apply_result_palette(false)
+
+func setup_defeat(current_level: int) -> void:
+	_result_mode = "defeat"
+	_has_next_level = false
+	_next_level_num = current_level
+	title_label.text = "КОЛОНИЯ РАЗРУШЕНА"
+	title_label.label_settings.font_color = Color(1.0, 0.42, 0.5, 1.0)
+	title_label.label_settings.shadow_color = Color(0.92, 0.18, 0.22, 0.2)
+	subtitle_label.text = "Уровень %d потерян\nСеть распалась." % current_level
+	stars_label.text = ""
+	stars_label.visible = false
+	next_btn.visible = false
+	_apply_result_palette(true)
 
 func show_victory() -> void:
 	visible = true
 	_reset_victory_visuals()
 	_animate_victory_panel()
 	_play_fireworks_sequence()
+
+func show_defeat() -> void:
+	visible = true
+	_reset_victory_visuals()
+	_animate_victory_panel()
+	_play_defeat_effect()
 
 func _build_ui() -> void:
 	overlay = ColorRect.new()
@@ -63,6 +98,15 @@ func _build_ui() -> void:
 	fireworks_layer.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	fireworks_layer.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	overlay.add_child(fireworks_layer)
+
+	_defeat_fx_layer = Control.new()
+	_defeat_fx_layer.name = "DefeatFxLayer"
+	_defeat_fx_layer.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	_defeat_fx_layer.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_defeat_fx_layer.z_index = 1
+	_defeat_fx_layer.draw.connect(_draw_defeat_fx)
+	_defeat_fx_layer.visible = false
+	overlay.add_child(_defeat_fx_layer)
 
 	var center := CenterContainer.new()
 	center.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
@@ -145,6 +189,27 @@ func _build_ui() -> void:
 	menu_btn.pressed.connect(_on_menu_pressed)
 	buttons.add_child(menu_btn)
 
+func _apply_result_palette(is_defeat: bool) -> void:
+	var panel_style := center_panel.get_theme_stylebox("panel") as StyleBoxFlat
+	if panel_style != null:
+		panel_style = panel_style.duplicate()
+		if is_defeat:
+			panel_style.bg_color = Color(0.11, 0.08, 0.12, 0.94)
+			panel_style.border_color = Color(0.92, 0.3, 0.42, 0.34)
+		else:
+			panel_style.bg_color = PANEL_BG
+			panel_style.border_color = PANEL_BORDER
+		center_panel.add_theme_stylebox_override("panel", panel_style)
+
+	if is_defeat:
+		overlay.color = Color(0.0, 0.0, 0.0, 0.8)
+		replay_btn.text = "ПОВТОРИТЬ ПОПЫТКУ"
+		menu_btn.text = "ОТСТУПИТЬ В МЕНЮ"
+	else:
+		overlay.color = Color(0.0, 0.0, 0.0, 0.72)
+		replay_btn.text = "ПЕРЕИГРАТЬ"
+		menu_btn.text = "В МЕНЮ"
+
 func _reset_victory_visuals() -> void:
 	overlay.visible = true
 	overlay.modulate.a = 0.0
@@ -153,10 +218,11 @@ func _reset_victory_visuals() -> void:
 	center_panel.pivot_offset = center_panel.size * 0.5
 	center_panel.position = Vector2.ZERO
 	stars_label.modulate.a = 0.0
-	next_btn.modulate.a = 0.0
+	next_btn.modulate.a = 0.0 if next_btn.visible else 1.0
 	replay_btn.modulate.a = 0.0
 	menu_btn.modulate.a = 0.0
 	_clear_fireworks()
+	_reset_defeat_fx()
 
 func _animate_victory_panel() -> void:
 	var tween := create_tween()
@@ -165,8 +231,10 @@ func _animate_victory_panel() -> void:
 	tween.tween_property(overlay, "modulate:a", 1.0, 0.3)
 	tween.tween_property(center_panel, "modulate:a", 1.0, 0.24)
 	tween.tween_property(center_panel, "scale", Vector2.ONE, 0.42).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
-	tween.chain().tween_property(stars_label, "modulate:a", 1.0, 0.18)
-	tween.parallel().tween_property(next_btn, "modulate:a", 1.0, 0.16)
+	if stars_label.visible:
+		tween.chain().tween_property(stars_label, "modulate:a", 1.0, 0.18)
+	if next_btn.visible:
+		tween.parallel().tween_property(next_btn, "modulate:a", 1.0, 0.16)
 	tween.parallel().tween_property(replay_btn, "modulate:a", 1.0, 0.16)
 	tween.parallel().tween_property(menu_btn, "modulate:a", 1.0, 0.16)
 
@@ -175,6 +243,13 @@ func _clear_fireworks() -> void:
 		return
 	for child in fireworks_layer.get_children():
 		child.queue_free()
+
+func _reset_defeat_fx() -> void:
+	_defeat_fx_time = 0.0
+	_defeat_fx_particles.clear()
+	if _defeat_fx_layer != null:
+		_defeat_fx_layer.visible = false
+		_defeat_fx_layer.queue_redraw()
 
 
 func _play_fireworks_sequence() -> void:
@@ -229,6 +304,59 @@ func _make_firework_particles(color: Color, lifetime: float, amount: int) -> CPU
 	particles.color_ramp = _make_firework_ramp(color)
 	particles.modulate = color
 	return particles
+
+func _play_defeat_effect() -> void:
+	if _defeat_fx_layer == null:
+		return
+	_reset_defeat_fx()
+	var viewport_size := get_viewport().get_visible_rect().size
+	for i in range(22):
+		var color: Color = DEFEAT_COLORS[i % DEFEAT_COLORS.size()]
+		var x := randf_range(viewport_size.x * 0.14, viewport_size.x * 0.86)
+		var y := randf_range(viewport_size.y * 0.04, viewport_size.y * 0.42)
+		var length := randf_range(26.0, 84.0)
+		var speed := randf_range(38.0, 96.0)
+		var sway := randf_range(-18.0, 18.0)
+		var width := randf_range(2.0, 5.0)
+		var phase := randf_range(0.0, TAU)
+		_defeat_fx_particles.append({
+			"pos": Vector2(x, y),
+			"length": length,
+			"speed": speed,
+			"sway": sway,
+			"width": width,
+			"phase": phase,
+			"color": color,
+		})
+	_defeat_fx_layer.visible = true
+	_defeat_fx_layer.queue_redraw()
+
+func _process(delta: float) -> void:
+	if not visible or _defeat_fx_layer == null or not _defeat_fx_layer.visible:
+		return
+	_defeat_fx_time += delta
+	var viewport_size := get_viewport().get_visible_rect().size
+	for particle in _defeat_fx_particles:
+		var pos: Vector2 = particle["pos"]
+		pos.y += float(particle["speed"]) * delta
+		pos.x += sin(_defeat_fx_time * 1.6 + float(particle["phase"])) * float(particle["sway"]) * delta
+		if pos.y - float(particle["length"]) > viewport_size.y * 0.9:
+			pos.y = randf_range(-120.0, -20.0)
+			pos.x = randf_range(viewport_size.x * 0.14, viewport_size.x * 0.86)
+		particle["pos"] = pos
+	_defeat_fx_layer.queue_redraw()
+
+func _draw_defeat_fx() -> void:
+	if _defeat_fx_layer == null or not _defeat_fx_layer.visible:
+		return
+	for particle in _defeat_fx_particles:
+		var pos: Vector2 = particle["pos"]
+		var length: float = float(particle["length"])
+		var width: float = float(particle["width"])
+		var color: Color = particle["color"]
+		var tail := pos - Vector2(0.0, length)
+		_defeat_fx_layer.draw_line(tail, pos, color, width, true)
+		_defeat_fx_layer.draw_circle(pos, width * 0.55, Color(color.r, color.g, color.b, minf(1.0, color.a + 0.12)))
 
 func _make_firework_ramp(color: Color) -> Gradient:
 	var gradient := Gradient.new()

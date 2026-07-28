@@ -44,10 +44,16 @@ var shield_min_max_energy: float = 20.0
 var virus_min_enemy_count: int = 3
 ## Разрешено ли ИИ использовать вирусный перк
 var allow_virus_perk: bool = true
+## Минимальный личный кулдаун щита у ИИ
+var shield_min_cd: float = 5.0
 ## Порог HP цели (доля от max_energy) для скорострельности
 var rapid_fire_hp_target_threshold: float = 0.4
 ## Минимальный личный кулдаун скорострельности у ИИ
 var rapid_fire_min_cd: float = 5.0
+## Минимальный личный кулдаун ускорения у ИИ
+var speed_min_cd: float = 5.0
+## Минимальный личный кулдаун вируса у ИИ
+var virus_min_cd: float = 5.0
 ## Порог дистанции до цели для активации ускорения
 var speed_boost_distance_threshold: float = 1200.0
 ## На easy щит включается только если игрока заметно больше рядом/на карте
@@ -89,10 +95,16 @@ func apply_difficulty_profile(profile: Dictionary) -> void:
 		virus_min_enemy_count = int(profile.virus_min_enemy_count)
 	if profile.has("allow_virus_perk"):
 		allow_virus_perk = bool(profile.allow_virus_perk)
+	if profile.has("shield_min_cd"):
+		shield_min_cd = float(profile.shield_min_cd)
 	if profile.has("rapid_fire_hp_target_threshold"):
 		rapid_fire_hp_target_threshold = float(profile.rapid_fire_hp_target_threshold)
 	if profile.has("rapid_fire_min_cd"):
 		rapid_fire_min_cd = float(profile.rapid_fire_min_cd)
+	if profile.has("speed_min_cd"):
+		speed_min_cd = float(profile.speed_min_cd)
+	if profile.has("virus_min_cd"):
+		virus_min_cd = float(profile.virus_min_cd)
 	if profile.has("speed_boost_distance_threshold"):
 		speed_boost_distance_threshold = float(profile.speed_boost_distance_threshold)
 	if profile.has("shield_player_outnumber_ratio"):
@@ -379,7 +391,7 @@ func _evaluate_and_use_perks(_delta: float) -> void:
 				
 			if target_shieldee:
 				ai_perk_energy -= sm.SHIELD_ENERGY_COST
-				_ai_shield_cd = max(5.0, sm.SHIELD_COOLDOWN_MAX)
+				_ai_shield_cd = max(shield_min_cd, sm.SHIELD_COOLDOWN_MAX)
 				
 				# Применяем щит по области (чуть больше радиус для ИИ, чтобы это было заметно)
 				var a_radius = sm.SHIELD_SELECT_RADIUS * 1.5
@@ -404,7 +416,7 @@ func _evaluate_and_use_perks(_delta: float) -> void:
 						sm.virus_outbreak_counter += 1
 						shooter.shoot_virus(current_target_node, sm.VIRUS_DURATION, sm.virus_outbreak_counter)
 						ai_perk_energy -= sm.VIRUS_ENERGY_COST
-						_ai_virus_cd = max(5.0, sm.VIRUS_COOLDOWN_MAX)
+						_ai_virus_cd = max(virus_min_cd, sm.VIRUS_COOLDOWN_MAX)
 
 	# 3. СКОРОСТРЕЛЬНОСТЬ (Приоритет: добивание/атака)
 	if _ai_rapid_fire_cd <= 0 and ai_perk_energy >= sm.RAPID_FIRE_ENERGY_COST:
@@ -438,7 +450,7 @@ func _evaluate_and_use_perks(_delta: float) -> void:
 			
 			if not already_sprinting:
 				ai_perk_energy -= sm.SPEED_ENERGY_COST
-				_ai_speed_cd = max(5.0, sm.SPEED_COOLDOWN_MAX)
+				_ai_speed_cd = max(speed_min_cd, sm.SPEED_COOLDOWN_MAX)
 				for c in my_cells:
 					if c is BaseCell and not c.is_infected:
 						c.apply_speed_boost(sm.SPEED_BOOST_DURATION, sm.SPEED_BOOST_MULTIPLIER)

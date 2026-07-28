@@ -76,9 +76,11 @@ var _bg_shader_timer: float = 0.0
 var _last_bg_cam_offset: Vector2 = Vector2.INF
 var _victory_ready: bool = false
 var _victory_triggered: bool = false
+var _defeat_triggered: bool = false
 var _victory_check_delay: float = 0.0
-var _victory_menu_pending: bool = false
-var _victory_menu_delay: float = 0.0
+var _result_menu_pending: bool = false
+var _result_menu_delay: float = 0.0
+var _result_mode: String = ""
 var _victory_payload: Dictionary = {}
 var _victory_menu: CanvasLayer = null
 var _pause_menu: PauseMenu = null
@@ -205,16 +207,16 @@ func _process(delta: float) -> void:
 			_last_bg_cam_offset = cam_offset
 			bg_rect.material.set_shader_parameter("cam_offset", cam_offset)
 
-	if _victory_ready and not _victory_triggered:
+	if _victory_ready and not _victory_triggered and not _defeat_triggered:
 		if _victory_check_delay > 0.0:
 			_victory_check_delay -= delta
 		else:
-			_check_victory_condition()
+			_check_result_condition()
 
-	if _victory_menu_pending:
-		_victory_menu_delay -= delta
-		if _victory_menu_delay <= 0.0:
-			_show_delayed_victory_menu()
+	if _result_menu_pending:
+		_result_menu_delay -= delta
+		if _result_menu_delay <= 0.0:
+			_show_delayed_result_menu()
 
 func _input(event: InputEvent) -> void:
 	if event is InputEventKey and event.pressed and not event.echo:
@@ -334,9 +336,10 @@ func _setup_tutorial(level_data: Dictionary, player_cell: BaseCell) -> void:
 	selection_manager.tutorial_manager = _tutorial_manager
 	_tutorial_manager.setup(selection_manager, camera, perk_panel, player_cell, level_data)
 
-func _check_victory_condition() -> void:
+func _check_result_condition() -> void:
 	var player_cells := get_tree().get_nodes_in_group("player_cells")
 	if player_cells.is_empty():
+		_trigger_defeat()
 		return
 
 	var enemy_groups := ["enemy_red_cells", "enemy_green_cells", "enemy_yellow_cells"]
@@ -347,12 +350,26 @@ func _check_victory_condition() -> void:
 	_trigger_victory()
 
 func _trigger_victory() -> void:
-	if _victory_triggered:
+	if _victory_triggered or _defeat_triggered:
 		return
 	_victory_triggered = true
-	_victory_menu_pending = true
-	_victory_menu_delay = VICTORY_SLOWMO_DURATION
+	_result_mode = "victory"
+	_result_menu_pending = true
+	_result_menu_delay = VICTORY_SLOWMO_DURATION
 	_victory_payload = _build_victory_payload()
+	_begin_result_slowmo()
+
+func _trigger_defeat() -> void:
+	if _victory_triggered or _defeat_triggered:
+		return
+	_defeat_triggered = true
+	_result_mode = "defeat"
+	_result_menu_pending = true
+	_result_menu_delay = VICTORY_SLOWMO_DURATION
+	_victory_payload = _build_defeat_payload()
+	_begin_result_slowmo()
+
+func _begin_result_slowmo() -> void:
 
 	if _pause_menu != null:
 		_pause_menu.is_open = false
@@ -384,21 +401,35 @@ func _build_victory_payload() -> Dictionary:
 		"next_level_num": next_level_num,
 	}
 
-func _show_delayed_victory_menu() -> void:
-	if not _victory_menu_pending:
+func _build_defeat_payload() -> Dictionary:
+	var level_manager := get_node_or_null("/root/LevelManager")
+	var current_level_num := 1
+	if level_manager != null:
+		current_level_num = int(level_manager.current_level)
+
+	return {
+		"current_level_num": current_level_num,
+	}
+
+func _show_delayed_result_menu() -> void:
+	if not _result_menu_pending:
 		return
-	_victory_menu_pending = false
-	_victory_menu_delay = 0.0
+	_result_menu_pending = false
+	_result_menu_delay = 0.0
 	Engine.time_scale = 1.0
 	get_tree().paused = true
 	if _victory_menu != null:
-		_victory_menu.setup(
-			int(_victory_payload.get("current_level_num", 1)),
-			String(_victory_payload.get("difficulty_stars", "★ ☆ ☆")),
-			bool(_victory_payload.get("has_next_level", false)),
-			int(_victory_payload.get("next_level_num", 1))
-		)
-		_victory_menu.show_victory()
+		if _result_mode == "defeat":
+			_victory_menu.setup_defeat(int(_victory_payload.get("current_level_num", 1)))
+			_victory_menu.show_defeat()
+		else:
+			_victory_menu.setup(
+				int(_victory_payload.get("current_level_num", 1)),
+				String(_victory_payload.get("difficulty_stars", "★ ☆ ☆")),
+				bool(_victory_payload.get("has_next_level", false)),
+				int(_victory_payload.get("next_level_num", 1))
+			)
+			_victory_menu.show_victory()
 
 func _stars_to_text(stars: int) -> String:
 	match clampi(stars, 0, 3):
@@ -772,17 +803,21 @@ func _build_difficulty_profile(difficulty: String) -> Dictionary:
 			}
 		_: # medium (по умолчанию) — текущее поведение + стартовый кулдаун перков
 			return {
-				"decision_interval": 2.5,
-				"perk_delay_mult": 1.5,
+				"decision_interval": 3.5,
+				"perk_delay_mult": 2.0,
 				"min_energy_ratio_for_war": 0.55,
 				"score_distance_scale": 2200.0,
 				# Как на easy, но без общей "тупизны": ИИ дольше добивает выбранную цель,
 				# вместо постоянного перескока между жирными нейтралками.
-				"goal_lock_time": 8.0,
+				"goal_lock_time": 11.0,
 				"enemy_notice_range": 2000.0,
 				"shield_hp_threshold": 0.45,
 				"shield_min_max_energy": 20.0,
-				"virus_min_enemy_count": 3,
+				"shield_min_cd": 24.0,
+				"virus_min_enemy_count": 4,
+				"virus_min_cd": 40.0,
 				"rapid_fire_hp_target_threshold": 0.4,
-				"speed_boost_distance_threshold": 1200.0,
+				"rapid_fire_min_cd": 30.0,
+				"speed_min_cd": 22.0,
+				"speed_boost_distance_threshold": 1500.0,
 			}

@@ -1,6 +1,6 @@
 extends Camera2D
 ## Камера, которая следует за группой клеток игрока.
-## Если игрок проиграл — переключается в режим наблюдателя (WASD + скролл).
+## Поддерживает dev-режим наблюдателя (WASD + скролл).
 
 @export var follow_speed: float = 3.0
 @export var zoom_speed: float = 2.0
@@ -29,7 +29,7 @@ func _ready() -> void:
 	add_child(ui_layer)
 
 	_spectator_label = Label.new()
-	_spectator_label.text = "☠ Ты проиграл! Наблюдаешь за битвой...\nWASD — перемещение  |  Колесо мыши — зум"
+	_spectator_label.text = "DEV: свободная камера включена\nWASD — перемещение  |  Колесо мыши — зум"
 	_spectator_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	_spectator_label.vertical_alignment = VERTICAL_ALIGNMENT_TOP
 	_spectator_label.set_anchors_preset(Control.PRESET_TOP_WIDE)
@@ -50,9 +50,12 @@ func _ready() -> void:
 
 func _process(delta: float) -> void:
 	var player_cells = get_tree().get_nodes_in_group("player_cells")
-	var spectator_active := _forced_spectator or player_cells.is_empty()
+	var spectator_active := _forced_spectator
 
 	if not spectator_active:
+		if player_cells.is_empty():
+			return
+
 		# === Режим слежения ===
 		if _spectator_mode:
 			_spectator_mode = false
@@ -106,7 +109,7 @@ func _process(delta: float) -> void:
 		# это значит, что мы ЕЩЕ НЕ НАШЛИ ПЕРВЫХ КЛЕТОК. Не сбрасываем его.
 		if not _spectator_mode:
 			_spectator_mode = true
-			_spectator_label.text = "DEV: свободная камера включена\nWASD — перемещение  |  Колесо мыши — зум" if _forced_spectator else "☠ Ты проиграл! Наблюдаешь за битвой...\nWASD — перемещение  |  Колесо мыши — зум"
+			_spectator_label.text = "DEV: свободная камера включена\nWASD — перемещение  |  Колесо мыши — зум"
 			_spectator_label.show()
 
 		_handle_spectator_movement(delta)
