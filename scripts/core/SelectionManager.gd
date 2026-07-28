@@ -397,6 +397,11 @@ func _notify_tutorial_perk_activated(perk_name: String) -> void:
 	if tutorial_manager.has_method("notify_perk_activated"):
 		tutorial_manager.call("notify_perk_activated", perk_name)
 
+func _play_active_perk_sound() -> void:
+	var level_sfx := get_tree().get_first_node_in_group("level_sfx")
+	if level_sfx != null and level_sfx.has_method("play_active_perk"):
+		level_sfx.call("play_active_perk")
+
 func _handle_double_click(pos: Vector2) -> bool:
 	var clicked_node: BaseCell = _get_cell_at_pos(pos)
 	if clicked_node and clicked_node.owner_type == BaseCell.OwnerType.PLAYER:
@@ -445,6 +450,7 @@ func try_activate_cell_perk(cell: BaseCell, custom_pos: Vector2 = Vector2.ZERO) 
 			
 			perk_energy -= SHIELD_ENERGY_COST
 			shield_cooldown = SHIELD_COOLDOWN_MAX
+			_play_active_perk_sound()
 			
 			if active_perk == "shield":
 				_clear_active_perk()
@@ -482,6 +488,7 @@ func try_activate_cell_perk(cell: BaseCell, custom_pos: Vector2 = Vector2.ZERO) 
 			
 		perk_energy -= SPEED_ENERGY_COST
 		speed_cooldown = SPEED_COOLDOWN_MAX
+		_play_active_perk_sound()
 		return true
 			
 	elif perk_name == "rapid_fire":
@@ -496,6 +503,7 @@ func try_activate_cell_perk(cell: BaseCell, custom_pos: Vector2 = Vector2.ZERO) 
 		
 		perk_energy -= RAPID_FIRE_ENERGY_COST
 		rapid_fire_cooldown = RAPID_FIRE_COOLDOWN_MAX
+		_play_active_perk_sound()
 		return true
 
 	elif perk_name == "virus":
@@ -530,6 +538,7 @@ func try_activate_cell_perk(cell: BaseCell, custom_pos: Vector2 = Vector2.ZERO) 
 				shooter.shoot_virus(target_cell, VIRUS_DURATION, virus_outbreak_counter)
 				perk_energy -= VIRUS_ENERGY_COST
 				virus_cooldown = VIRUS_COOLDOWN_MAX
+				_play_active_perk_sound()
 				print("ВИРУС запущен из ", cell.name, " в ", target_cell.name)
 				return true
 		else:
@@ -576,6 +585,7 @@ func activate_perk(perk_name: String) -> void:
 		for cell in player_cells:
 			if cell is BaseCell and not cell.is_infected:
 				cell.apply_speed_boost(SPEED_BOOST_DURATION, SPEED_BOOST_MULTIPLIER)
+		_play_active_perk_sound()
 		
 		print("Спринт! Длительность: %.1f, Множитель: %.1f, Стоимость: %d, КД: %.1f" % [
 			SPEED_BOOST_DURATION,
@@ -598,6 +608,7 @@ func activate_perk(perk_name: String) -> void:
 		for cell in player_cells:
 			if cell is BaseCell and not cell.is_infected:
 				cell.apply_rapid_fire(RAPID_FIRE_DURATION, RAPID_FIRE_MULTIPLIER)
+		_play_active_perk_sound()
 		
 		print("Яростный огонь! Длительность: %.1f, Множитель: %.1f, Стоимость: %d, КД: %.1f" % [
 			RAPID_FIRE_DURATION,
@@ -649,6 +660,7 @@ func _activate_shield_chain() -> void:
 	
 	perk_energy -= SHIELD_ENERGY_COST
 	shield_cooldown = SHIELD_COOLDOWN_MAX
+	_play_active_perk_sound()
 
 func _activate_virus_auto() -> void:
 	## Автоматический выстрел вируса в ближайшего врага с визуализацией траектории
@@ -728,6 +740,7 @@ func _activate_virus_auto() -> void:
 	
 	perk_energy -= VIRUS_ENERGY_COST
 	virus_cooldown = VIRUS_COOLDOWN_MAX
+	_play_active_perk_sound()
 
 func _clear_active_perk() -> void:
 	if active_perk != "":
@@ -757,6 +770,7 @@ func _activate_shield_at_position(world_pos: Vector2) -> void:
 		
 		perk_energy -= SHIELD_ENERGY_COST
 		shield_cooldown = SHIELD_COOLDOWN_MAX
+		_play_active_perk_sound()
 		active_perk = ""
 
 func _activate_speed_dash(direction: Vector2) -> void:
@@ -766,6 +780,7 @@ func _activate_speed_dash(direction: Vector2) -> void:
 	
 	perk_energy -= SPEED_ENERGY_COST
 	speed_cooldown = SPEED_COOLDOWN_MAX
+	_play_active_perk_sound()
 	
 	# Рывок: x6 скорость на 1 секунду
 	var player_cells = get_tree().get_nodes_in_group("player_cells")
@@ -830,6 +845,7 @@ func _activate_virus_at_position(world_pos: Vector2) -> void:
 	
 	perk_energy -= VIRUS_ENERGY_COST
 	virus_cooldown = VIRUS_COOLDOWN_MAX
+	_play_active_perk_sound()
 	active_perk = ""
 
 func _handle_selection(pos: Vector2) -> void:
@@ -873,6 +889,7 @@ func _handle_selection(pos: Vector2) -> void:
 					# Снимаем ресурсы и ставим КД
 					perk_energy -= SHIELD_ENERGY_COST
 					shield_cooldown = SHIELD_COOLDOWN_MAX
+					_play_active_perk_sound()
 
 				_clear_active_perk()
 			else:
@@ -912,6 +929,7 @@ func _handle_selection(pos: Vector2) -> void:
 						shooter.shoot_virus(target_cell, VIRUS_DURATION, virus_outbreak_counter)
 						perk_energy -= VIRUS_ENERGY_COST
 						virus_cooldown = VIRUS_COOLDOWN_MAX
+						_play_active_perk_sound()
 				_clear_active_perk()
 			else:
 				show_floating_message("НЕТ ЦЕЛИ", Color(1.0, 0.4, 0.4))

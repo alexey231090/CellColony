@@ -1,4 +1,4 @@
-[gd_scene load_steps=12 format=3 uid="uid://dg0u8n3n4v5u6"]
+[gd_scene load_steps=22 format=3 uid="uid://dg0u8n3n4v5u6"]
 
 [ext_resource type="Script" path="res://scenes/levels/organic_level.gd" id="1_org"]
 [ext_resource type="Script" path="res://scripts/core/SelectionManager.gd" id="2_sm"]
@@ -9,6 +9,16 @@
 [ext_resource type="Script" path="res://scripts/core/PerkEnergyBar.gd" id="7_peb"]
 [ext_resource type="PackedScene" path="res://scenes/ui/dev_console.tscn" id="8_console"]
 [ext_resource type="Script" path="res://scripts/core/AIFactionManager.gd" id="9_ai"]
+[ext_resource type="AudioStream" uid="uid://ddicvbj8rpvtl" path="res://audio/Cell_ColloniyMusic1_2.ogg" id="10_music"]
+[ext_resource type="Script" path="res://scenes/levels/level_sfx.gd" id="11_sfx"]
+[ext_resource type="AudioStream" uid="uid://b4sr8x0npf1k2" path="res://audio/FireCell_1.ogg" id="12_fire_1"]
+[ext_resource type="AudioStream" uid="uid://c7v1mkaq5uan3" path="res://audio/FireCell_2.ogg" id="13_fire_2"]
+[ext_resource type="AudioStream" uid="uid://jfriyvnl50rq" path="res://audio/DemageCell.ogg" id="14_damage_1"]
+[ext_resource type="AudioStream" uid="uid://eia7sudo5wcu" path="res://audio/cell_demage_2.ogg" id="15_damage_2"]
+[ext_resource type="AudioStream" uid="uid://8ev4q38st5w7" path="res://audio/frendly_fire.ogg" id="16_friendly"]
+[ext_resource type="AudioStream" uid="uid://bi5ifyp2ot54u" path="res://audio/shot_shield.ogg" id="17_shield_1"]
+[ext_resource type="AudioStream" uid="uid://dbb4d6ja71fr7" path="res://audio/shot_shield_1.ogg" id="18_shield_2"]
+[ext_resource type="AudioStream" uid="uid://3svhtt05k5fa" path="res://audio/active_perk.ogg" id="19_active_perk"]
 
 [sub_resource type="ShaderMaterial" id="ShaderMaterial_org"]
 shader = ExtResource("5_shader")
@@ -20,6 +30,22 @@ shader_parameter/cam_offset = Vector2(0, 0)
 
 [node name="OrganicLevel" type="Node2D"]
 script = ExtResource("1_org")
+
+[node name="LevelMusic" type="AudioStreamPlayer" parent="."]
+stream = ExtResource("10_music")
+autoplay = true
+bus = &"Music"
+
+[node name="LevelSfx" type="Node2D" parent="."]
+script = ExtResource("11_sfx")
+fire_sound_1 = ExtResource("12_fire_1")
+fire_sound_2 = ExtResource("13_fire_2")
+damage_sound_1 = ExtResource("14_damage_1")
+damage_sound_2 = ExtResource("15_damage_2")
+friendly_fire_sound = ExtResource("16_friendly")
+shield_sound_1 = ExtResource("17_shield_1")
+shield_sound_2 = ExtResource("18_shield_2")
+active_perk_sound = ExtResource("19_active_perk")
 
 [node name="BackgroundLayer" type="CanvasLayer" parent="."]
 layer = -1
@@ -64,7 +90,7 @@ offset_right = 40.0
 offset_bottom = 23.0
 script = ExtResource("6_fps")
 
-[node name="DevConsole" parent="HUDLayer" instance=ExtResource("8_console")]
+[node name="DevConsole" parent="." instance=ExtResource("8_console")]
 layout_mode = 3
 anchors_preset = 15
 anchor_right = 1.0

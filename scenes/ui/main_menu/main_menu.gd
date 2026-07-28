@@ -21,6 +21,8 @@ const SHADOW_COLOR := Color(0.0, 0.0, 0.0, 0.5)
 const CORNER_RADIUS := 16
 const BTN_CORNER := 12
 const BTN_MIN_HEIGHT := 56  # Минимальная высота кнопок (удобно для пальца)
+const MASTER_BUS_NAME: StringName = &"Master"
+const MUSIC_BUS_NAME: StringName = &"Music"
 const DEV_CONSOLE_SCENE := preload("res://scenes/ui/dev_console.tscn")
 const SHIELD_ICON := preload("res://assets/sprites/shield.png")
 const RAPID_FIRE_ICON := preload("res://assets/sprites/speedfire2.png")
@@ -103,6 +105,7 @@ var level_panel: Control
 var settings_panel: Control
 var perks_panel: Control
 var overlay: ColorRect
+@onready var menu_music: AudioStreamPlayer = $MenuMusic
 
 # Кнопки верхней панели
 var sound_btn: Button
@@ -142,6 +145,7 @@ var total_levels: int = 4
 var unlocked_levels: int = 1
 
 func _ready() -> void:
+	_sync_audio_state_from_buses()
 	if has_node("/root/LevelManager"):
 		var lm: Node = get_node("/root/LevelManager")
 		unlocked_levels = lm.unlocked_levels
@@ -602,7 +606,7 @@ func _build_main_screen() -> void:
 	center_box.add_child(sound_container)
 
 	sound_btn = _make_icon_button("🔊", 72)
-	sound_btn.tooltip_text = "Звуки вкл/выкл"
+	sound_btn.tooltip_text = "Все звуки и музыка вкл/выкл"
 	sound_btn.pressed.connect(_on_sound_toggle)
 	sound_container.add_child(sound_btn)
 
@@ -1354,18 +1358,44 @@ func _on_music_volume_changed(value: float) -> void:
 	_apply_music_volume()
 
 func _apply_sound_volume() -> void:
-	# Заглушка: Здесь будет AudioServer.set_bus_volume_db(...)
-	var effective = sound_volume if is_sound_on else 0.0
-	var _db = linear_to_db(effective / 100.0) if effective > 0 else -80.0
-	# AudioServer.set_bus_volume_db(AudioServer.get_bus_index("SFX"), db)
-	pass
+	var master_bus_index: int = AudioServer.get_bus_index(MASTER_BUS_NAME)
+	if master_bus_index < 0:
+		return
+	var effective: float = clampf(sound_volume / 100.0, 0.0, 1.0)
+	AudioServer.set_bus_volume_db(
+		master_bus_index,
+		linear_to_db(effective) if effective > 0.0 else -80.0
+	)
+	AudioServer.set_bus_mute(master_bus_index, not is_sound_on)
 
 func _apply_music_volume() -> void:
-	# Заглушка: Здесь будет AudioServer.set_bus_volume_db(...)
-	var effective = music_volume if is_music_on else 0.0
-	var _db = linear_to_db(effective / 100.0) if effective > 0 else -80.0
-	# AudioServer.set_bus_volume_db(AudioServer.get_bus_index("Music"), db)
-	pass
+	var effective: float = music_volume if is_music_on else 0.0
+	var volume_db: float = linear_to_db(effective / 100.0) if effective > 0.0 else -80.0
+	var music_bus_index: int = AudioServer.get_bus_index(MUSIC_BUS_NAME)
+	if music_bus_index >= 0:
+		AudioServer.set_bus_volume_db(music_bus_index, volume_db)
+		AudioServer.set_bus_mute(music_bus_index, not is_music_on)
+	else:
+		menu_music.volume_db = volume_db
+
+func _sync_audio_state_from_buses() -> void:
+	var master_bus_index: int = AudioServer.get_bus_index(MASTER_BUS_NAME)
+	if master_bus_index >= 0:
+		is_sound_on = not AudioServer.is_bus_mute(master_bus_index)
+		sound_volume = clampf(
+			db_to_linear(AudioServer.get_bus_volume_db(master_bus_index)) * 100.0,
+			0.0,
+			100.0
+		)
+
+	var music_bus_index: int = AudioServer.get_bus_index(MUSIC_BUS_NAME)
+	if music_bus_index >= 0:
+		is_music_on = not AudioServer.is_bus_mute(music_bus_index)
+		music_volume = clampf(
+			db_to_linear(AudioServer.get_bus_volume_db(music_bus_index)) * 100.0,
+			0.0,
+			100.0
+		)
 
 func _input(event: InputEvent) -> void:
 	var dev = get_tree().get_first_node_in_group("dev_console")

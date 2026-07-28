@@ -338,10 +338,10 @@ func _draw() -> void:
 
 		if not sm: continue
 		
-		var cd = sm.get_perk_cooldown_ratio(icon.perk_name) as float
-		var energy_cost = sm.get_perk_energy_cost(icon.perk_name)
-		var has_enough_energy := sm.perk_energy >= energy_cost
-		var is_ready = (cd <= 0.0 and has_enough_energy)
+		var cd: float = float(sm.get_perk_cooldown_ratio(icon.perk_name))
+		var energy_cost: float = float(sm.get_perk_energy_cost(icon.perk_name))
+		var has_enough_energy: bool = sm.perk_energy >= energy_cost
+		var is_ready: bool = cd <= 0.0 and has_enough_energy
 		
 		_draw_button(d_pos, r, icon.perk_name, is_ready, cd, has_enough_energy, zoom, alpha_mult)
 

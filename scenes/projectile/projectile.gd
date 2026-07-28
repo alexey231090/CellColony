@@ -158,8 +158,15 @@ func _on_body_entered(body: Node2D) -> void:
 @export var impact_effect_scene: PackedScene = preload("res://scenes/projectile/impact_effect.tscn")
 
 func _impact(cell: BaseCell) -> void:
+	var is_enemy_hit: bool = cell.owner_type != owner_type
+	# Звук щита срабатывает для клетки любой стороны. Отражение ниже остаётся
+	# только против вражеского снаряда, чтобы союзная цель не отбрасывала лечение.
+	var hits_active_shield: bool = not is_virus and cell.reflect_chance > 0.0
+	if hits_active_shield:
+		_play_shield_sound(global_position)
+
 	# Проверка на отскок (если у цели есть активный щит)
-	if not is_virus and cell.reflect_chance > 0.0 and cell.owner_type != owner_type:
+	if hits_active_shield and is_enemy_hit:
 		if randf() <= cell.reflect_chance:
 			_reflect(cell)
 			return
@@ -168,7 +175,7 @@ func _impact(cell: BaseCell) -> void:
 	_spawn_impact_effect(global_position, projectile_color)
 	
 	# Добавляем толчок только если это НЕ союзник
-	if cell.owner_type != owner_type:
+	if is_enemy_hit:
 		var push_strength = 50.0
 		cell.velocity += direction * push_strength
 	
@@ -181,8 +188,28 @@ func _impact(cell: BaseCell) -> void:
 			return
 		cell.infect(virus_duration, virus_outbreak_id)
 	else:
+		if not hits_active_shield:
+			if is_enemy_hit:
+				_play_damage_sound(global_position)
+			else:
+				_play_friendly_hit_sound(global_position)
 		cell.take_damage(damage, owner_type)
 	queue_free()
+
+func _play_damage_sound(at_position: Vector2) -> void:
+	var level_sfx := get_tree().get_first_node_in_group("level_sfx")
+	if level_sfx and level_sfx.has_method("play_damage"):
+		level_sfx.call("play_damage", at_position)
+
+func _play_friendly_hit_sound(at_position: Vector2) -> void:
+	var level_sfx := get_tree().get_first_node_in_group("level_sfx")
+	if level_sfx and level_sfx.has_method("play_friendly_hit"):
+		level_sfx.call("play_friendly_hit", at_position)
+
+func _play_shield_sound(at_position: Vector2) -> void:
+	var level_sfx := get_tree().get_first_node_in_group("level_sfx")
+	if level_sfx and level_sfx.has_method("play_shield"):
+		level_sfx.call("play_shield", at_position)
 
 func _impact_wall_at(impact_pos: Vector2) -> void:
 	_spawn_impact_effect(impact_pos + direction.normalized() * 100.0, Color(0.28, 0.86, 0.92, 0.9))

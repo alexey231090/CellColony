@@ -7,6 +7,11 @@ enum OwnerType { NEUTRAL, PLAYER, ENEMY_RED, ENEMY_GREEN, ENEMY_YELLOW }
 @export var owner_type: OwnerType = OwnerType.NEUTRAL
 @export var stats: CellStats = CellStats.new()
 @export var radius: float = 32.0
+@export_category("Shoot Effect")
+@export_range(0.0, 0.35, 0.01) var shoot_tension_stretch: float = 0.16
+@export_range(0.05, 0.5, 0.01) var shoot_tension_duration: float = 0.2
+@export_range(0.0, 0.15, 0.005) var shoot_body_contraction: float = 0.045
+@export_range(0.0, 0.3, 0.01) var shoot_nucleus_recoil: float = 0.12
 
 @onready var energy_label: Label = $EnergyLabel
 @onready var contr_label: Label = $ContrLabel
@@ -38,6 +43,8 @@ var last_outbreak_id: int = -1 # ID последней волны вируса, 
 # Сглаживание желейной физики
 var visual_stretch: float = 0.0
 var visual_angle: float = 0.0
+var _shoot_tension_timer: float = 0.0
+var _shoot_tension_angle: float = 0.0
 
 # Новая механика перков (Щит, Спринт и т.д.)
 var assigned_perk: String = ""
@@ -221,6 +228,19 @@ func set_tutorial_highlight(enabled: bool) -> void:
 	tutorial_highlight = enabled
 	queue_redraw()
 
+func play_shoot_effect(direction: Vector2) -> void:
+	if direction.is_zero_approx():
+		return
+	_shoot_tension_angle = direction.angle()
+	_shoot_tension_timer = shoot_tension_duration
+	queue_redraw()
+
+func _get_shoot_tension() -> float:
+	if shoot_tension_duration <= 0.0:
+		return 0.0
+	var normalized_time: float = clampf(_shoot_tension_timer / shoot_tension_duration, 0.0, 1.0)
+	return smoothstep(0.0, 1.0, normalized_time)
+
 func _spawn_reward_popup(amount: float) -> void:
 	var viewport := get_viewport()
 	if viewport == null:
@@ -299,11 +319,17 @@ func _draw() -> void:
 	# ==========================================
 	# ЖЕЛЕЙНАЯ ФИЗИКА (Squash and Stretch)
 	# ==========================================
-	var scale_x = 1.0 + visual_stretch
-	var scale_y = 1.0 / max(0.1, scale_x) # Сохраняем объем (сплющиваем по бокам)
+	var shoot_tension: float = _get_shoot_tension()
+	var combined_stretch: float = visual_stretch + shoot_tension_stretch * shoot_tension
+	var scale_x: float = 1.0 + combined_stretch
+	var scale_y: float = 1.0 / maxf(0.1, scale_x) # Сохраняем объем (сплющиваем по бокам)
+	var draw_angle: float = visual_angle
+	if shoot_tension > 0.001:
+		var aim_weight: float = clampf(shoot_tension * 1.35, 0.0, 1.0)
+		draw_angle = lerp_angle(visual_angle, _shoot_tension_angle, aim_weight)
 	
 	# Применяем трансформацию ко всему, что будет нарисовано ниже
-	draw_set_transform(Vector2.ZERO, visual_angle, Vector2(scale_x, scale_y))
+	draw_set_transform(Vector2.ZERO, draw_angle, Vector2(scale_x, scale_y))
 	
 	# Уникальный сдвиг фазы анимации для этой конкретной клетки
 	var phase_offset = (global_position.x + global_position.y) * 0.01
@@ -312,7 +338,8 @@ func _draw() -> void:
 	# Анимационное дыхание (пульсация мембраны)
 	var breathe_factor = sin(local_time * 3.0) * 0.05 + 1.0 # от 0.95 до 1.05
 	# При попадании клетка слегка вздувается
-	var current_radius = radius * breathe_factor + (hit_intensity * 5.0)
+	var tension_contraction: float = 1.0 - shoot_body_contraction * shoot_tension
+	var current_radius = radius * breathe_factor * tension_contraction + (hit_intensity * 5.0)
 	var screen_radius: float = _get_screen_radius(current_radius)
 	var is_low_detail: bool = screen_radius < 18.0
 	var is_medium_detail: bool = not is_low_detail and screen_radius < 30.0
@@ -420,6 +447,9 @@ func _draw() -> void:
 	
 	# 4. Ядро (Nucleus) - плавает около центра
 	var nucleus_pos = Vector2(cos(local_time * 1.5), sin(local_time * 2.1)) * (current_radius * 0.15)
+	if shoot_tension > 0.001:
+		var local_shoot_direction := Vector2.RIGHT.rotated(_shoot_tension_angle - draw_angle)
+		nucleus_pos -= local_shoot_direction * current_radius * shoot_nucleus_recoil * shoot_tension
 	var nucleus_color = display_color.lightened(0.6)
 	if rapid_fire_timer > 0:
 		nucleus_color = Color(1.0, 0.6, 0.1) # Раскаленное оранжевое ядро
@@ -460,6 +490,8 @@ func _process(delta: float) -> void:
 		hit_flash_timer -= delta
 	if hit_impact_wobble > 0.0:
 		hit_impact_wobble = lerp(hit_impact_wobble, 0.0, delta * 15.0)
+	if _shoot_tension_timer > 0.0:
+		_shoot_tension_timer = maxf(0.0, _shoot_tension_timer - delta)
 
 	if reflect_timer > 0.0:
 		reflect_timer -= delta

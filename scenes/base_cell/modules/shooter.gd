@@ -111,6 +111,7 @@ func shoot(current_target: Node2D) -> void:
 	var shoot_dir = (current_target.global_position - global_position).normalized()
 	var spread = deg_to_rad(randf_range(-5, 5))
 	shoot_dir = shoot_dir.rotated(spread)
+	parent_cell.play_shoot_effect(shoot_dir)
 	
 	var spawn_dist = parent_cell.radius * parent_cell.scale.x + 10.0
 	
@@ -124,6 +125,12 @@ func shoot(current_target: Node2D) -> void:
 	
 	var p_color = parent_cell._get_cell_color()
 	proj.projectile_color = p_color
+	_play_fire_sound(proj.global_position)
+
+func _play_fire_sound(at_position: Vector2) -> void:
+	var level_sfx := get_tree().get_first_node_in_group("level_sfx")
+	if level_sfx and level_sfx.has_method("play_fire"):
+		level_sfx.call("play_fire", at_position)
 
 func shoot_virus(current_target: Node2D, duration: float, outbreak_id: int) -> void:
 	var parent_cell = get_parent() as BaseCell
@@ -133,6 +140,7 @@ func shoot_virus(current_target: Node2D, duration: float, outbreak_id: int) -> v
 	get_tree().root.add_child(proj)
 	
 	var shoot_dir = (current_target.global_position - global_position).normalized()
+	parent_cell.play_shoot_effect(shoot_dir)
 	var spawn_dist = parent_cell.radius * parent_cell.scale.x + 15.0
 	
 	proj.global_position = global_position + shoot_dir * spawn_dist

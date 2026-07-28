@@ -11,6 +11,16 @@
 [ext_resource type="Shader" uid="uid://dumm2ibcfyxao" path="res://scenes/environment/background.gdshader" id="9_bg_shader"]
 [ext_resource type="Script" path="res://scripts/core/PerkButtonPanel.gd" id="10_pbp"]
 [ext_resource type="Script" path="res://scripts/core/PerkEnergyBar.gd" id="11_peb"]
+[ext_resource type="AudioStream" uid="uid://ddicvbj8rpvtl" path="res://audio/Cell_ColloniyMusic1_2.ogg" id="12_music"]
+[ext_resource type="Script" path="res://scenes/levels/level_sfx.gd" id="13_sfx"]
+[ext_resource type="AudioStream" uid="uid://b4sr8x0npf1k2" path="res://audio/FireCell_1.ogg" id="14_fire_1"]
+[ext_resource type="AudioStream" uid="uid://c7v1mkaq5uan3" path="res://audio/FireCell_2.ogg" id="15_fire_2"]
+[ext_resource type="AudioStream" uid="uid://jfriyvnl50rq" path="res://audio/DemageCell.ogg" id="16_damage_1"]
+[ext_resource type="AudioStream" uid="uid://eia7sudo5wcu" path="res://audio/cell_demage_2.ogg" id="17_damage_2"]
+[ext_resource type="AudioStream" uid="uid://8ev4q38st5w7" path="res://audio/frendly_fire.ogg" id="18_friendly"]
+[ext_resource type="AudioStream" uid="uid://bi5ifyp2ot54u" path="res://audio/shot_shield.ogg" id="19_shield_1"]
+[ext_resource type="AudioStream" uid="uid://dbb4d6ja71fr7" path="res://audio/shot_shield_1.ogg" id="20_shield_2"]
+[ext_resource type="AudioStream" uid="uid://3svhtt05k5fa" path="res://audio/active_perk.ogg" id="21_active_perk"]
 
 [sub_resource type="ShaderMaterial" id="ShaderMaterial_bg"]
 shader = ExtResource("9_bg_shader")
@@ -26,6 +36,22 @@ metadata/_custom_type_script = "uid://bd7rrvofrrdam"
 
 [node name="Main" type="Node2D" unique_id=231817894]
 script = ExtResource("1_main")
+
+[node name="LevelMusic" type="AudioStreamPlayer" parent="."]
+stream = ExtResource("12_music")
+autoplay = true
+bus = &"Music"
+
+[node name="LevelSfx" type="Node2D" parent="."]
+script = ExtResource("13_sfx")
+fire_sound_1 = ExtResource("14_fire_1")
+fire_sound_2 = ExtResource("15_fire_2")
+damage_sound_1 = ExtResource("16_damage_1")
+damage_sound_2 = ExtResource("17_damage_2")
+friendly_fire_sound = ExtResource("18_friendly")
+shield_sound_1 = ExtResource("19_shield_1")
+shield_sound_2 = ExtResource("20_shield_2")
+active_perk_sound = ExtResource("21_active_perk")
 
 [node name="AIManager_Red" type="Node" parent="." unique_id=2141526557]
 script = ExtResource("7_ai_mgr")
@@ -93,7 +119,7 @@ script = ExtResource("11_peb")
 [node name="FPSCounter" type="Label" parent="HUDLayer" unique_id=1106520099]
 script = ExtResource("5_fps")
 
-[node name="DevConsole" parent="HUDLayer" unique_id=1070921993 instance=ExtResource("8_console")]
+[node name="DevConsole" parent="." unique_id=1070921993 instance=ExtResource("8_console")]
 layout_mode = 3
 
 [node name="BackgroundManual" type="Node2D" parent="." unique_id=1995090335]
