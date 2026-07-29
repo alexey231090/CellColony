@@ -12,12 +12,26 @@ const BTN_BG := Color(0.12, 0.15, 0.2, 0.9)
 const BTN_HOVER := Color(0.15, 0.2, 0.28, 0.95)
 const BTN_PRESSED := Color(0.08, 0.1, 0.14, 1.0)
 const TEXT_COLOR := Color(0.9, 0.95, 1.0, 1.0)
+const TEXT_DIM := Color(0.62, 0.7, 0.78, 1.0)
+const MASTER_BUS_NAME: StringName = &"Master"
+const MUSIC_BUS_NAME: StringName = &"Music"
+const BUTTON_HOVER_SOUND := preload("res://audio/Button_click.ogg")
+const BUTTON_HOVER_VOLUME_DB: float = -8.0
+const BUTTON_CLICK_SOUND := preload("res://audio/clickWhooh.ogg")
+const BUTTON_CLICK_VOLUME_DB: float = -14.0
+const BUTTON_CLICK_PITCH_SCALE: float = 1.8
 
 var overlay: ColorRect
 var center_panel: PanelContainer
 var resume_btn: Button
 var restart_btn: Button
 var main_menu_btn: Button
+var master_slider: HSlider
+var music_slider: HSlider
+var master_value_label: Label
+var music_value_label: Label
+var ui_hover_sfx: AudioStreamPlayer
+var ui_click_sfx: AudioStreamPlayer
 
 var is_open: bool = false
 
@@ -25,6 +39,7 @@ func _ready() -> void:
 	layer = 120 # Поверх всего HUD
 	process_mode = Node.PROCESS_MODE_ALWAYS # Работает при паузе
 	
+	_setup_ui_sounds()
 	_build_ui()
 	
 	# Скрыто по умолчанию
@@ -44,7 +59,7 @@ func _build_ui() -> void:
 	
 	# 3. Сама плашка паузы с glassmorphism
 	center_panel = PanelContainer.new()
-	center_panel.custom_minimum_size = Vector2(360, 400)
+	center_panel.custom_minimum_size = Vector2(360, 570)
 	var panel_sb = StyleBoxFlat.new()
 	panel_sb.bg_color = PANEL_BG
 	panel_sb.corner_radius_top_left = 16
@@ -67,7 +82,7 @@ func _build_ui() -> void:
 	
 	# 4. Внутренности
 	var vbox = VBoxContainer.new()
-	vbox.add_theme_constant_override("separation", 24)
+	vbox.add_theme_constant_override("separation", 16)
 	vbox.alignment = BoxContainer.ALIGNMENT_CENTER
 	center_panel.add_child(vbox)
 	
@@ -105,6 +120,20 @@ func _build_ui() -> void:
 	main_menu_btn.pressed.connect(_on_main_menu_pressed)
 	vbox.add_child(main_menu_btn)
 
+	var audio_separator := HSeparator.new()
+	audio_separator.custom_minimum_size.y = 4
+	vbox.add_child(audio_separator)
+
+	var audio_title := Label.new()
+	audio_title.text = "ЗВУК"
+	audio_title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	audio_title.add_theme_font_size_override("font_size", 18)
+	audio_title.add_theme_color_override("font_color", ACCENT_COLOR)
+	vbox.add_child(audio_title)
+
+	master_slider = _add_audio_slider(vbox, "ОБЩАЯ ГРОМКОСТЬ", _get_bus_volume_percent(MASTER_BUS_NAME), _on_master_volume_changed)
+	music_slider = _add_audio_slider(vbox, "МУЗЫКА УРОВНЯ", _get_level_music_volume_percent(), _on_music_volume_changed)
+
 func _make_button(text: String, accent: Color) -> Button:
 	var btn = Button.new()
 	btn.text = text
@@ -139,14 +168,150 @@ func _make_button(text: String, accent: Color) -> Button:
 	pressed_sb.bg_color = BTN_PRESSED
 	pressed_sb.border_color = accent
 	btn.add_theme_stylebox_override("pressed", pressed_sb)
-	
+	btn.mouse_entered.connect(_play_ui_hover_sound)
+	btn.pressed.connect(_play_ui_click_sound)
 	return btn
+
+func _add_audio_slider(parent: VBoxContainer, caption: String, initial_value: float, changed_callback: Callable) -> HSlider:
+	var row := VBoxContainer.new()
+	row.add_theme_constant_override("separation", 4)
+	parent.add_child(row)
+
+	var header := HBoxContainer.new()
+	row.add_child(header)
+
+	var caption_label := Label.new()
+	caption_label.text = caption
+	caption_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	caption_label.add_theme_font_size_override("font_size", 14)
+	caption_label.add_theme_color_override("font_color", TEXT_DIM)
+	header.add_child(caption_label)
+
+	var value_label := Label.new()
+	value_label.text = "%d%%" % roundi(initial_value)
+	value_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+	value_label.custom_minimum_size.x = 54
+	value_label.add_theme_font_size_override("font_size", 16)
+	value_label.add_theme_color_override("font_color", TEXT_COLOR)
+	header.add_child(value_label)
+
+	var slider := HSlider.new()
+	slider.min_value = 0.0
+	slider.max_value = 100.0
+	slider.step = 1.0
+	slider.value = clampf(initial_value, slider.min_value, slider.max_value)
+	slider.custom_minimum_size.y = 24
+	slider.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	row.add_child(slider)
+	slider.value_changed.connect(changed_callback.bind(value_label))
+
+	if caption == "ОБЩАЯ ГРОМКОСТЬ":
+		master_value_label = value_label
+	else:
+		music_value_label = value_label
+	return slider
+
+func _setup_ui_sounds() -> void:
+	ui_hover_sfx = AudioStreamPlayer.new()
+	ui_hover_sfx.name = "UiHoverSfx"
+	ui_hover_sfx.stream = BUTTON_HOVER_SOUND
+	ui_hover_sfx.bus = MASTER_BUS_NAME
+	ui_hover_sfx.volume_db = BUTTON_HOVER_VOLUME_DB
+	ui_hover_sfx.process_mode = Node.PROCESS_MODE_ALWAYS
+	add_child(ui_hover_sfx)
+
+	ui_click_sfx = AudioStreamPlayer.new()
+	ui_click_sfx.name = "UiClickSfx"
+	ui_click_sfx.stream = BUTTON_CLICK_SOUND
+	ui_click_sfx.bus = MASTER_BUS_NAME
+	ui_click_sfx.volume_db = BUTTON_CLICK_VOLUME_DB
+	ui_click_sfx.pitch_scale = BUTTON_CLICK_PITCH_SCALE
+	ui_click_sfx.process_mode = Node.PROCESS_MODE_ALWAYS
+	add_child(ui_click_sfx)
+
+func _play_ui_hover_sound() -> void:
+	if not is_open or ui_hover_sfx == null:
+		return
+	ui_hover_sfx.stop()
+	ui_hover_sfx.play()
+
+func _play_ui_click_sound() -> void:
+	if not is_open or ui_click_sfx == null:
+		return
+	ui_click_sfx.stop()
+	ui_click_sfx.play()
+
+func _on_master_volume_changed(value: float, value_label: Label) -> void:
+	_set_bus_volume_percent(MASTER_BUS_NAME, value)
+	value_label.text = "%d%%" % roundi(value)
+
+func _on_music_volume_changed(value: float, value_label: Label) -> void:
+	_set_level_music_volume_percent(value)
+	value_label.text = "%d%%" % roundi(value)
+
+func _get_level_music_player() -> AudioStreamPlayer:
+	var root := get_tree().current_scene
+	if root == null:
+		return null
+	return root.get_node_or_null(NodePath("LevelMusic")) as AudioStreamPlayer
+
+func _get_level_music_volume_percent() -> float:
+	var level_music := _get_level_music_player()
+	if level_music == null:
+		return 0.0
+	return clampf(db_to_linear(level_music.volume_db + _get_music_bus_volume_db()) * 100.0, 0.0, 100.0)
+
+func _set_level_music_volume_percent(value: float) -> void:
+	var level_music := _get_level_music_player()
+	if level_music == null:
+		return
+	var percent := clampf(value, 0.0, 100.0)
+	var volume_db := linear_to_db(percent / 100.0) if percent > 0.0 else -80.0
+	level_music.volume_db = volume_db - _get_music_bus_volume_db()
+	if percent > 0.0:
+		var music_bus_index := AudioServer.get_bus_index(MUSIC_BUS_NAME)
+		if music_bus_index >= 0:
+			AudioServer.set_bus_mute(music_bus_index, false)
+
+func _get_music_bus_volume_db() -> float:
+	var music_bus_index := AudioServer.get_bus_index(MUSIC_BUS_NAME)
+	if music_bus_index < 0:
+		return 0.0
+	return AudioServer.get_bus_volume_db(music_bus_index)
+
+func _get_bus_volume_percent(bus_name: StringName) -> float:
+	var bus_index := AudioServer.get_bus_index(bus_name)
+	if bus_index < 0 or AudioServer.is_bus_mute(bus_index):
+		return 0.0
+	return clampf(db_to_linear(AudioServer.get_bus_volume_db(bus_index)) * 100.0, 0.0, 100.0)
+
+func _set_bus_volume_percent(bus_name: StringName, value: float) -> void:
+	var bus_index := AudioServer.get_bus_index(bus_name)
+	if bus_index < 0:
+		return
+	var percent := clampf(value, 0.0, 100.0)
+	AudioServer.set_bus_volume_db(bus_index, linear_to_db(percent / 100.0) if percent > 0.0 else -80.0)
+	AudioServer.set_bus_mute(bus_index, percent <= 0.0)
+
+func _sync_audio_controls() -> void:
+	var master_percent := _get_bus_volume_percent(MASTER_BUS_NAME)
+	if master_slider != null:
+		master_slider.set_value_no_signal(master_percent)
+	if master_value_label != null:
+		master_value_label.text = "%d%%" % roundi(master_percent)
+
+	var music_percent := _get_level_music_volume_percent()
+	if music_slider != null:
+		music_slider.set_value_no_signal(music_percent)
+	if music_value_label != null:
+		music_value_label.text = "%d%%" % roundi(music_percent)
 
 func toggle_pause() -> void:
 	is_open = not is_open
 	get_tree().paused = is_open
 	
 	if is_open:
+		_sync_audio_controls()
 		overlay.visible = true
 		var tween = create_tween().set_parallel()
 		tween.tween_property(overlay, "modulate:a", 1.0, 0.2)

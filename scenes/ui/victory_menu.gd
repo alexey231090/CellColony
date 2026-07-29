@@ -9,6 +9,22 @@ const PANEL_BORDER := Color(0.25, 0.95, 0.72, 0.34)
 const BTN_BG := Color(0.12, 0.16, 0.22, 0.94)
 const BTN_HOVER := Color(0.18, 0.24, 0.32, 0.98)
 const BTN_PRESSED := Color(0.08, 0.11, 0.16, 1.0)
+const MASTER_BUS_NAME: StringName = &"Master"
+const MUSIC_BUS_NAME: StringName = &"Music"
+const BUTTON_HOVER_SOUND := preload("res://audio/Button_click.ogg")
+const BUTTON_HOVER_VOLUME_DB: float = -8.0
+const BUTTON_CLICK_SOUND := preload("res://audio/clickWhooh.ogg")
+const BUTTON_CLICK_VOLUME_DB: float = -14.0
+const BUTTON_CLICK_PITCH_SCALE: float = 1.8
+const WON_MUSIC := preload("res://audio/won_music.wav")
+const FIREWORK_SOUNDS := [
+	preload("res://audio/Single_crisp_firewor_#1.wav"),
+	preload("res://audio/Single_crisp_firewor_#2.wav"),
+	preload("res://audio/Single_crisp_firewor_#3.wav"),
+	preload("res://audio/Single_crisp_firewor_#4.wav"),
+]
+const FIREWORK_CRACK_SOUND := preload("res://audio/Sharp_firework_crack_#1.wav")
+const FIREWORK_SOUND_POOL_SIZE: int = 4
 const FIREWORK_SEQUENCE_DURATION: float = 5.0
 const FIREWORK_BURST_INTERVAL: float = 0.45
 const FIREWORK_BURST_LIFETIME: float = 1.6
@@ -33,6 +49,14 @@ var next_btn: Button
 var replay_btn: Button
 var menu_btn: Button
 var fireworks_layer: Control
+var ui_hover_sfx: AudioStreamPlayer
+var ui_click_sfx: AudioStreamPlayer
+var won_music: AudioStreamPlayer
+var firework_crack_sfx: AudioStreamPlayer
+var _firework_sound_players: Array[AudioStreamPlayer] = []
+var _firework_sound_player_index: int = 0
+var _firework_burst_count: int = 0
+var _firework_rng := RandomNumberGenerator.new()
 
 var _next_level_num: int = 0
 var _has_next_level: bool = false
@@ -44,6 +68,8 @@ var _defeat_fx_particles: Array[Dictionary] = []
 func _ready() -> void:
 	layer = 130
 	process_mode = Node.PROCESS_MODE_ALWAYS
+	_firework_rng.randomize()
+	_setup_audio_players()
 	_build_ui()
 	visible = false
 
@@ -77,14 +103,96 @@ func setup_defeat(current_level: int) -> void:
 func show_victory() -> void:
 	visible = true
 	_reset_victory_visuals()
+	_play_won_music()
 	_animate_victory_panel()
 	_play_fireworks_sequence()
 
 func show_defeat() -> void:
+	if won_music != null:
+		won_music.stop()
 	visible = true
 	_reset_victory_visuals()
 	_animate_victory_panel()
 	_play_defeat_effect()
+
+func _setup_audio_players() -> void:
+	ui_hover_sfx = AudioStreamPlayer.new()
+	ui_hover_sfx.name = "UiHoverSfx"
+	ui_hover_sfx.stream = BUTTON_HOVER_SOUND
+	ui_hover_sfx.bus = MASTER_BUS_NAME
+	ui_hover_sfx.volume_db = BUTTON_HOVER_VOLUME_DB
+	ui_hover_sfx.process_mode = Node.PROCESS_MODE_ALWAYS
+	add_child(ui_hover_sfx)
+
+	ui_click_sfx = AudioStreamPlayer.new()
+	ui_click_sfx.name = "UiClickSfx"
+	ui_click_sfx.stream = BUTTON_CLICK_SOUND
+	ui_click_sfx.bus = MASTER_BUS_NAME
+	ui_click_sfx.volume_db = BUTTON_CLICK_VOLUME_DB
+	ui_click_sfx.pitch_scale = BUTTON_CLICK_PITCH_SCALE
+	ui_click_sfx.process_mode = Node.PROCESS_MODE_ALWAYS
+	add_child(ui_click_sfx)
+
+	won_music = AudioStreamPlayer.new()
+	won_music.name = "WonMusic"
+	won_music.stream = WON_MUSIC
+	won_music.bus = MUSIC_BUS_NAME
+	won_music.process_mode = Node.PROCESS_MODE_ALWAYS
+	add_child(won_music)
+
+	firework_crack_sfx = AudioStreamPlayer.new()
+	firework_crack_sfx.name = "FireworkCrackSfx"
+	firework_crack_sfx.stream = FIREWORK_CRACK_SOUND
+	firework_crack_sfx.bus = MASTER_BUS_NAME
+	firework_crack_sfx.process_mode = Node.PROCESS_MODE_ALWAYS
+	add_child(firework_crack_sfx)
+
+	for player_index in range(FIREWORK_SOUND_POOL_SIZE):
+		var player := AudioStreamPlayer.new()
+		player.name = "FireworkSfx%d" % player_index
+		player.bus = MASTER_BUS_NAME
+		player.process_mode = Node.PROCESS_MODE_ALWAYS
+		add_child(player)
+		_firework_sound_players.append(player)
+
+func _play_won_music() -> void:
+	if won_music == null:
+		return
+	var level_music := _get_level_music()
+	if level_music != null:
+		won_music.volume_db = level_music.volume_db
+		level_music.stop()
+	won_music.stop()
+	won_music.play()
+
+func _get_level_music() -> AudioStreamPlayer:
+	var root := get_tree().current_scene
+	if root == null:
+		return null
+	return root.get_node_or_null(NodePath("LevelMusic")) as AudioStreamPlayer
+
+func _play_ui_hover_sound() -> void:
+	if not visible or ui_hover_sfx == null:
+		return
+	ui_hover_sfx.stop()
+	ui_hover_sfx.play()
+
+func _play_ui_click_sound() -> void:
+	if not visible or ui_click_sfx == null:
+		return
+	ui_click_sfx.stop()
+	ui_click_sfx.play()
+
+func _play_firework_sound() -> void:
+	if _firework_sound_players.is_empty():
+		return
+	var player := _firework_sound_players[_firework_sound_player_index]
+	_firework_sound_player_index = (_firework_sound_player_index + 1) % _firework_sound_players.size()
+	player.stream = FIREWORK_SOUNDS[_firework_rng.randi_range(0, FIREWORK_SOUNDS.size() - 1)]
+	player.play()
+	_firework_burst_count += 1
+	if _firework_burst_count % 3 == 0 and firework_crack_sfx != null:
+		firework_crack_sfx.play()
 
 func _build_ui() -> void:
 	overlay = ColorRect.new()
@@ -256,6 +364,7 @@ func _play_fireworks_sequence() -> void:
 	if fireworks_layer == null:
 		return
 	_clear_fireworks()
+	_firework_burst_count = 0
 	var viewport_size := get_viewport().get_visible_rect().size
 	var firework_positions := [
 		Vector2(viewport_size.x * 0.22, viewport_size.y * 0.24),
@@ -280,6 +389,7 @@ func _spawn_firework_burst(position: Vector2, color: Color, delay: float) -> voi
 	start_tween.tween_interval(delay)
 	start_tween.tween_callback(func() -> void:
 		if is_instance_valid(particles):
+			_play_firework_sound()
 			particles.restart()
 			particles.emitting = true
 	)
@@ -403,6 +513,8 @@ func _make_button(text: String, accent: Color) -> Button:
 	pressed_sb.bg_color = BTN_PRESSED
 	pressed_sb.border_color = accent
 	btn.add_theme_stylebox_override("pressed", pressed_sb)
+	btn.mouse_entered.connect(_play_ui_hover_sound)
+	btn.pressed.connect(_play_ui_click_sound)
 
 	return btn
 

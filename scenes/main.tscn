@@ -40,6 +40,7 @@ script = ExtResource("1_main")
 [node name="LevelMusic" type="AudioStreamPlayer" parent="."]
 stream = ExtResource("12_music")
 autoplay = true
+volume_db = -8.519375
 bus = &"Music"
 
 [node name="LevelSfx" type="Node2D" parent="."]

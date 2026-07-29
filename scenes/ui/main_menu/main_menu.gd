@@ -24,6 +24,11 @@ const BTN_MIN_HEIGHT := 56  # Минимальная высота кнопок (
 const MASTER_BUS_NAME: StringName = &"Master"
 const MUSIC_BUS_NAME: StringName = &"Music"
 const DEV_CONSOLE_SCENE := preload("res://scenes/ui/dev_console.tscn")
+const BUTTON_HOVER_SOUND := preload("res://audio/Button_click.ogg")
+const BUTTON_HOVER_VOLUME_DB: float = -8.0
+const BUTTON_CLICK_SOUND := preload("res://audio/clickWhooh.ogg")
+const BUTTON_CLICK_VOLUME_DB: float = -14.0
+const BUTTON_CLICK_PITCH_SCALE: float = 1.8
 const SHIELD_ICON := preload("res://assets/sprites/shield.png")
 const RAPID_FIRE_ICON := preload("res://assets/sprites/speedfire2.png")
 const SPEED_ICON := preload("res://assets/sprites/speed.png")
@@ -106,6 +111,8 @@ var settings_panel: Control
 var perks_panel: Control
 var overlay: ColorRect
 @onready var menu_music: AudioStreamPlayer = $MenuMusic
+var ui_hover_sfx: AudioStreamPlayer
+var ui_click_sfx: AudioStreamPlayer
 
 # Кнопки верхней панели
 var sound_btn: Button
@@ -146,6 +153,8 @@ var unlocked_levels: int = 1
 
 func _ready() -> void:
 	_sync_audio_state_from_buses()
+	_setup_ui_hover_sound()
+	_setup_ui_click_sound()
 	if has_node("/root/LevelManager"):
 		var lm: Node = get_node("/root/LevelManager")
 		unlocked_levels = lm.unlocked_levels
@@ -219,6 +228,8 @@ func _make_button(text: String, accent: Color = ACCENT_COLOR, min_h: int = BTN_M
 	btn.text = text
 	btn.custom_minimum_size.y = min_h
 	btn.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
+	_attach_hover_sound(btn)
+	_attach_click_sound(btn)
 	
 	# Normal
 	var normal_sb = _make_stylebox(BTN_BG, BTN_CORNER, 2, accent * Color(1,1,1, 0.4))
@@ -503,6 +514,8 @@ func _build_main_screen() -> void:
 	play_button.add_theme_font_size_override("font_size", 32)
 	
 	play_button.pressed.connect(_on_play_pressed)
+	_attach_hover_sound(play_button)
+	_attach_click_sound(play_button)
 	play_button.mouse_entered.connect(func(): play_membrane.set_hovered(true))
 	play_button.mouse_exited.connect(func(): play_membrane.set_hovered(false))
 	play_button.set_meta("glow", play_glow)
@@ -792,6 +805,8 @@ func _build_level_button(level_num: int, is_unlocked: bool) -> Button:
 	stars_lbl.label_settings = stars_set
 
 	if is_unlocked:
+		_attach_hover_sound(btn)
+		_attach_click_sound(btn)
 		icon_lbl.text = "◉"
 		icon_lbl.modulate.a = 0.32
 		num_settings.font_color = ACCENT_COLOR * Color(1, 1, 1, 0.9)
@@ -841,6 +856,41 @@ func _build_level_button(level_num: int, is_unlocked: bool) -> Button:
 	btn.add_child(stars_lbl)
 	btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	return btn
+
+func _setup_ui_hover_sound() -> void:
+	ui_hover_sfx = AudioStreamPlayer.new()
+	ui_hover_sfx.name = "UiHoverSfx"
+	ui_hover_sfx.stream = BUTTON_HOVER_SOUND
+	ui_hover_sfx.bus = MASTER_BUS_NAME
+	ui_hover_sfx.volume_db = BUTTON_HOVER_VOLUME_DB
+	add_child(ui_hover_sfx)
+
+func _setup_ui_click_sound() -> void:
+	ui_click_sfx = AudioStreamPlayer.new()
+	ui_click_sfx.name = "UiClickSfx"
+	ui_click_sfx.stream = BUTTON_CLICK_SOUND
+	ui_click_sfx.bus = MASTER_BUS_NAME
+	ui_click_sfx.volume_db = BUTTON_CLICK_VOLUME_DB
+	ui_click_sfx.pitch_scale = BUTTON_CLICK_PITCH_SCALE
+	add_child(ui_click_sfx)
+
+func _attach_hover_sound(button: Button) -> void:
+	button.mouse_entered.connect(_play_ui_hover_sound)
+
+func _attach_click_sound(button: Button) -> void:
+	button.pressed.connect(_play_ui_click_sound)
+
+func _play_ui_hover_sound() -> void:
+	if ui_hover_sfx == null:
+		return
+	ui_hover_sfx.stop()
+	ui_hover_sfx.play()
+
+func _play_ui_click_sound() -> void:
+	if ui_click_sfx == null:
+		return
+	ui_click_sfx.stop()
+	ui_click_sfx.play()
 
 func _stars_to_text(stars: int) -> String:
 	match clampi(stars, 0, 3):
@@ -919,6 +969,8 @@ func _make_difficulty_button(title_text: String, stars_text: String, desc_text: 
 	btn.custom_minimum_size = Vector2(0, 88)
 	btn.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
 	btn.pivot_offset = Vector2(244, 44) # Для скейла (учитываем ширину ~488)
+	_attach_hover_sound(btn)
+	_attach_click_sound(btn)
 	
 	# Стили
 	var dark_bg = Color(accent.r * 0.1, accent.g * 0.1, accent.b * 0.1, 0.8)
@@ -1210,6 +1262,8 @@ func _build_perk_card(perk: Dictionary) -> Button:
 	btn.custom_minimum_size = Vector2(0, 180)
 	btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	btn.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
+	_attach_hover_sound(btn)
+	_attach_click_sound(btn)
 
 	var normal_sb = _make_stylebox(Color(accent.r * 0.1, accent.g * 0.1, accent.b * 0.1, 0.82), BTN_CORNER, 2, accent * Color(1, 1, 1, 0.26))
 	normal_sb.shadow_size = 10
@@ -1370,13 +1424,18 @@ func _apply_sound_volume() -> void:
 
 func _apply_music_volume() -> void:
 	var effective: float = music_volume if is_music_on else 0.0
-	var volume_db: float = linear_to_db(effective / 100.0) if effective > 0.0 else -80.0
-	var music_bus_index: int = AudioServer.get_bus_index(MUSIC_BUS_NAME)
-	if music_bus_index >= 0:
-		AudioServer.set_bus_volume_db(music_bus_index, volume_db)
-		AudioServer.set_bus_mute(music_bus_index, not is_music_on)
-	else:
-		menu_music.volume_db = volume_db
+	var volume_db := linear_to_db(effective / 100.0) if effective > 0.0 else -80.0
+	menu_music.volume_db = volume_db - _get_music_bus_volume_db()
+	if effective > 0.0:
+		var music_bus_index := AudioServer.get_bus_index(MUSIC_BUS_NAME)
+		if music_bus_index >= 0:
+			AudioServer.set_bus_mute(music_bus_index, false)
+
+func _get_music_bus_volume_db() -> float:
+	var music_bus_index := AudioServer.get_bus_index(MUSIC_BUS_NAME)
+	if music_bus_index < 0:
+		return 0.0
+	return AudioServer.get_bus_volume_db(music_bus_index)
 
 func _sync_audio_state_from_buses() -> void:
 	var master_bus_index: int = AudioServer.get_bus_index(MASTER_BUS_NAME)
@@ -1388,14 +1447,9 @@ func _sync_audio_state_from_buses() -> void:
 			100.0
 		)
 
-	var music_bus_index: int = AudioServer.get_bus_index(MUSIC_BUS_NAME)
-	if music_bus_index >= 0:
-		is_music_on = not AudioServer.is_bus_mute(music_bus_index)
-		music_volume = clampf(
-			db_to_linear(AudioServer.get_bus_volume_db(music_bus_index)) * 100.0,
-			0.0,
-			100.0
-		)
+	music_volume = clampf(db_to_linear(menu_music.volume_db + _get_music_bus_volume_db()) * 100.0, 0.0, 100.0)
+	var music_bus_index := AudioServer.get_bus_index(MUSIC_BUS_NAME)
+	is_music_on = music_volume > 0.0 and (music_bus_index < 0 or not AudioServer.is_bus_mute(music_bus_index))
 
 func _input(event: InputEvent) -> void:
 	var dev = get_tree().get_first_node_in_group("dev_console")

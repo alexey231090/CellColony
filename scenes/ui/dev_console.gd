@@ -13,6 +13,8 @@ const DEFAULT_FRIENDLY_FIRE_VOLUME_DB: float = -3.0
 const DEFAULT_SHIELD_SOUND_1_VOLUME_DB: float = 0.0
 const DEFAULT_SHIELD_SOUND_2_VOLUME_DB: float = 0.0
 const DEFAULT_ACTIVE_PERK_SOUND_VOLUME_DB: float = -4.0
+const DEFAULT_UI_HOVER_SOUND_VOLUME_DB: float = -8.0
+const DEFAULT_UI_CLICK_SOUND_VOLUME_DB: float = -14.0
 
 var overlay: ColorRect
 var panel: PanelContainer
@@ -368,6 +370,8 @@ func _build_settings() -> void:
 	if _audio_files_expanded:
 		_append_current_music_setting("audio_menu_music_volume_db", "   └ Музыка меню: Cell_ColloniyMusic_2 (дБ)", NodePath("MenuMusic"))
 		_append_current_music_setting("audio_level_music_volume_db", "   └ Музыка уровня: Cell_ColloniyMusic1_2 (дБ)", NodePath("LevelMusic"))
+		_append_current_audio_player_setting("audio_ui_hover_volume_db", "   └ UI-наведение: Button_click (дБ)", "Громкость звука при наведении на кнопки меню, карточки уровней и кнопки паузы.", NodePath("UiHoverSfx"))
+		_append_current_audio_player_setting("audio_ui_click_volume_db", "   └ UI-нажатие: clickWhooh (дБ)", "Громкость звука при нажатии на кнопки меню, доступные уровни и кнопки паузы.", NodePath("UiClickSfx"))
 		_append_sfx_audio_setting("audio_fire_cell_1_volume_db", "   └ Выстрел: FireCell_1 (дБ)", &"fire_cell_1", DEFAULT_FIRE_SOUND_1_VOLUME_DB)
 		_append_sfx_audio_setting("audio_fire_cell_2_volume_db", "   └ Выстрел: FireCell_2 (дБ)", &"fire_cell_2", DEFAULT_FIRE_SOUND_2_VOLUME_DB)
 		_append_sfx_audio_setting("audio_damage_cell_1_volume_db", "   └ Урон: DemageCell (дБ)", &"damage_cell_1", DEFAULT_DAMAGE_SOUND_1_VOLUME_DB)
@@ -541,6 +545,9 @@ func _build_settings() -> void:
 	_refresh_tutorial_calibration_settings_from_manager()
 	
 func _append_current_music_setting(setting_id: String, setting_name: String, node_path: NodePath) -> void:
+	_append_current_audio_player_setting(setting_id, setting_name, "Громкость только этого музыкального файла в текущей сцене.", node_path)
+
+func _append_current_audio_player_setting(setting_id: String, setting_name: String, description: String, node_path: NodePath) -> void:
 	var player := _get_current_scene_audio_player(node_path)
 	if player == null:
 		return
@@ -552,7 +559,7 @@ func _append_current_music_setting(setting_id: String, setting_name: String, nod
 		"min": AUDIO_MIN_VOLUME_DB,
 		"max": AUDIO_MAX_VOLUME_DB,
 		"step": AUDIO_VOLUME_STEP_DB,
-		"desc": "Громкость только этого музыкального файла в текущей сцене.",
+		"desc": description,
 		"apply": Callable(self, "_apply_music_player_volume").bind(node_path)
 	})
 
@@ -848,7 +855,10 @@ func _get_current_scene_audio_player(node_path: NodePath) -> AudioStreamPlayer:
 	var root := get_tree().current_scene
 	if root == null:
 		return null
-	return root.get_node_or_null(node_path) as AudioStreamPlayer
+	var player := root.get_node_or_null(node_path) as AudioStreamPlayer
+	if player != null:
+		return player
+	return root.get_node_or_null(NodePath("PauseMenu/" + String(node_path))) as AudioStreamPlayer
 
 func _refresh_audio_settings() -> void:
 	_set_setting_value_by_id("audio_master_volume_db", _get_bus_volume_db(MASTER_BUS_NAME, 0.0), false)
@@ -859,6 +869,12 @@ func _refresh_audio_settings() -> void:
 	var level_music := _get_current_scene_audio_player(NodePath("LevelMusic"))
 	if level_music != null:
 		_set_setting_value_by_id("audio_level_music_volume_db", level_music.volume_db, false)
+	var ui_hover := _get_current_scene_audio_player(NodePath("UiHoverSfx"))
+	if ui_hover != null:
+		_set_setting_value_by_id("audio_ui_hover_volume_db", ui_hover.volume_db, false)
+	var ui_click := _get_current_scene_audio_player(NodePath("UiClickSfx"))
+	if ui_click != null:
+		_set_setting_value_by_id("audio_ui_click_volume_db", ui_click.volume_db, false)
 	_set_setting_value_by_id("audio_fire_cell_1_volume_db", _get_level_sfx_sound_volume(&"fire_cell_1", DEFAULT_FIRE_SOUND_1_VOLUME_DB), false)
 	_set_setting_value_by_id("audio_fire_cell_2_volume_db", _get_level_sfx_sound_volume(&"fire_cell_2", DEFAULT_FIRE_SOUND_2_VOLUME_DB), false)
 	_set_setting_value_by_id("audio_damage_cell_1_volume_db", _get_level_sfx_sound_volume(&"damage_cell_1", DEFAULT_DAMAGE_SOUND_1_VOLUME_DB), false)
@@ -914,6 +930,12 @@ func _apply_audio_print_settings(enabled: bool) -> void:
 	var level_music := _get_current_scene_audio_player(NodePath("LevelMusic"))
 	if level_music != null:
 		print("level_music = %.1f dB" % level_music.volume_db)
+	var ui_hover := _get_current_scene_audio_player(NodePath("UiHoverSfx"))
+	if ui_hover != null:
+		print("Button_click = %.1f dB" % ui_hover.volume_db)
+	var ui_click := _get_current_scene_audio_player(NodePath("UiClickSfx"))
+	if ui_click != null:
+		print("clickWhooh = %.1f dB" % ui_click.volume_db)
 	print("FireCell_1 = %.1f dB" % _get_level_sfx_sound_volume(&"fire_cell_1", DEFAULT_FIRE_SOUND_1_VOLUME_DB))
 	print("FireCell_2 = %.1f dB" % _get_level_sfx_sound_volume(&"fire_cell_2", DEFAULT_FIRE_SOUND_2_VOLUME_DB))
 	print("DemageCell = %.1f dB" % _get_level_sfx_sound_volume(&"damage_cell_1", DEFAULT_DAMAGE_SOUND_1_VOLUME_DB))
