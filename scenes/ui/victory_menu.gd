@@ -17,6 +17,7 @@ const BUTTON_CLICK_SOUND := preload("res://audio/clickWhooh.ogg")
 const BUTTON_CLICK_VOLUME_DB: float = -14.0
 const BUTTON_CLICK_PITCH_SCALE: float = 1.8
 const WON_MUSIC := preload("res://audio/won_music.wav")
+const LOSE_MUSIC := preload("res://audio/lose_music_0.ogg")
 const FIREWORK_SOUNDS := [
 	preload("res://audio/Single_crisp_firewor_#1.wav"),
 	preload("res://audio/Single_crisp_firewor_#2.wav"),
@@ -52,6 +53,7 @@ var fireworks_layer: Control
 var ui_hover_sfx: AudioStreamPlayer
 var ui_click_sfx: AudioStreamPlayer
 var won_music: AudioStreamPlayer
+var lose_music: AudioStreamPlayer
 var firework_crack_sfx: AudioStreamPlayer
 var _firework_sound_players: Array[AudioStreamPlayer] = []
 var _firework_sound_player_index: int = 0
@@ -101,6 +103,8 @@ func setup_defeat(current_level: int) -> void:
 	_apply_result_palette(true)
 
 func show_victory() -> void:
+	if lose_music != null:
+		lose_music.stop()
 	visible = true
 	_reset_victory_visuals()
 	_play_won_music()
@@ -112,6 +116,7 @@ func show_defeat() -> void:
 		won_music.stop()
 	visible = true
 	_reset_victory_visuals()
+	_play_lose_music()
 	_animate_victory_panel()
 	_play_defeat_effect()
 
@@ -140,6 +145,13 @@ func _setup_audio_players() -> void:
 	won_music.process_mode = Node.PROCESS_MODE_ALWAYS
 	add_child(won_music)
 
+	lose_music = AudioStreamPlayer.new()
+	lose_music.name = "LoseMusic"
+	lose_music.stream = LOSE_MUSIC
+	lose_music.bus = MUSIC_BUS_NAME
+	lose_music.process_mode = Node.PROCESS_MODE_ALWAYS
+	add_child(lose_music)
+
 	firework_crack_sfx = AudioStreamPlayer.new()
 	firework_crack_sfx.name = "FireworkCrackSfx"
 	firework_crack_sfx.stream = FIREWORK_CRACK_SOUND
@@ -164,6 +176,16 @@ func _play_won_music() -> void:
 		level_music.stop()
 	won_music.stop()
 	won_music.play()
+
+func _play_lose_music() -> void:
+	if lose_music == null:
+		return
+	var level_music := _get_level_music()
+	if level_music != null:
+		lose_music.volume_db = level_music.volume_db
+		level_music.stop()
+	lose_music.stop()
+	lose_music.play()
 
 func _get_level_music() -> AudioStreamPlayer:
 	var root := get_tree().current_scene
