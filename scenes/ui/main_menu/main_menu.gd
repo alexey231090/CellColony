@@ -18,6 +18,20 @@ const TEXT_COLOR := Color(0.9, 0.95, 1.0, 1.0)           # Белый текст
 const TEXT_DIM := Color(0.5, 0.55, 0.6, 1.0)             # Приглушённый текст
 const SHADOW_COLOR := Color(0.0, 0.0, 0.0, 0.5)
 
+# Средне-тёмная дружелюбная палитра экрана выбора уровней.
+const LEVEL_PANEL_BG := Color(0.19, 0.24, 0.29, 0.97)
+const LEVEL_PANEL_BORDER := Color(0.42, 0.55, 0.62, 0.78)
+const LEVEL_CHAPTER_BG := Color(0.25, 0.3, 0.34, 0.96)
+const LEVEL_CARD_BG := Color(0.32, 0.38, 0.41, 0.98)
+const LEVEL_CARD_HOVER := Color(0.39, 0.47, 0.48, 1.0)
+const LEVEL_CARD_PRESSED := Color(0.27, 0.34, 0.36, 1.0)
+const LEVEL_TEXT := Color(0.96, 0.97, 0.92, 1.0)
+const LEVEL_TEXT_DIM := Color(0.72, 0.77, 0.76, 1.0)
+const LEVEL_ACCENT := Color(0.42, 0.83, 0.64, 1.0)
+const LEVEL_ACCENT_BLUE := Color(0.42, 0.68, 0.92, 1.0)
+const LEVEL_LOCKED_BG := Color(0.24, 0.28, 0.3, 0.94)
+const LEVEL_LOCKED_TEXT := Color(0.58, 0.63, 0.63, 0.94)
+
 const CORNER_RADIUS := 16
 const BTN_CORNER := 12
 const BTN_MIN_HEIGHT := 56  # Минимальная высота кнопок (удобно для пальца)
@@ -130,6 +144,7 @@ var level_list: VBoxContainer
 var level_back_btn: Button
 var difficulty_panel: Control
 var pending_level_num: int = 1
+var level_ui_font: SystemFont
 
 # Настройки
 var sound_slider: HSlider
@@ -656,9 +671,15 @@ func _build_level_panel() -> void:
 	panel_box.name = "LevelPanelBox"
 	# Ширина под 5 колонок: 5 * 140 (кнопки) + 4 * 20 (отступы) + 2 * 36 (контент-маржин) = ~920
 	panel_box.custom_minimum_size = Vector2(920, 720)
-	var panel_sb = _make_stylebox(PANEL_BG, CORNER_RADIUS, 2, PANEL_BORDER)
-	panel_sb.shadow_size = 24
-	panel_sb.shadow_color = Color(0, 0, 0, 0.7)
+	level_ui_font = SystemFont.new()
+	level_ui_font.font_names = PackedStringArray(["Trebuchet MS", "Segoe UI", "Arial"])
+	level_ui_font.font_weight = 600
+	var level_theme := Theme.new()
+	level_theme.default_font = level_ui_font
+	panel_box.theme = level_theme
+	var panel_sb = _make_stylebox(LEVEL_PANEL_BG, 24, 3, LEVEL_PANEL_BORDER)
+	panel_sb.shadow_size = 18
+	panel_sb.shadow_color = Color(0.12, 0.15, 0.15, 0.28)
 	panel_sb.content_margin_left = 36
 	panel_sb.content_margin_right = 36
 	panel_sb.content_margin_top = 30
@@ -671,13 +692,13 @@ func _build_level_panel() -> void:
 	panel_box.add_child(vbox)
 	
 	# Заголовок
-	var header = _make_label("ВЫБОР УРОВНЯ", 42, ACCENT_COLOR)
+	var header = _make_label("ВЫБОР УРОВНЯ", 42, LEVEL_TEXT)
 	header.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	vbox.add_child(header)
 	
 	# Разделитель
 	var sep = HSeparator.new()
-	sep.add_theme_stylebox_override("separator", _make_stylebox(PANEL_BORDER * Color(1,1,1,0.3), 0))
+	sep.add_theme_stylebox_override("separator", _make_stylebox(LEVEL_PANEL_BORDER * Color(1, 1, 1, 0.55), 0))
 	vbox.add_child(sep)
 	
 	# Скролл для сетки
@@ -685,6 +706,7 @@ func _build_level_panel() -> void:
 	scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
 	vbox.add_child(scroll)
+	_style_level_scrollbar(scroll)
 	
 	# MarginContainer внутри ScrollContainer решает проблему обрезания hover-эффектов у карточек
 	var scroll_margin = MarginContainer.new()
@@ -704,10 +726,42 @@ func _build_level_panel() -> void:
 	_populate_levels()
 	
 	# Кнопка назад
-	level_back_btn = _make_button("← НАЗАД", ACCENT_BLUE)
+	level_back_btn = _make_button("← НАЗАД", LEVEL_ACCENT_BLUE)
+	_apply_level_back_button_style(level_back_btn)
+	level_back_btn.custom_minimum_size = Vector2(300, 64)
+	level_back_btn.add_theme_font_size_override("font_size", 24)
 	level_back_btn.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
 	level_back_btn.pressed.connect(_on_level_back)
 	vbox.add_child(level_back_btn)
+
+func _style_level_scrollbar(scroll: ScrollContainer) -> void:
+	var scrollbar := scroll.get_v_scroll_bar()
+	scrollbar.custom_minimum_size.x = 28
+	var track := _make_stylebox(Color(0.12, 0.16, 0.19, 0.72), 14, 1, Color(0.5, 0.61, 0.65, 0.28))
+	var grabber := _make_stylebox(LEVEL_ACCENT_BLUE * Color(1, 1, 1, 0.84), 14)
+	var grabber_hover := _make_stylebox(LEVEL_ACCENT_BLUE, 14)
+	var grabber_pressed := _make_stylebox(LEVEL_ACCENT, 14)
+	scrollbar.add_theme_stylebox_override("scroll", track)
+	scrollbar.add_theme_stylebox_override("scroll_focus", track.duplicate())
+	scrollbar.add_theme_stylebox_override("grabber", grabber)
+	scrollbar.add_theme_stylebox_override("grabber_highlight", grabber_hover)
+	scrollbar.add_theme_stylebox_override("grabber_pressed", grabber_pressed)
+
+func _apply_level_back_button_style(button: Button) -> void:
+	button.add_theme_color_override("font_color", LEVEL_TEXT)
+	button.add_theme_color_override("font_hover_color", LEVEL_TEXT)
+	button.add_theme_color_override("font_pressed_color", LEVEL_TEXT)
+	var normal := _make_stylebox(LEVEL_CARD_BG, 18, 2, LEVEL_PANEL_BORDER)
+	normal.shadow_size = 7
+	normal.shadow_color = Color(0.12, 0.15, 0.15, 0.16)
+	var hover := _make_stylebox(LEVEL_CARD_HOVER, 18, 3, LEVEL_ACCENT_BLUE)
+	hover.shadow_size = 10
+	hover.shadow_color = Color(0.18, 0.28, 0.36, 0.2)
+	var pressed := _make_stylebox(LEVEL_CARD_PRESSED, 18, 3, LEVEL_ACCENT_BLUE)
+	button.add_theme_stylebox_override("normal", normal)
+	button.add_theme_stylebox_override("hover", hover)
+	button.add_theme_stylebox_override("focus", hover.duplicate())
+	button.add_theme_stylebox_override("pressed", pressed)
 
 func _populate_levels() -> void:
 	# Очищаем
@@ -717,9 +771,21 @@ func _populate_levels() -> void:
 	var chapters := int(ceili(float(total_levels) / 5.0))
 	var level_manager := get_node_or_null("/root/LevelManager")
 	for chapter_index in range(1, chapters + 1):
-		var chapter_box = VBoxContainer.new()
+		var chapter_panel := PanelContainer.new()
+		chapter_panel.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		var chapter_sb := _make_stylebox(LEVEL_CHAPTER_BG, 20, 2, LEVEL_PANEL_BORDER * Color(1, 1, 1, 0.48))
+		chapter_sb.content_margin_left = 18
+		chapter_sb.content_margin_right = 18
+		chapter_sb.content_margin_top = 16
+		chapter_sb.content_margin_bottom = 18
+		chapter_sb.shadow_size = 8
+		chapter_sb.shadow_color = Color(0.12, 0.15, 0.15, 0.1)
+		chapter_panel.add_theme_stylebox_override("panel", chapter_sb)
+		level_list.add_child(chapter_panel)
+
+		var chapter_box := VBoxContainer.new()
 		chapter_box.add_theme_constant_override("separation", 14)
-		level_list.add_child(chapter_box)
+		chapter_panel.add_child(chapter_box)
 
 		var chapter_unlocked := true
 		var required_stars := 0
@@ -729,7 +795,7 @@ func _populate_levels() -> void:
 			required_stars = int(level_manager.get_required_stars_for_chapter(chapter_index))
 			total_stars_now = int(level_manager.get_total_stars())
 
-		var chapter_title_color := ACCENT_BLUE if chapter_unlocked else LOCKED_COLOR.lightened(0.15)
+		var chapter_title_color := LEVEL_ACCENT_BLUE if chapter_unlocked else LEVEL_LOCKED_TEXT
 		var chapter_title = _make_label("ГЛАВА %d" % chapter_index, 28, chapter_title_color)
 		chapter_title.horizontal_alignment = HORIZONTAL_ALIGNMENT_LEFT
 		chapter_box.add_child(chapter_title)
@@ -737,13 +803,13 @@ func _populate_levels() -> void:
 		var subtitle_text := "Уровни %d-%d" % [((chapter_index - 1) * 5) + 1, mini(chapter_index * 5, total_levels)]
 		if chapter_index > 1:
 			subtitle_text += "  •  Звезды: %d / %d" % [min(total_stars_now, required_stars), required_stars]
-		var subtitle_color := TEXT_DIM if chapter_unlocked else LOCKED_COLOR.lightened(0.1)
+		var subtitle_color := LEVEL_TEXT_DIM if chapter_unlocked else LEVEL_LOCKED_TEXT
 		var subtitle = _make_label(subtitle_text, 16, subtitle_color)
 		subtitle.horizontal_alignment = HORIZONTAL_ALIGNMENT_LEFT
 		chapter_box.add_child(subtitle)
 
 		if not chapter_unlocked:
-			var locked_hint = _make_label("Глава откроется, когда наберешь еще %d звезд" % max(0, required_stars - total_stars_now), 15, ACCENT_RED * Color(1, 1, 1, 0.85))
+			var locked_hint = _make_label("Глава откроется, когда наберешь еще %d звезд" % max(0, required_stars - total_stars_now), 15, Color(0.96, 0.62, 0.6, 0.96))
 			locked_hint.horizontal_alignment = HORIZONTAL_ALIGNMENT_LEFT
 			chapter_box.add_child(locked_hint)
 
@@ -780,8 +846,9 @@ func _build_level_button(level_num: int, is_unlocked: bool) -> Button:
 	num_lbl.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	num_lbl.position = Vector2(12, 8)
 	var num_settings = LabelSettings.new()
+	num_settings.font = level_ui_font
 	num_settings.font_size = 28
-	num_settings.shadow_color = Color(0, 0, 0, 0.5)
+	num_settings.shadow_color = Color(0, 0, 0, 0.3)
 	num_settings.shadow_offset = Vector2(0, 2)
 	num_lbl.label_settings = num_settings
 
@@ -801,6 +868,7 @@ func _build_level_button(level_num: int, is_unlocked: bool) -> Button:
 	stars_lbl.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	
 	var stars_set = LabelSettings.new()
+	stars_set.font = level_ui_font
 	stars_set.font_size = 22
 	stars_lbl.label_settings = stars_set
 
@@ -808,20 +876,20 @@ func _build_level_button(level_num: int, is_unlocked: bool) -> Button:
 		_attach_hover_sound(btn)
 		_attach_click_sound(btn)
 		icon_lbl.text = "◉"
-		icon_lbl.modulate.a = 0.32
-		num_settings.font_color = ACCENT_COLOR * Color(1, 1, 1, 0.9)
-		icon_lbl.add_theme_color_override("font_color", Color(0.92, 0.98, 1.0, 0.95))
-		stars_set.font_color = Color(1.0, 0.9, 0.4, 0.85) if best_stars > 0 else Color(0.75, 0.8, 0.9, 0.5)
-		stars_set.outline_size = 4
-		stars_set.outline_color = Color(1.0, 0.5, 0.0, 0.5) if best_stars > 0 else Color(0.0, 0.0, 0.0, 0.35)
-		stars_set.shadow_color = Color(1.0, 0.8, 0.2, 0.6) if best_stars > 0 else Color(0.0, 0.0, 0.0, 0.25)
-		stars_set.shadow_size = 8
+		icon_lbl.modulate.a = 0.36
+		num_settings.font_color = LEVEL_ACCENT
+		icon_lbl.add_theme_color_override("font_color", LEVEL_ACCENT)
+		stars_set.font_color = Color(1.0, 0.79, 0.28, 0.98) if best_stars > 0 else Color(0.7, 0.75, 0.76, 0.72)
+		stars_set.outline_size = 2
+		stars_set.outline_color = Color(0.34, 0.25, 0.06, 0.88) if best_stars > 0 else Color(0.12, 0.15, 0.16, 0.72)
+		stars_set.shadow_color = Color(1.0, 0.7, 0.15, 0.28) if best_stars > 0 else Color(0.0, 0.0, 0.0, 0.2)
+		stars_set.shadow_size = 4
 
 		btn.mouse_entered.connect(func():
-			icon_lbl.modulate.a = 0.8
+			icon_lbl.modulate.a = 0.72
 			var t = btn.create_tween()
-			t.tween_property(btn, "scale", Vector2(1.08, 1.08), 0.2).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
-			t.parallel().tween_property(btn, "modulate", Color(1.2, 1.2, 1.2, 1.0), 0.2)
+			t.tween_property(btn, "scale", Vector2(1.04, 1.04), 0.18).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+			t.parallel().tween_property(btn, "modulate", Color(1.03, 1.03, 1.03, 1.0), 0.18)
 		)
 		btn.mouse_exited.connect(func():
 			icon_lbl.modulate.a = 0.32
@@ -831,23 +899,25 @@ func _build_level_button(level_num: int, is_unlocked: bool) -> Button:
 		)
 		btn.pressed.connect(_open_difficulty_panel.bind(level_num))
 
-		var sb = _make_stylebox(Color(0.1, 0.2, 0.15, 0.85), BTN_CORNER, 2, ACCENT_COLOR * Color(1, 1, 1, 0.6))
+		var sb = _make_stylebox(LEVEL_CARD_BG, 18, 2, LEVEL_ACCENT * Color(1, 1, 1, 0.62))
+		sb.shadow_size = 8
+		sb.shadow_color = Color(0.12, 0.15, 0.15, 0.14)
 		btn.add_theme_stylebox_override("normal", sb)
-		var hover_sb = _make_stylebox(Color(0.15, 0.3, 0.2, 0.95), BTN_CORNER, 2, ACCENT_COLOR)
-		hover_sb.shadow_size = 20
-		hover_sb.shadow_color = Color(0.1, 0.85, 0.55, 0.5)
+		var hover_sb = _make_stylebox(LEVEL_CARD_HOVER, 18, 3, LEVEL_ACCENT)
+		hover_sb.shadow_size = 12
+		hover_sb.shadow_color = Color(0.18, 0.34, 0.28, 0.2)
 		btn.add_theme_stylebox_override("hover", hover_sb)
-		btn.add_theme_stylebox_override("pressed", _make_stylebox(Color(0.05, 0.15, 0.1, 1.0), BTN_CORNER, 3, ACCENT_COLOR))
+		btn.add_theme_stylebox_override("pressed", _make_stylebox(LEVEL_CARD_PRESSED, 18, 3, LEVEL_ACCENT))
 		btn.add_theme_stylebox_override("focus", hover_sb.duplicate())
 	else:
 		icon_lbl.text = "🔒"
-		num_settings.font_color = LOCKED_COLOR
-		icon_lbl.add_theme_color_override("font_color", LOCKED_COLOR)
-		stars_set.font_color = LOCKED_COLOR * Color(1, 1, 1, 0.5)
-		stars_set.outline_size = 4
-		stars_set.outline_color = Color(0.0, 0.0, 0.0, 0.28)
+		num_settings.font_color = LEVEL_LOCKED_TEXT
+		icon_lbl.add_theme_color_override("font_color", LEVEL_LOCKED_TEXT)
+		stars_set.font_color = LEVEL_LOCKED_TEXT * Color(1, 1, 1, 0.62)
+		stars_set.outline_size = 1
+		stars_set.outline_color = Color(0.92, 0.93, 0.92, 0.75)
 		btn.disabled = true
-		var locked_sb = _make_stylebox(Color(0.08, 0.1, 0.12, 0.7), BTN_CORNER, 1, LOCKED_COLOR * Color(1, 1, 1, 0.2))
+		var locked_sb = _make_stylebox(LEVEL_LOCKED_BG, 18, 2, LEVEL_LOCKED_TEXT * Color(1, 1, 1, 0.38))
 		btn.add_theme_stylebox_override("normal", locked_sb)
 		btn.add_theme_stylebox_override("disabled", locked_sb)
 

@@ -251,7 +251,10 @@ func _spawn_reward_popup(amount: float) -> void:
 		popup_host = self
 
 	var canvas_layer := CanvasLayer.new()
+	canvas_layer.name = "RewardPopupLayer"
 	canvas_layer.layer = 140
+	canvas_layer.process_mode = Node.PROCESS_MODE_ALWAYS
+	canvas_layer.add_to_group("reward_popups")
 	popup_host.add_child(canvas_layer)
 
 	var popup := Label.new()
@@ -278,7 +281,8 @@ func _spawn_reward_popup(amount: float) -> void:
 	popup.position = screen_pos - popup.size * 0.5
 	popup.scale = Vector2(0.7, 0.7)
 
-	var tween := create_tween()
+	var tween := canvas_layer.create_tween()
+	tween.set_pause_mode(Tween.TWEEN_PAUSE_PROCESS)
 	tween.set_parallel(true)
 	tween.tween_property(popup, "scale", Vector2(1.15, 1.15), 0.14).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
 	tween.tween_property(popup, "position:y", popup.position.y - 78.0, 0.72).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
