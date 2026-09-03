@@ -32,6 +32,7 @@ var _ai_shield_cd: float = 0.0
 var _ai_speed_cd: float = 0.0
 var _ai_rapid_fire_cd: float = 0.0
 var _ai_virus_cd: float = 0.0
+var _ai_perk_use_cd: float = 0.0
 
 # === ПАРАМЕТРЫ СЛОЖНОСТИ ===
 ## Режим скоринга нейтралок: "max_value" (жирные первыми) или "fast_capture" (слабые первыми)
@@ -44,6 +45,14 @@ var shield_min_max_energy: float = 20.0
 var virus_min_enemy_count: int = 3
 ## Разрешено ли ИИ использовать вирусный перк
 var allow_virus_perk: bool = true
+## Вирус разрешён только если клеток текущей целевой фракции больше, чем клеток ИИ
+var virus_only_when_outnumbered: bool = false
+## Отдельная стоимость вируса для ИИ; отрицательное значение использует стоимость игрока
+var ai_virus_energy_cost: float = -1.0
+## Часть энергии, которую ИИ сохраняет для готового вируса во время боя
+var virus_energy_reserve: float = 0.0
+## Максимальная дистанция, на которой вирусный снаряд успевает долететь до цели
+var virus_max_shot_range: float = 3500.0
 ## Минимальный личный кулдаун щита у ИИ
 var shield_min_cd: float = 5.0
 ## Порог HP цели (доля от max_energy) для скорострельности
@@ -58,6 +67,8 @@ var virus_min_cd: float = 5.0
 var speed_boost_distance_threshold: float = 1200.0
 ## На easy щит включается только если игрока заметно больше рядом/на карте
 var shield_player_outnumber_ratio: float = 0.0
+## Минимальная пауза между использованием любых двух перков одной фракцией ИИ
+var perk_use_interval: float = 0.0
 
 func _ready() -> void:
 	add_to_group("ai_faction_managers")
@@ -95,6 +106,14 @@ func apply_difficulty_profile(profile: Dictionary) -> void:
 		virus_min_enemy_count = int(profile.virus_min_enemy_count)
 	if profile.has("allow_virus_perk"):
 		allow_virus_perk = bool(profile.allow_virus_perk)
+	if profile.has("virus_only_when_outnumbered"):
+		virus_only_when_outnumbered = bool(profile.virus_only_when_outnumbered)
+	if profile.has("ai_virus_energy_cost"):
+		ai_virus_energy_cost = float(profile.ai_virus_energy_cost)
+	if profile.has("virus_energy_reserve"):
+		virus_energy_reserve = float(profile.virus_energy_reserve)
+	if profile.has("virus_max_shot_range"):
+		virus_max_shot_range = float(profile.virus_max_shot_range)
 	if profile.has("shield_min_cd"):
 		shield_min_cd = float(profile.shield_min_cd)
 	if profile.has("rapid_fire_hp_target_threshold"):
@@ -109,6 +128,8 @@ func apply_difficulty_profile(profile: Dictionary) -> void:
 		speed_boost_distance_threshold = float(profile.speed_boost_distance_threshold)
 	if profile.has("shield_player_outnumber_ratio"):
 		shield_player_outnumber_ratio = float(profile.shield_player_outnumber_ratio)
+	if profile.has("perk_use_interval"):
+		perk_use_interval = maxf(0.0, float(profile.perk_use_interval))
 	
 	# Стартовый кулдаун перков (perk_delay_mult): 
 	# На Easy/Medium ИИ начинает с перками на откате, на Hard — сразу готов.
@@ -120,6 +141,8 @@ func apply_difficulty_profile(profile: Dictionary) -> void:
 			_ai_speed_cd = maxf(_ai_speed_cd, sm.SPEED_COOLDOWN_MAX * perk_delay_mult)
 			_ai_rapid_fire_cd = maxf(_ai_rapid_fire_cd, sm.RAPID_FIRE_COOLDOWN_MAX * perk_delay_mult)
 			_ai_virus_cd = maxf(_ai_virus_cd, sm.VIRUS_COOLDOWN_MAX * perk_delay_mult)
+	if profile.has("virus_start_cd"):
+		_ai_virus_cd = maxf(0.0, float(profile.virus_start_cd))
 	
 	print("[AI %s] Профиль сложности применён: interval=%.1f, notice_range=%.0f, war_ratio=%.2f, neutral_mode=%s" % [
 		_get_group_for_owner(faction), decision_interval, enemy_notice_range, min_energy_ratio_for_war, neutral_score_mode
@@ -136,6 +159,7 @@ func _process(delta: float) -> void:
 	if _ai_speed_cd > 0: _ai_speed_cd = max(0.0, _ai_speed_cd - delta)
 	if _ai_rapid_fire_cd > 0: _ai_rapid_fire_cd = max(0.0, _ai_rapid_fire_cd - delta)
 	if _ai_virus_cd > 0: _ai_virus_cd = max(0.0, _ai_virus_cd - delta)
+	if _ai_perk_use_cd > 0: _ai_perk_use_cd = max(0.0, _ai_perk_use_cd - delta)
 		
 	decision_timer -= delta
 	if decision_timer <= 0:
@@ -336,11 +360,26 @@ func _get_nearest_cell(cells: Array[BaseCell], pos: Vector2) -> BaseCell:
 	var nearest: BaseCell = null
 	var min_dist_sq = INF
 	for c in cells:
+		if c.is_infected:
+			continue
 		var d_sq = c.global_position.distance_squared_to(pos)
 		if d_sq < min_dist_sq:
 			min_dist_sq = d_sq
 			nearest = c
 	return nearest
+
+func _can_spend_lower_priority_perk(cost: float, reserve_virus_now: bool, virus_cost: float) -> bool:
+	if ai_perk_energy < cost:
+		return false
+	if not reserve_virus_now or virus_energy_reserve <= 0.0:
+		return true
+	return ai_perk_energy - cost >= minf(virus_energy_reserve, virus_cost)
+
+func _start_perk_use_interval() -> bool:
+	if perk_use_interval <= 0.0:
+		return false
+	_ai_perk_use_cd = perk_use_interval
+	return true
 
 func _get_group_for_owner(owner_t: BaseCell.OwnerType) -> String:
 	match owner_t:
@@ -356,6 +395,21 @@ func _evaluate_and_use_perks(_delta: float) -> void:
 	
 	var my_cells = _get_my_cells()
 	if my_cells.is_empty(): return
+	if _ai_perk_use_cd > 0.0: return
+
+	var virus_cost: float = ai_virus_energy_cost if ai_virus_energy_cost >= 0.0 else sm.VIRUS_ENERGY_COST
+	var virus_shooter: BaseCell = null
+	var virus_target_ready: bool = false
+	if allow_virus_perk and current_target_node and is_instance_valid(current_target_node):
+		if current_target_node.owner_type != faction and current_target_node.owner_type != BaseCell.OwnerType.NEUTRAL:
+			var target_faction_size: int = get_tree().get_node_count_in_group(_get_group_for_owner(current_target_node.owner_type))
+			var virus_balance_allows: bool = not virus_only_when_outnumbered or my_cells.size() < target_faction_size
+			if target_faction_size >= virus_min_enemy_count and virus_balance_allows:
+				virus_shooter = _get_nearest_cell(my_cells, current_target_node.global_position)
+				if virus_shooter != null:
+					var max_range_sq := virus_max_shot_range * virus_max_shot_range
+					virus_target_ready = virus_shooter.global_position.distance_squared_to(current_target_node.global_position) <= max_range_sq
+	var reserve_virus_now: bool = virus_target_ready and _ai_virus_cd <= 0.0
 	
 	# 1. ЩИТ (Приоритет: спасение)
 	# Исправление бага: фильтруем молодые клетки (max_energy < shield_min_max_energy),
@@ -401,25 +455,23 @@ func _evaluate_and_use_perks(_delta: float) -> void:
 					if cell.global_position.distance_squared_to(target_shieldee.global_position) <= combined_radius * combined_radius:
 						cell.reflect_chance = 0.5
 						cell.reflect_timer = 10.0
+				if _start_perk_use_interval():
+					return
 
 	# 2. ВИРУС (Приоритет: текущая цель и её соседи)
-	if allow_virus_perk and _ai_virus_cd <= 0 and ai_perk_energy >= sm.VIRUS_ENERGY_COST:
-		# Оптимизация: не ищем по всей карте, а бьем в текущую цель если там есть толпа
-		if current_target_node and is_instance_valid(current_target_node) and current_target_node.owner_type != BaseCell.OwnerType.NEUTRAL:
-			var enemy_cluster_size: int = get_tree().get_node_count_in_group(_get_group_for_owner(current_target_node.owner_type))
-			if enemy_cluster_size >= virus_min_enemy_count: # Бьем если у врага достаточная кучка
-				# Ищем нашу ближайшую клетку к цели
-				var nearest = _get_nearest_cell(my_cells, current_target_node.global_position)
-				if nearest:
-					var shooter = nearest.get_node_or_null("ShooterModule")
-					if shooter:
-						sm.virus_outbreak_counter += 1
-						shooter.shoot_virus(current_target_node, sm.VIRUS_DURATION, sm.virus_outbreak_counter)
-						ai_perk_energy -= sm.VIRUS_ENERGY_COST
-						_ai_virus_cd = max(virus_min_cd, sm.VIRUS_COOLDOWN_MAX)
+	if allow_virus_perk and _ai_virus_cd <= 0.0 and ai_perk_energy >= virus_cost and virus_target_ready:
+		var shooter = virus_shooter.get_node_or_null("ShooterModule")
+		if shooter:
+			sm.virus_outbreak_counter += 1
+			if shooter.shoot_virus(current_target_node, sm.VIRUS_DURATION, sm.virus_outbreak_counter):
+				ai_perk_energy -= virus_cost
+				_ai_virus_cd = maxf(virus_min_cd, sm.VIRUS_COOLDOWN_MAX)
+				reserve_virus_now = false
+				if _start_perk_use_interval():
+					return
 
 	# 3. СКОРОСТРЕЛЬНОСТЬ (Приоритет: добивание/атака)
-	if _ai_rapid_fire_cd <= 0 and ai_perk_energy >= sm.RAPID_FIRE_ENERGY_COST:
+	if _ai_rapid_fire_cd <= 0 and _can_spend_lower_priority_perk(sm.RAPID_FIRE_ENERGY_COST, reserve_virus_now, virus_cost):
 		if current_target_node and is_instance_valid(current_target_node) and current_target_node.owner_type != BaseCell.OwnerType.NEUTRAL:
 			if current_target_node.stats.current_energy < current_target_node.stats.max_energy * rapid_fire_hp_target_threshold:
 				# Проверяем, не включен ли уже перк (чтобы не спамить)
@@ -435,9 +487,11 @@ func _evaluate_and_use_perks(_delta: float) -> void:
 					for c in my_cells:
 						if c is BaseCell and not c.is_infected:
 							c.apply_rapid_fire(sm.RAPID_FIRE_DURATION, sm.RAPID_FIRE_MULTIPLIER)
+					if _start_perk_use_interval():
+						return
 
 	# 4. УСКОРЕНИЕ (Приоритет: догнать цель)
-	if _ai_speed_cd <= 0 and ai_perk_energy >= sm.SPEED_ENERGY_COST:
+	if _ai_speed_cd <= 0 and _can_spend_lower_priority_perk(sm.SPEED_ENERGY_COST, reserve_virus_now, virus_cost):
 		var center = _get_center(my_cells)
 		var speed_threshold_sq: float = speed_boost_distance_threshold * speed_boost_distance_threshold
 		if current_goal_pos != Vector2.ZERO and center.distance_squared_to(current_goal_pos) > speed_threshold_sq:
@@ -454,3 +508,4 @@ func _evaluate_and_use_perks(_delta: float) -> void:
 				for c in my_cells:
 					if c is BaseCell and not c.is_infected:
 						c.apply_speed_boost(sm.SPEED_BOOST_DURATION, sm.SPEED_BOOST_MULTIPLIER)
+				_start_perk_use_interval()

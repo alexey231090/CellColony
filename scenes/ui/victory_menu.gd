@@ -21,6 +21,7 @@ const LOSE_MUSIC := preload("res://audio/lose_music_0.ogg")
 const ONE_STAR_BANNER := preload("res://assets/sprites/oneStar.png")
 const TWO_STAR_BANNER := preload("res://assets/sprites/twoStars.png")
 const THREE_STAR_BANNER := preload("res://assets/sprites/freeStars.png")
+const DEFEAT_BANNER := preload("res://assets/sprites/lose.png")
 const FIREWORK_SOUNDS := [
 	preload("res://audio/Single_crisp_firewor_#1.wav"),
 	preload("res://audio/Single_crisp_firewor_#2.wav"),
@@ -103,12 +104,14 @@ func setup_defeat(current_level: int) -> void:
 	_result_mode = "defeat"
 	_has_next_level = false
 	_next_level_num = current_level
-	title_label.text = "КОЛОНИЯ РАЗРУШЕНА"
+	title_label.text = "ПОРАЖЕНИЕ"
 	title_label.label_settings.font_color = Color(1.0, 0.42, 0.5, 1.0)
 	title_label.label_settings.shadow_color = Color(0.92, 0.18, 0.22, 0.2)
-	subtitle_label.text = "Уровень %d потерян\nСеть распалась." % current_level
-	subtitle_label.visible = true
-	result_banner.visible = false
+	subtitle_label.text = ""
+	subtitle_label.visible = false
+	result_banner.texture = DEFEAT_BANNER
+	result_banner.material = null
+	result_banner.visible = true
 	next_btn.visible = false
 	_apply_result_palette(true)
 
@@ -279,7 +282,7 @@ func _build_ui() -> void:
 	_defeat_fx_layer.name = "DefeatFxLayer"
 	_defeat_fx_layer.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	_defeat_fx_layer.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	_defeat_fx_layer.z_index = 1
+	_defeat_fx_layer.z_index = -100
 	_defeat_fx_layer.draw.connect(_draw_defeat_fx)
 	_defeat_fx_layer.visible = false
 	overlay.add_child(_defeat_fx_layer)
@@ -410,8 +413,8 @@ func _apply_result_palette(is_defeat: bool) -> void:
 		center_panel.add_theme_stylebox_override("panel", panel_style)
 
 	if is_defeat:
-		result_banner.visible = false
-		title_label.position = Vector2(20, 65)
+		result_banner.visible = true
+		title_label.position = Vector2(20, 95)
 		overlay.color = Color(0.0, 0.0, 0.0, 0.8)
 		replay_btn.text = "ПОВТОРИТЬ ПОПЫТКУ"
 		menu_btn.text = "ОТСТУПИТЬ В МЕНЮ"

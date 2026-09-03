@@ -1,5 +1,8 @@
 extends Node
 
+const GAME_CURSOR_SOURCE := preload("res://assets/sprites/CCgameCursor2.png")
+const GAME_CURSOR_MAX_SIZE: int = 32
+const GAME_CURSOR_HOTSPOT := Vector2(1.0, 1.0)
 const DIFFICULTY_EASY := "easy"
 const DIFFICULTY_MEDIUM := "medium"
 const DIFFICULTY_HARD := "hard"
@@ -2237,11 +2240,41 @@ const BASE_LEVELS: Array[Dictionary] = [
 ]
 
 var levels: Array[Dictionary] = []
+var _game_cursor_texture: ImageTexture = null
 
 func _ready() -> void:
 	levels = BASE_LEVELS.duplicate(true)
 	_ensure_level_count(30)
 	_reset_runtime_progress()
+	apply_game_cursor()
+
+func apply_game_cursor() -> void:
+	if _game_cursor_texture == null:
+		var source_image := GAME_CURSOR_SOURCE.get_image()
+		if source_image == null or source_image.is_empty():
+			return
+		var used_rect := source_image.get_used_rect()
+		if used_rect.size.x <= 0 or used_rect.size.y <= 0:
+			return
+		var cursor_image := source_image.get_region(used_rect)
+		var source_size := cursor_image.get_size()
+		var resize_factor := minf(
+			float(GAME_CURSOR_MAX_SIZE) / float(source_size.x),
+			float(GAME_CURSOR_MAX_SIZE) / float(source_size.y)
+		)
+		var target_width := maxi(1, roundi(float(source_size.x) * resize_factor))
+		var target_height := maxi(1, roundi(float(source_size.y) * resize_factor))
+		cursor_image.resize(target_width, target_height, Image.INTERPOLATE_LANCZOS)
+		_game_cursor_texture = ImageTexture.create_from_image(cursor_image)
+
+	var cursor_shapes: Array = [
+		Input.CURSOR_ARROW,
+		Input.CURSOR_POINTING_HAND,
+		Input.CURSOR_CROSS,
+		Input.CURSOR_FORBIDDEN,
+	]
+	for cursor_shape in cursor_shapes:
+		Input.set_custom_mouse_cursor(_game_cursor_texture, cursor_shape, GAME_CURSOR_HOTSPOT)
 
 func _reset_runtime_progress() -> void:
 	level_best_stars.clear()

@@ -2,6 +2,7 @@ extends Node2D
 class_name ShooterModule
 
 @export var projectile_scene: PackedScene = preload("res://scenes/projectile/projectile.tscn")
+const VIRUS_TRAJECTORY_LINE_SCRIPT := preload("res://scripts/core/VirusTrajectoryLine.gd")
 
 var target_position: Vector2 = Vector2.ZERO
 var target_node: Node2D = null
@@ -132,9 +133,13 @@ func _play_fire_sound(at_position: Vector2) -> void:
 	if level_sfx and level_sfx.has_method("play_fire"):
 		level_sfx.call("play_fire", at_position)
 
-func shoot_virus(current_target: Node2D, duration: float, outbreak_id: int) -> void:
+func shoot_virus(current_target: Node2D, duration: float, outbreak_id: int) -> bool:
 	var parent_cell = get_parent() as BaseCell
-	if not parent_cell: return
+	if not parent_cell or parent_cell.is_infected or not is_instance_valid(current_target):
+		return false
+	var target_cell := current_target as BaseCell
+	if target_cell != null and target_cell.owner_type == parent_cell.owner_type:
+		return false
 	
 	var proj = projectile_scene.instantiate() as Projectile
 	get_tree().root.add_child(proj)
@@ -153,3 +158,16 @@ func shoot_virus(current_target: Node2D, duration: float, outbreak_id: int) -> v
 	proj.original_owner_type = parent_cell.owner_type
 	proj.target_node = current_target
 	proj.projectile_color = Color(0.8, 0.1, 1.0) # Яркий неоновый/пурпурный (заметный!)
+	proj.z_as_relative = false
+	proj.z_index = 110
+	_spawn_virus_trajectory_line(proj.global_position, current_target.global_position)
+	_play_fire_sound(proj.global_position)
+	return true
+
+func _spawn_virus_trajectory_line(from: Vector2, to: Vector2) -> void:
+	var trajectory_line := Line2D.new()
+	trajectory_line.set_script(VIRUS_TRAJECTORY_LINE_SCRIPT)
+	trajectory_line.z_as_relative = false
+	get_tree().root.add_child(trajectory_line)
+	trajectory_line.add_point(from)
+	trajectory_line.add_point(to)

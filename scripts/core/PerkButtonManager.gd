@@ -289,7 +289,7 @@ func _draw() -> void:
 
 	var sm = get_tree().get_first_node_in_group("selection_manager")
 	
-	# 1. При перетаскивании - рисуем линию прицеливания и РАДИУС
+	# 1. При перетаскивании рисуем линию прицеливания и радиус воздействия.
 	if _is_dragging and _drag_icon and sm:
 		var target_pos = get_global_mouse_position()
 		var d_pos = to_local(_drag_icon.pos)

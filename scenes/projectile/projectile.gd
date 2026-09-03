@@ -11,7 +11,6 @@ var target_node: Node2D = null
 var is_virus: bool = false
 var virus_duration: float = 0.0
 var virus_outbreak_id: int = 0
-var was_reflected: bool = false
 var original_owner_type: BaseCell.OwnerType = BaseCell.OwnerType.NEUTRAL
 var trail_points: Array[Vector2] = []
 var trail_timer: float = 0.0
@@ -130,6 +129,9 @@ func _process(delta: float) -> void:
 			queue_redraw()
 
 func _on_body_entered(body: Node2D) -> void:
+	if is_queued_for_deletion():
+		return
+
 	if body is StaticBody2D:
 		_impact_wall_at(global_position)
 		return
@@ -158,6 +160,16 @@ func _on_body_entered(body: Node2D) -> void:
 @export var impact_effect_scene: PackedScene = preload("res://scenes/projectile/impact_effect.tscn")
 
 func _impact(cell: BaseCell) -> void:
+	var virus_source_owner: BaseCell.OwnerType = original_owner_type
+	if virus_source_owner == BaseCell.OwnerType.NEUTRAL:
+		virus_source_owner = owner_type
+
+	# Пока вирус летит, цель может перейти под контроль стрелявшей фракции.
+	# В таком случае собственный вирус просто растворяется и не заражает своих.
+	if is_virus and cell.owner_type == virus_source_owner:
+		queue_free()
+		return
+
 	var is_enemy_hit: bool = cell.owner_type != owner_type
 	# Звук щита срабатывает для клетки любой стороны. Отражение ниже остаётся
 	# только против вражеского снаряда, чтобы союзная цель не отбрасывала лечение.
@@ -181,12 +193,7 @@ func _impact(cell: BaseCell) -> void:
 	
 	# Наносим урон/лечение
 	if is_virus:
-		# Проверка на защиту от собственного отраженного вируса
-		if was_reflected and original_owner_type == BaseCell.OwnerType.PLAYER and cell.owner_type == BaseCell.OwnerType.PLAYER:
-			# Растворяемся без вреда для себя
-			queue_free()
-			return
-		cell.infect(virus_duration, virus_outbreak_id)
+		cell.infect(virus_duration, virus_outbreak_id, virus_source_owner)
 	else:
 		if not hits_active_shield:
 			if is_enemy_hit:
@@ -216,7 +223,6 @@ func _impact_wall_at(impact_pos: Vector2) -> void:
 	queue_free()
 
 func _reflect(cell: BaseCell) -> void:
-	was_reflected = true
 	# Меняем направление (чуть с разбросом для красоты)
 	direction = -direction.rotated(randf_range(-0.2, 0.2))
 	_sync_visual_direction()

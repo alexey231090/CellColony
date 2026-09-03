@@ -745,7 +745,11 @@ func _activate_virus_auto() -> void:
 func _clear_active_perk() -> void:
 	if active_perk != "":
 		active_perk = ""
-		Input.set_custom_mouse_cursor(null)
+		var level_manager := get_node_or_null("/root/LevelManager")
+		if level_manager != null and level_manager.has_method("apply_game_cursor"):
+			level_manager.apply_game_cursor()
+		else:
+			Input.set_custom_mouse_cursor(null)
 
 func _activate_shield_at_position(world_pos: Vector2) -> void:
 	## Активирует щит в указанной позиции (для джойстика)

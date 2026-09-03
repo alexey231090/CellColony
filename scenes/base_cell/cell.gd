@@ -12,6 +12,12 @@ enum OwnerType { NEUTRAL, PLAYER, ENEMY_RED, ENEMY_GREEN, ENEMY_YELLOW }
 @export_range(0.05, 0.5, 0.01) var shoot_tension_duration: float = 0.2
 @export_range(0.0, 0.15, 0.005) var shoot_body_contraction: float = 0.045
 @export_range(0.0, 0.3, 0.01) var shoot_nucleus_recoil: float = 0.12
+@export_category("Hover Effect")
+@export_range(1.0, 20.0, 0.5) var hover_fade_speed: float = 8.0
+@export_category("Energy Regeneration")
+@export_range(0.0, 100.0, 1.0) var slow_regen_threshold: float = 15.0
+@export_range(0.1, 10.0, 0.1) var slow_regen_interval: float = 3.0
+@export_range(0.1, 10.0, 0.1) var slow_regen_amount: float = 1.0
 
 @onready var energy_label: Label = $EnergyLabel
 @onready var contr_label: Label = $ContrLabel
@@ -37,8 +43,13 @@ var current_fire_rate_multiplier: float = 1.0
 var is_infected: bool = false
 var infection_timer: float = 0.0
 var _spread_timer: float = 0.0
+var _has_spread_current_outbreak: bool = false
 var _visual_infection_factor: float = 0.0 # Для плавного потемнения
 var last_outbreak_id: int = -1 # ID последней волны вируса, которой болела клетка
+var infection_source_owner: OwnerType = OwnerType.NEUTRAL
+# Память не сбрасывается при захвате: один конкретный выстрел может заразить
+# эту клетку только один раз за весь матч, даже после смены владельца.
+var _processed_virus_outbreak_ids: Dictionary = {}
 
 # Сглаживание желейной физики
 var visual_stretch: float = 0.0
@@ -65,6 +76,9 @@ var _vein_rng: RandomNumberGenerator = null
 var _vein_rng_seed: int = 0
 var is_info_focused: bool = false
 var tutorial_highlight: bool = false
+var _is_mouse_hovered: bool = false
+var _hover_strength: float = 0.0
+var _slow_regen_timer: float = 0.0
 
 # Механика "отставшей" клетки
 var is_stranded: bool = false
@@ -108,6 +122,8 @@ static func get_colony_center(tree: SceneTree, owner: OwnerType) -> Vector2:
 
 func _ready() -> void:
 	add_to_group("cells")
+	mouse_entered.connect(_on_mouse_entered)
+	mouse_exited.connect(_on_mouse_exited)
 	_update_groups()
 	_update_visuals()
 	_set_energy_ui_visible(false)
@@ -154,6 +170,7 @@ func take_damage(amount: float, attacker_owner: OwnerType) -> void:
 		stats.current_energy = min(stats.max_energy, stats.current_energy + amount)
 	else:
 		stats.current_energy -= amount
+		_slow_regen_timer = 0.0
 		# Отслеживаем вклад атакующего
 		contributions[attacker_owner] = contributions.get(attacker_owner, 0.0) + amount
 		last_damage_time = Time.get_ticks_msec() / 1000.0
@@ -189,6 +206,9 @@ func _capture(new_owner: OwnerType) -> void:
 	# Сбрасываем вклады и баффы (щит, ускорение) после смены владельца
 	contributions.clear()
 	is_info_focused = false
+	_is_mouse_hovered = false
+	_hover_strength = 0.0
+	_slow_regen_timer = 0.0
 	reflect_chance = 0.0
 	reflect_timer = 0.0
 	speed_boost_timer = 0.0
@@ -197,8 +217,11 @@ func _capture(new_owner: OwnerType) -> void:
 	current_fire_rate_multiplier = 1.0
 	is_infected = false
 	infection_timer = 0.0
+	_spread_timer = 0.0
+	_has_spread_current_outbreak = false
 	_visual_infection_factor = 0.0
 	last_outbreak_id = -1
+	infection_source_owner = OwnerType.NEUTRAL
 	_vein_rng = null # Сброс кешированного RNG вен
 	is_stranded = false
 	_stranded_check_timer = 0.0
@@ -221,6 +244,16 @@ func set_info_focus(enabled: bool) -> void:
 		return
 	is_info_focused = enabled
 	_update_ui()
+
+func _on_mouse_entered() -> void:
+	if owner_type == OwnerType.PLAYER:
+		return
+	_is_mouse_hovered = true
+	queue_redraw()
+
+func _on_mouse_exited() -> void:
+	_is_mouse_hovered = false
+	queue_redraw()
 
 func set_tutorial_highlight(enabled: bool) -> void:
 	if tutorial_highlight == enabled:
@@ -301,6 +334,8 @@ func _draw() -> void:
 	if _visual_infection_factor > 0.01:
 		var dark_color = display_color.darkened(0.7)
 		display_color = display_color.lerp(dark_color, _visual_infection_factor)
+	if _hover_strength > 0.001 and owner_type != OwnerType.PLAYER:
+		display_color = display_color.lerp(Color.WHITE, 0.08 * _hover_strength)
 	
 	# Цвет обводки меняется если активен щит или скорострельность или спринт
 	var outline_color = display_color.lightened(0.4)
@@ -348,6 +383,24 @@ func _draw() -> void:
 	var is_low_detail: bool = screen_radius < 18.0
 	var is_medium_detail: bool = not is_low_detail and screen_radius < 30.0
 	var organelles_enabled: bool = stats.current_energy > 15.0 and screen_radius >= 10.0
+
+	# Мягкая игровая подсветка цели: две полупрозрачные ауры и тонкий читаемый контур.
+	# Цвет нейтрали чуть теплее, а враги сохраняют цвет своей фракции.
+	if _hover_strength > 0.001 and owner_type != OwnerType.PLAYER:
+		var hover_pulse := (sin(local_time * 4.2) + 1.0) * 0.5
+		var hover_color := Color(1.0, 0.82, 0.38, 1.0) if owner_type == OwnerType.NEUTRAL else base_color.lightened(0.4)
+		var hover_outer := hover_color
+		hover_outer.a = _hover_strength * (0.035 + hover_pulse * 0.015)
+		var hover_inner := hover_color
+		hover_inner.a = _hover_strength * (0.06 + hover_pulse * 0.02)
+		var hover_ring := hover_color
+		hover_ring.a = _hover_strength * (0.34 + hover_pulse * 0.08)
+		var hover_ring_soft := hover_color
+		hover_ring_soft.a = _hover_strength * (0.14 + hover_pulse * 0.04)
+		draw_circle(Vector2.ZERO, current_radius * 1.44, hover_outer)
+		draw_circle(Vector2.ZERO, current_radius * 1.28, hover_inner)
+		draw_arc(Vector2.ZERO, current_radius * 1.16, 0.0, TAU, 44, hover_ring, 2.2, true)
+		draw_arc(Vector2.ZERO, current_radius * 1.32, 0.0, TAU, 44, hover_ring_soft, 1.2, true)
 	
 	# 1. Ламповое мягкое свечение (Glow)
 	# ОПТИМИЗАЦИЯ: Свечение для Спринта и Щита теперь в Шейдере!
@@ -490,6 +543,9 @@ func _get_cell_color() -> Color:
 	return Color(0.55, 0.55, 0.55) # Серый нейтрал
 
 func _process(delta: float) -> void:
+	var hover_target := 1.0 if _is_mouse_hovered and owner_type != OwnerType.PLAYER else 0.0
+	_hover_strength = move_toward(_hover_strength, hover_target, hover_fade_speed * delta)
+
 	if hit_flash_timer > 0.0:
 		hit_flash_timer -= delta
 	if hit_impact_wobble > 0.0:
@@ -523,12 +579,11 @@ func _process(delta: float) -> void:
 	# Обработка таймера вируса
 	if is_infected:
 		infection_timer -= delta
-		_spread_timer -= delta
-		
-		# Распространение вируса раз в секунду
-		if _spread_timer <= 0:
-			_spread_timer = 1.0
-			_spread_infection()
+		if not _has_spread_current_outbreak:
+			_spread_timer -= delta
+			if _spread_timer <= 0.0:
+				_has_spread_current_outbreak = true
+				_spread_infection_once()
 			
 		if infection_timer <= 0:
 			is_infected = false
@@ -550,6 +605,7 @@ func _process(delta: float) -> void:
 		visual_angle = lerp_angle(visual_angle, velocity.angle(), delta * 8.0)
 
 	if is_infected:
+		_slow_regen_timer = 0.0
 		# Истощение энергии при заражении (1 HP каждые 1.5 сек)
 		var drain = (1.0 / 1.5) * delta
 		stats.current_energy -= drain
@@ -559,12 +615,14 @@ func _process(delta: float) -> void:
 			stats.current_energy = 0.0
 			_capture(OwnerType.NEUTRAL)
 	elif is_stranded:
+		_slow_regen_timer = 0.0
 		_apply_stranded_damage(delta)
 	elif owner_type != OwnerType.NEUTRAL:
 		_stranded_damage_timer = 0.0
-		stats.current_energy = min(stats.max_energy, stats.current_energy + stats.energy_gain_rate * delta)
+		_apply_energy_regeneration(delta)
 	else:
 		_stranded_damage_timer = 0.0
+		_slow_regen_timer = 0.0
 	
 	_update_size()
 	_ui_timer += delta
@@ -593,6 +651,32 @@ func _process(delta: float) -> void:
 	if _redraw_timer >= REDRAW_INTERVAL:
 		_redraw_timer = 0.0
 		queue_redraw()
+
+func _apply_energy_regeneration(delta: float) -> void:
+	if stats.current_energy >= stats.max_energy:
+		_slow_regen_timer = 0.0
+		return
+
+	var effective_threshold := minf(slow_regen_threshold, stats.max_energy)
+	if stats.current_energy < effective_threshold:
+		_slow_regen_timer = 0.0
+		stats.current_energy = minf(
+			effective_threshold,
+			stats.current_energy + stats.energy_gain_rate * delta
+		)
+		return
+
+	if slow_regen_interval <= 0.0 or slow_regen_amount <= 0.0:
+		return
+	_slow_regen_timer += delta
+	var regen_ticks := int(floor(_slow_regen_timer / slow_regen_interval))
+	if regen_ticks <= 0:
+		return
+	_slow_regen_timer -= float(regen_ticks) * slow_regen_interval
+	stats.current_energy = minf(
+		stats.max_energy,
+		stats.current_energy + float(regen_ticks) * slow_regen_amount
+	)
 
 func _update_stranded_state(delta: float) -> void:
 	if owner_type == OwnerType.NEUTRAL:
@@ -682,12 +766,27 @@ func apply_rapid_fire(duration: float, multiplier: float) -> void:
 	current_fire_rate_multiplier = multiplier
 	queue_redraw()
 
-func infect(duration: float = -1.0, outbreak_id: int = -1) -> void:
-	# Если мы уже болеем этой конкретной волной или уже переболели ей — игнорируем
-	if outbreak_id != -1 and (is_infected or last_outbreak_id == outbreak_id):
-		return
+func infect(duration: float = -1.0, outbreak_id: int = -1, source_owner: OwnerType = OwnerType.NEUTRAL) -> bool:
+	# Своя фракция невосприимчива к выпущенному ею вирусу, в том числе если
+	# цель успели захватить до попадания снаряда.
+	if source_owner != OwnerType.NEUTRAL and owner_type == source_owner:
+		return false
+
+	# Каждый ID соответствует одному отдельному выстрелу. Запоминаем все
+	# достигшие клетку выстрелы, а не только последний: старые волны больше не
+	# смогут заразить её повторно после выздоровления или смены владельца.
+	if outbreak_id != -1:
+		if _processed_virus_outbreak_ids.has(outbreak_id):
+			return false
+		_processed_virus_outbreak_ids[outbreak_id] = true
+
+	# Вызов без ID не считается отдельным выстрелом и не может продлевать
+	# активное заражение. Новый реальный снаряд с новым ID запускает эффект заново.
+	if is_infected and outbreak_id == -1:
+		return false
 		
 	is_infected = true
+	infection_source_owner = source_owner
 	
 	# Сброс баффов при заражении
 	reflect_chance = 0.0
@@ -710,20 +809,36 @@ func infect(duration: float = -1.0, outbreak_id: int = -1) -> void:
 	else:
 		infection_timer = duration
 		
-	_spread_timer = 1.0
+	# Каждая клетка передаёт конкретную волну соседям ровно один раз.
+	_spread_timer = 0.45
+	_has_spread_current_outbreak = false
 	queue_redraw()
+	return true
 
-func _spread_infection() -> void:
+func has_processed_virus_outbreak(outbreak_id: int) -> bool:
+	return outbreak_id != -1 and _processed_virus_outbreak_ids.has(outbreak_id)
+
+func _spread_infection_once() -> void:
+	if last_outbreak_id == -1:
+		return
 	var sm = get_tree().get_first_node_in_group("selection_manager")
-	var spread_range = 200.0
-	if sm: spread_range = sm.VIRUS_SPREAD_RADIUS
-	
-	var all_cells = get_tree().get_nodes_in_group("cells")
-	for cell in all_cells:
-		if cell != self and cell is BaseCell and cell.owner_type == owner_type:
-			if not cell.is_infected and cell.last_outbreak_id != last_outbreak_id:
-				if global_position.distance_to(cell.global_position) <= spread_range:
-					cell.infect(-1.0, last_outbreak_id) # Передаем ID текущей волны
+	var spread_range: float = 200.0
+	if sm:
+		spread_range = sm.VIRUS_SPREAD_RADIUS
+	var spread_range_sq := spread_range * spread_range
+
+	for node in get_tree().get_nodes_in_group("cells"):
+		var cell := node as BaseCell
+		if cell == null or cell == self or cell.owner_type != owner_type:
+			continue
+		# Вирус никогда не возвращается в клетки выпустившей его фракции.
+		if infection_source_owner != OwnerType.NEUTRAL and cell.owner_type == infection_source_owner:
+			continue
+		# История ID не позволяет клеткам перезаражать друг друга той же волной.
+		if cell.has_processed_virus_outbreak(last_outbreak_id):
+			continue
+		if global_position.distance_squared_to(cell.global_position) <= spread_range_sq:
+			cell.infect(-1.0, last_outbreak_id, infection_source_owner)
 
 func _update_shield_overlay() -> void:
 	if not shield_overlay: return
