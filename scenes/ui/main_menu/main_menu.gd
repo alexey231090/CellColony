@@ -18,19 +18,20 @@ const TEXT_COLOR := Color(0.9, 0.95, 1.0, 1.0)           # Белый текст
 const TEXT_DIM := Color(0.5, 0.55, 0.6, 1.0)             # Приглушённый текст
 const SHADOW_COLOR := Color(0.0, 0.0, 0.0, 0.5)
 
-# Средне-тёмная дружелюбная палитра экрана выбора уровней.
-const LEVEL_PANEL_BG := Color(0.19, 0.24, 0.29, 0.97)
-const LEVEL_PANEL_BORDER := Color(0.42, 0.55, 0.62, 0.78)
-const LEVEL_CHAPTER_BG := Color(0.25, 0.3, 0.34, 0.96)
-const LEVEL_CARD_BG := Color(0.32, 0.38, 0.41, 0.98)
-const LEVEL_CARD_HOVER := Color(0.39, 0.47, 0.48, 1.0)
-const LEVEL_CARD_PRESSED := Color(0.27, 0.34, 0.36, 1.0)
-const LEVEL_TEXT := Color(0.96, 0.97, 0.92, 1.0)
-const LEVEL_TEXT_DIM := Color(0.72, 0.77, 0.76, 1.0)
-const LEVEL_ACCENT := Color(0.42, 0.83, 0.64, 1.0)
-const LEVEL_ACCENT_BLUE := Color(0.42, 0.68, 0.92, 1.0)
-const LEVEL_LOCKED_BG := Color(0.24, 0.28, 0.3, 0.94)
-const LEVEL_LOCKED_TEXT := Color(0.58, 0.63, 0.63, 0.94)
+# Неоново-биологическая Glassmorphism палитра экрана выбора уровней
+const LEVEL_PANEL_BG := Color(0.06, 0.09, 0.13, 0.96)
+const LEVEL_PANEL_BORDER := Color(0.12, 0.75, 0.65, 0.6)
+const LEVEL_CHAPTER_BG := Color(0.09, 0.13, 0.18, 0.92)
+const LEVEL_CARD_BG := Color(0.12, 0.17, 0.23, 0.94)
+const LEVEL_CARD_HOVER := Color(0.16, 0.24, 0.32, 0.98)
+const LEVEL_CARD_PRESSED := Color(0.10, 0.14, 0.19, 1.0)
+const LEVEL_TEXT := Color(0.95, 0.98, 1.0, 1.0)
+const LEVEL_TEXT_DIM := Color(0.62, 0.70, 0.76, 1.0)
+const LEVEL_ACCENT := Color(0.14, 0.90, 0.62, 1.0)
+const LEVEL_ACCENT_BLUE := Color(0.24, 0.72, 1.0, 1.0)
+const LEVEL_ACCENT_GOLD := Color(1.0, 0.82, 0.24, 1.0)
+const LEVEL_LOCKED_BG := Color(0.08, 0.10, 0.14, 0.8)
+const LEVEL_LOCKED_TEXT := Color(0.42, 0.48, 0.54, 0.8)
 
 const CORNER_RADIUS := 16
 const BTN_CORNER := 12
@@ -142,6 +143,10 @@ var play_pulse_tween: Tween
 # Уровни
 var level_list: VBoxContainer
 var level_back_btn: Button
+var level_panel_box: PanelContainer
+var level_header_stars_label: Label
+var level_close_top_btn: Button
+var level_grid_columns: int = 5
 var difficulty_panel: Control
 var pending_level_num: int = 1
 var level_ui_font: SystemFont
@@ -667,80 +672,174 @@ func _build_level_panel() -> void:
 	level_panel.mouse_filter = MOUSE_FILTER_IGNORE
 	add_child(level_panel)
 	
-	var panel_box = PanelContainer.new()
-	panel_box.name = "LevelPanelBox"
-	# Ширина под 5 колонок: 5 * 140 (кнопки) + 4 * 20 (отступы) + 2 * 36 (контент-маржин) = ~920
-	panel_box.custom_minimum_size = Vector2(920, 720)
+	level_panel_box = PanelContainer.new()
+	level_panel_box.name = "LevelPanelBox"
 	level_ui_font = SystemFont.new()
 	level_ui_font.font_names = PackedStringArray(["Trebuchet MS", "Segoe UI", "Arial"])
 	level_ui_font.font_weight = 600
 	var level_theme := Theme.new()
 	level_theme.default_font = level_ui_font
-	panel_box.theme = level_theme
-	var panel_sb = _make_stylebox(LEVEL_PANEL_BG, 24, 3, LEVEL_PANEL_BORDER)
-	panel_sb.shadow_size = 18
-	panel_sb.shadow_color = Color(0.12, 0.15, 0.15, 0.28)
-	panel_sb.content_margin_left = 36
-	panel_sb.content_margin_right = 36
-	panel_sb.content_margin_top = 30
-	panel_sb.content_margin_bottom = 30
-	panel_box.add_theme_stylebox_override("panel", panel_sb)
-	level_panel.add_child(panel_box)
+	level_panel_box.theme = level_theme
+
+	var panel_sb = _make_stylebox(LEVEL_PANEL_BG, 24, 2, LEVEL_PANEL_BORDER)
+	panel_sb.shadow_size = 32
+	panel_sb.shadow_color = Color(0.04, 0.26, 0.22, 0.38) # Изумрудный био-glow
+	panel_sb.content_margin_left = 24
+	panel_sb.content_margin_right = 24
+	panel_sb.content_margin_top = 20
+	panel_sb.content_margin_bottom = 20
+	level_panel_box.add_theme_stylebox_override("panel", panel_sb)
+	level_panel.add_child(level_panel_box)
 	
 	var vbox = VBoxContainer.new()
-	vbox.add_theme_constant_override("separation", 16)
-	panel_box.add_child(vbox)
+	vbox.add_theme_constant_override("separation", 14)
+	vbox.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	vbox.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	level_panel_box.add_child(vbox)
 	
-	# Заголовок
-	var header = _make_label("ВЫБОР УРОВНЯ", 42, LEVEL_TEXT)
-	header.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	vbox.add_child(header)
-	
+	# Шапка окна: Заголовок + Бейдж звезд + Кнопка закрытия ✖
+	var header_bar = HBoxContainer.new()
+	header_bar.alignment = BoxContainer.ALIGNMENT_CENTER
+	header_bar.add_theme_constant_override("separation", 12)
+	vbox.add_child(header_bar)
+
+	var title_box = HBoxContainer.new()
+	title_box.add_theme_constant_override("separation", 10)
+	header_bar.add_child(title_box)
+
+	var title_icon = _make_label("🧬", 28, LEVEL_ACCENT)
+	title_box.add_child(title_icon)
+
+	var header = _make_label("ВЫБОР УРОВНЯ", 30, LEVEL_TEXT)
+	var head_set = LabelSettings.new()
+	head_set.font = level_ui_font
+	head_set.font_size = 30
+	head_set.font_color = LEVEL_TEXT
+	head_set.shadow_color = LEVEL_ACCENT * Color(1, 1, 1, 0.35)
+	head_set.shadow_size = 8
+	header.label_settings = head_set
+	title_box.add_child(header)
+
+	var header_spacer = Control.new()
+	header_spacer.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	header_bar.add_child(header_spacer)
+
+	# Звездный бейдж кампании
+	var stars_badge = PanelContainer.new()
+	var stars_badge_sb = _make_stylebox(Color(0.11, 0.16, 0.22, 0.92), 14, 1, LEVEL_ACCENT_GOLD * Color(1, 1, 1, 0.55))
+	stars_badge_sb.content_margin_left = 14
+	stars_badge_sb.content_margin_right = 14
+	stars_badge_sb.content_margin_top = 6
+	stars_badge_sb.content_margin_bottom = 6
+	stars_badge_sb.shadow_size = 6
+	stars_badge_sb.shadow_color = Color(0.85, 0.6, 0.1, 0.2)
+	stars_badge.add_theme_stylebox_override("panel", stars_badge_sb)
+	header_bar.add_child(stars_badge)
+
+	level_header_stars_label = _make_label("⭐ 0 / 90", 18, LEVEL_ACCENT_GOLD)
+	var badge_settings = LabelSettings.new()
+	badge_settings.font = level_ui_font
+	badge_settings.font_size = 18
+	badge_settings.font_color = LEVEL_ACCENT_GOLD
+	badge_settings.shadow_color = Color(0, 0, 0, 0.5)
+	badge_settings.shadow_size = 2
+	level_header_stars_label.label_settings = badge_settings
+	stars_badge.add_child(level_header_stars_label)
+
+	# Кнопка закрытия ✖ в правом верхнем углу (для мобильных и ПК)
+	level_close_top_btn = Button.new()
+	level_close_top_btn.text = "✖"
+	level_close_top_btn.custom_minimum_size = Vector2(40, 40)
+	level_close_top_btn.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
+	level_close_top_btn.add_theme_font_size_override("font_size", 18)
+	var close_norm_sb = _make_stylebox(Color(0.14, 0.18, 0.24, 0.9), 12, 1, Color(1, 1, 1, 0.18))
+	var close_hover_sb = _make_stylebox(Color(0.35, 0.15, 0.18, 0.95), 12, 2, ACCENT_RED)
+	close_hover_sb.shadow_size = 8
+	close_hover_sb.shadow_color = ACCENT_RED * Color(1, 1, 1, 0.4)
+	level_close_top_btn.add_theme_stylebox_override("normal", close_norm_sb)
+	level_close_top_btn.add_theme_stylebox_override("hover", close_hover_sb)
+	level_close_top_btn.add_theme_stylebox_override("focus", close_hover_sb.duplicate())
+	level_close_top_btn.add_theme_stylebox_override("pressed", _make_stylebox(Color(0.25, 0.10, 0.12, 1.0), 12, 2, ACCENT_RED))
+	_attach_hover_sound(level_close_top_btn)
+	_attach_click_sound(level_close_top_btn)
+	level_close_top_btn.pressed.connect(_on_level_back)
+	header_bar.add_child(level_close_top_btn)
+
 	# Разделитель
 	var sep = HSeparator.new()
-	sep.add_theme_stylebox_override("separator", _make_stylebox(LEVEL_PANEL_BORDER * Color(1, 1, 1, 0.55), 0))
+	sep.add_theme_stylebox_override("separator", _make_stylebox(LEVEL_PANEL_BORDER * Color(1, 1, 1, 0.45), 0))
 	vbox.add_child(sep)
-	
+
 	# Скролл для сетки
 	var scroll = ScrollContainer.new()
 	scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	scroll.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
 	vbox.add_child(scroll)
 	_style_level_scrollbar(scroll)
-	
-	# MarginContainer внутри ScrollContainer решает проблему обрезания hover-эффектов у карточек
+
 	var scroll_margin = MarginContainer.new()
 	scroll_margin.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	scroll_margin.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	scroll_margin.add_theme_constant_override("margin_left", 16)
-	scroll_margin.add_theme_constant_override("margin_right", 16)
-	scroll_margin.add_theme_constant_override("margin_top", 16)
-	scroll_margin.add_theme_constant_override("margin_bottom", 24)
+	scroll_margin.add_theme_constant_override("margin_left", 10)
+	scroll_margin.add_theme_constant_override("margin_right", 12)
+	scroll_margin.add_theme_constant_override("margin_top", 10)
+	scroll_margin.add_theme_constant_override("margin_bottom", 16)
 	scroll.add_child(scroll_margin)
-	
+
 	level_list = VBoxContainer.new()
-	level_list.add_theme_constant_override("separation", 26)
+	level_list.add_theme_constant_override("separation", 22)
 	level_list.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	scroll_margin.add_child(level_list)
-	
-	_populate_levels()
-	
-	# Кнопка назад
-	level_back_btn = _make_button("← НАЗАД", LEVEL_ACCENT_BLUE)
+
+	# Нижняя панель с кнопкой назад
+	var footer_box = HBoxContainer.new()
+	footer_box.alignment = BoxContainer.ALIGNMENT_CENTER
+	vbox.add_child(footer_box)
+
+	level_back_btn = _make_button("← НАЗАД В МЕНЮ", LEVEL_ACCENT_BLUE)
 	_apply_level_back_button_style(level_back_btn)
-	level_back_btn.custom_minimum_size = Vector2(300, 64)
-	level_back_btn.add_theme_font_size_override("font_size", 24)
+	level_back_btn.custom_minimum_size = Vector2(280, 54)
+	level_back_btn.add_theme_font_size_override("font_size", 20)
 	level_back_btn.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
 	level_back_btn.pressed.connect(_on_level_back)
-	vbox.add_child(level_back_btn)
+	footer_box.add_child(level_back_btn)
+
+	# Подключение к ресайзу экрана для адаптивности
+	get_tree().root.size_changed.connect(_update_level_panel_responsive)
+	_update_level_panel_responsive()
+	_populate_levels()
+
+func _update_level_panel_responsive() -> void:
+	if level_panel_box == null:
+		return
+	var vp_size := get_viewport_rect().size
+	# Адаптация под мобильные экраны и десктоп
+	var target_w := clampf(vp_size.x * 0.94, 320.0, 980.0)
+	var target_h := clampf(vp_size.y * 0.90, 420.0, 750.0)
+	level_panel_box.custom_minimum_size = Vector2(target_w, target_h)
+
+	var inner_w := target_w - 76.0
+	var target_cols := 5
+	if inner_w < 480.0:
+		target_cols = 3
+	elif inner_w < 680.0:
+		target_cols = 4
+	else:
+		target_cols = 5
+
+	if target_cols != level_grid_columns:
+		level_grid_columns = target_cols
+		if level_list != null and level_list.get_child_count() > 0:
+			_populate_levels()
 
 func _style_level_scrollbar(scroll: ScrollContainer) -> void:
 	var scrollbar := scroll.get_v_scroll_bar()
-	scrollbar.custom_minimum_size.x = 28
-	var track := _make_stylebox(Color(0.12, 0.16, 0.19, 0.72), 14, 1, Color(0.5, 0.61, 0.65, 0.28))
-	var grabber := _make_stylebox(LEVEL_ACCENT_BLUE * Color(1, 1, 1, 0.84), 14)
-	var grabber_hover := _make_stylebox(LEVEL_ACCENT_BLUE, 14)
-	var grabber_pressed := _make_stylebox(LEVEL_ACCENT, 14)
+	scrollbar.custom_minimum_size.x = 22
+	var track := _make_stylebox(Color(0.08, 0.11, 0.15, 0.7), 11, 1, Color(0.2, 0.3, 0.38, 0.3))
+	var grabber := _make_stylebox(LEVEL_ACCENT_BLUE * Color(1, 1, 1, 0.8), 11)
+	var grabber_hover := _make_stylebox(LEVEL_ACCENT_BLUE, 11)
+	var grabber_pressed := _make_stylebox(LEVEL_ACCENT, 11)
 	scrollbar.add_theme_stylebox_override("scroll", track)
 	scrollbar.add_theme_stylebox_override("scroll_focus", track.duplicate())
 	scrollbar.add_theme_stylebox_override("grabber", grabber)
@@ -751,76 +850,127 @@ func _apply_level_back_button_style(button: Button) -> void:
 	button.add_theme_color_override("font_color", LEVEL_TEXT)
 	button.add_theme_color_override("font_hover_color", LEVEL_TEXT)
 	button.add_theme_color_override("font_pressed_color", LEVEL_TEXT)
-	var normal := _make_stylebox(LEVEL_CARD_BG, 18, 2, LEVEL_PANEL_BORDER)
-	normal.shadow_size = 7
-	normal.shadow_color = Color(0.12, 0.15, 0.15, 0.16)
-	var hover := _make_stylebox(LEVEL_CARD_HOVER, 18, 3, LEVEL_ACCENT_BLUE)
-	hover.shadow_size = 10
-	hover.shadow_color = Color(0.18, 0.28, 0.36, 0.2)
-	var pressed := _make_stylebox(LEVEL_CARD_PRESSED, 18, 3, LEVEL_ACCENT_BLUE)
+	var normal := _make_stylebox(LEVEL_CARD_BG, 18, 1, LEVEL_PANEL_BORDER * Color(1, 1, 1, 0.5))
+	normal.shadow_size = 8
+	normal.shadow_color = Color(0.04, 0.08, 0.12, 0.25)
+	var hover := _make_stylebox(LEVEL_CARD_HOVER, 18, 2, LEVEL_ACCENT_BLUE)
+	hover.shadow_size = 14
+	hover.shadow_color = LEVEL_ACCENT_BLUE * Color(1, 1, 1, 0.3)
+	var pressed := _make_stylebox(LEVEL_CARD_PRESSED, 18, 2, LEVEL_ACCENT_BLUE)
 	button.add_theme_stylebox_override("normal", normal)
 	button.add_theme_stylebox_override("hover", hover)
 	button.add_theme_stylebox_override("focus", hover.duplicate())
 	button.add_theme_stylebox_override("pressed", pressed)
 
 func _populate_levels() -> void:
-	# Очищаем
+	if level_list == null:
+		return
 	for child in level_list.get_children():
 		child.queue_free()
 
-	var chapters := int(ceili(float(total_levels) / 5.0))
 	var level_manager := get_node_or_null("/root/LevelManager")
+	var total_stars_now := 0
+	if level_manager != null:
+		total_stars_now = int(level_manager.get_total_stars())
+	var max_stars := total_levels * 3
+	if level_header_stars_label != null:
+		level_header_stars_label.text = "⭐ %d / %d" % [total_stars_now, max_stars]
+
+	var chapters := int(ceili(float(total_levels) / 5.0))
 	for chapter_index in range(1, chapters + 1):
 		var chapter_panel := PanelContainer.new()
 		chapter_panel.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-		var chapter_sb := _make_stylebox(LEVEL_CHAPTER_BG, 20, 2, LEVEL_PANEL_BORDER * Color(1, 1, 1, 0.48))
-		chapter_sb.content_margin_left = 18
-		chapter_sb.content_margin_right = 18
-		chapter_sb.content_margin_top = 16
-		chapter_sb.content_margin_bottom = 18
-		chapter_sb.shadow_size = 8
-		chapter_sb.shadow_color = Color(0.12, 0.15, 0.15, 0.1)
+		var chapter_sb := _make_stylebox(LEVEL_CHAPTER_BG, 18, 1, LEVEL_PANEL_BORDER * Color(1, 1, 1, 0.4))
+		chapter_sb.content_margin_left = 16
+		chapter_sb.content_margin_right = 16
+		chapter_sb.content_margin_top = 14
+		chapter_sb.content_margin_bottom = 16
+		chapter_sb.shadow_size = 10
+		chapter_sb.shadow_color = Color(0.04, 0.08, 0.12, 0.35)
 		chapter_panel.add_theme_stylebox_override("panel", chapter_sb)
 		level_list.add_child(chapter_panel)
 
 		var chapter_box := VBoxContainer.new()
-		chapter_box.add_theme_constant_override("separation", 14)
+		chapter_box.add_theme_constant_override("separation", 12)
 		chapter_panel.add_child(chapter_box)
 
 		var chapter_unlocked := true
 		var required_stars := 0
-		var total_stars_now := 0
 		if level_manager != null:
 			chapter_unlocked = bool(level_manager.is_chapter_unlocked(chapter_index))
 			required_stars = int(level_manager.get_required_stars_for_chapter(chapter_index))
-			total_stars_now = int(level_manager.get_total_stars())
-
-		var chapter_title_color := LEVEL_ACCENT_BLUE if chapter_unlocked else LEVEL_LOCKED_TEXT
-		var chapter_title = _make_label("ГЛАВА %d" % chapter_index, 28, chapter_title_color)
-		chapter_title.horizontal_alignment = HORIZONTAL_ALIGNMENT_LEFT
-		chapter_box.add_child(chapter_title)
-
-		var subtitle_text := "Уровни %d-%d" % [((chapter_index - 1) * 5) + 1, mini(chapter_index * 5, total_levels)]
-		if chapter_index > 1:
-			subtitle_text += "  •  Звезды: %d / %d" % [min(total_stars_now, required_stars), required_stars]
-		var subtitle_color := LEVEL_TEXT_DIM if chapter_unlocked else LEVEL_LOCKED_TEXT
-		var subtitle = _make_label(subtitle_text, 16, subtitle_color)
-		subtitle.horizontal_alignment = HORIZONTAL_ALIGNMENT_LEFT
-		chapter_box.add_child(subtitle)
-
-		if not chapter_unlocked:
-			var locked_hint = _make_label("Глава откроется, когда наберешь еще %d звезд" % max(0, required_stars - total_stars_now), 15, Color(0.96, 0.62, 0.6, 0.96))
-			locked_hint.horizontal_alignment = HORIZONTAL_ALIGNMENT_LEFT
-			chapter_box.add_child(locked_hint)
-
-		var chapter_grid = GridContainer.new()
-		chapter_grid.columns = 5
-		chapter_grid.add_theme_constant_override("h_separation", 20)
-		chapter_grid.add_theme_constant_override("v_separation", 20)
-		chapter_box.add_child(chapter_grid)
 
 		var start_level := (chapter_index - 1) * 5 + 1
 		var end_level := mini(chapter_index * 5, total_levels)
+
+		# Подсчет звезд в данной главе
+		var chapter_stars := 0
+		for lvl in range(start_level, end_level + 1):
+			if level_manager != null:
+				chapter_stars += int(level_manager.get_level_best_stars(lvl))
+		var chapter_max_stars := (end_level - start_level + 1) * 3
+
+		# Шапка главы: Название слева, прогресс справа
+		var ch_head_row := HBoxContainer.new()
+		ch_head_row.alignment = BoxContainer.ALIGNMENT_CENTER
+		chapter_box.add_child(ch_head_row)
+
+		var ch_left_box := VBoxContainer.new()
+		ch_left_box.add_theme_constant_override("separation", 2)
+		ch_head_row.add_child(ch_left_box)
+
+		var chapter_title_color := LEVEL_ACCENT_BLUE if chapter_unlocked else LEVEL_LOCKED_TEXT
+		var chapter_title = _make_label("ГЛАВА %d" % chapter_index, 22, chapter_title_color)
+		chapter_title.horizontal_alignment = HORIZONTAL_ALIGNMENT_LEFT
+		ch_left_box.add_child(chapter_title)
+
+		var subtitle_text := "Уровни %d-%d" % [start_level, end_level]
+		var subtitle = _make_label(subtitle_text, 15, LEVEL_TEXT_DIM)
+		subtitle.horizontal_alignment = HORIZONTAL_ALIGNMENT_LEFT
+		ch_left_box.add_child(subtitle)
+
+		var ch_spacer := Control.new()
+		ch_spacer.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		ch_head_row.add_child(ch_spacer)
+
+		# Звездный чип главы
+		var ch_stars_chip := PanelContainer.new()
+		var chip_border := (LEVEL_ACCENT_GOLD if chapter_unlocked else LEVEL_LOCKED_TEXT) * Color(1, 1, 1, 0.4)
+		var chip_sb := _make_stylebox(Color(0.06, 0.10, 0.14, 0.8), 10, 1, chip_border)
+		chip_sb.content_margin_left = 10
+		chip_sb.content_margin_right = 10
+		chip_sb.content_margin_top = 4
+		chip_sb.content_margin_bottom = 4
+		ch_stars_chip.add_theme_stylebox_override("panel", chip_sb)
+		ch_head_row.add_child(ch_stars_chip)
+
+		var chip_color := LEVEL_ACCENT_GOLD if chapter_unlocked else LEVEL_LOCKED_TEXT
+		var chip_text := "⭐ %d / %d" % [chapter_stars, chapter_max_stars]
+		var chip_lbl := _make_label(chip_text, 15, chip_color)
+		ch_stars_chip.add_child(chip_lbl)
+
+		if not chapter_unlocked:
+			var locked_panel := PanelContainer.new()
+			var lock_sb := _make_stylebox(Color(0.24, 0.08, 0.10, 0.6), 10, 1, Color(1.0, 0.35, 0.35, 0.45))
+			lock_sb.content_margin_left = 12
+			lock_sb.content_margin_right = 12
+			lock_sb.content_margin_top = 6
+			lock_sb.content_margin_bottom = 6
+			locked_panel.add_theme_stylebox_override("panel", lock_sb)
+			chapter_box.add_child(locked_panel)
+
+			var lock_text := "🔒 Глава откроется при достижении %d ⭐ (нужно еще %d)" % [required_stars, max(0, required_stars - total_stars_now)]
+			var locked_hint = _make_label(lock_text, 15, Color(1.0, 0.65, 0.65, 0.95))
+			locked_hint.horizontal_alignment = HORIZONTAL_ALIGNMENT_LEFT
+			locked_panel.add_child(locked_hint)
+
+		var chapter_grid = GridContainer.new()
+		chapter_grid.columns = level_grid_columns
+		chapter_grid.add_theme_constant_override("h_separation", 14)
+		chapter_grid.add_theme_constant_override("v_separation", 14)
+		chapter_grid.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		chapter_box.add_child(chapter_grid)
+
 		for level_num in range(start_level, end_level + 1):
 			var is_available := level_num <= unlocked_levels
 			if level_manager != null:
@@ -834,97 +984,135 @@ func _build_level_button(level_num: int, is_unlocked: bool) -> Button:
 		best_stars = int(level_manager.get_level_best_stars(level_num))
 	var stars_text := _stars_to_text(best_stars)
 
+	var is_current_target := is_unlocked and (level_num == unlocked_levels)
+
 	var btn = Button.new()
-	btn.custom_minimum_size = Vector2(140, 150)
+	# Адаптивный размер: расширяется по горизонтали, чтобы гармонично заполнять колонку
+	btn.custom_minimum_size = Vector2(90, 115)
+	btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	btn.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND if is_unlocked else Control.CURSOR_FORBIDDEN
-	btn.pivot_offset = Vector2(70, 75)
 
 	var num_lbl = Label.new()
 	num_lbl.text = str(level_num)
 	num_lbl.set_anchors_and_offsets_preset(Control.PRESET_TOP_LEFT)
-	num_lbl.add_theme_font_size_override("font_size", 28)
 	num_lbl.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	num_lbl.position = Vector2(12, 8)
+	num_lbl.position = Vector2(10, 6)
 	var num_settings = LabelSettings.new()
 	num_settings.font = level_ui_font
-	num_settings.font_size = 28
-	num_settings.shadow_color = Color(0, 0, 0, 0.3)
-	num_settings.shadow_offset = Vector2(0, 2)
+	num_settings.font_size = 20
+	num_settings.shadow_color = Color(0, 0, 0, 0.4)
+	num_settings.shadow_offset = Vector2(0, 1)
 	num_lbl.label_settings = num_settings
 
 	var icon_lbl = Label.new()
 	icon_lbl.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	icon_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	icon_lbl.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
-	icon_lbl.add_theme_font_size_override("font_size", 56)
 	icon_lbl.mouse_filter = Control.MOUSE_FILTER_IGNORE
 
 	var stars_lbl = Label.new()
 	stars_lbl.text = stars_text
 	stars_lbl.set_anchors_and_offsets_preset(Control.PRESET_BOTTOM_WIDE)
 	stars_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	stars_lbl.position.y = -32
-	stars_lbl.custom_minimum_size.y = 24
+	stars_lbl.position.y = -26
+	stars_lbl.custom_minimum_size.y = 22
 	stars_lbl.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	
 	var stars_set = LabelSettings.new()
 	stars_set.font = level_ui_font
-	stars_set.font_size = 22
+	stars_set.font_size = 18
 	stars_lbl.label_settings = stars_set
 
 	if is_unlocked:
 		_attach_hover_sound(btn)
 		_attach_click_sound(btn)
-		icon_lbl.text = "◉"
-		icon_lbl.modulate.a = 0.36
-		num_settings.font_color = LEVEL_ACCENT
-		icon_lbl.add_theme_color_override("font_color", LEVEL_ACCENT)
-		stars_set.font_color = Color(1.0, 0.79, 0.28, 0.98) if best_stars > 0 else Color(0.7, 0.75, 0.76, 0.72)
-		stars_set.outline_size = 2
-		stars_set.outline_color = Color(0.34, 0.25, 0.06, 0.88) if best_stars > 0 else Color(0.12, 0.15, 0.16, 0.72)
-		stars_set.shadow_color = Color(1.0, 0.7, 0.15, 0.28) if best_stars > 0 else Color(0.0, 0.0, 0.0, 0.2)
-		stars_set.shadow_size = 4
+
+		if is_current_target:
+			icon_lbl.text = "▶"
+			icon_lbl.add_theme_font_size_override("font_size", 34)
+			icon_lbl.modulate.a = 0.95
+			num_settings.font_color = LEVEL_ACCENT
+			icon_lbl.add_theme_color_override("font_color", LEVEL_ACCENT)
+		elif best_stars > 0:
+			icon_lbl.text = "◈"
+			icon_lbl.add_theme_font_size_override("font_size", 38)
+			icon_lbl.modulate.a = 0.85
+			num_settings.font_color = LEVEL_TEXT
+			icon_lbl.add_theme_color_override("font_color", LEVEL_ACCENT_BLUE)
+		else:
+			icon_lbl.text = "◉"
+			icon_lbl.add_theme_font_size_override("font_size", 38)
+			icon_lbl.modulate.a = 0.4
+			num_settings.font_color = LEVEL_TEXT
+			icon_lbl.add_theme_color_override("font_color", LEVEL_TEXT_DIM)
+
+		if best_stars > 0:
+			stars_set.font_color = LEVEL_ACCENT_GOLD
+			stars_set.outline_size = 2
+			stars_set.outline_color = Color(0.35, 0.22, 0.04, 0.9)
+			stars_set.shadow_color = Color(1.0, 0.72, 0.15, 0.35)
+			stars_set.shadow_size = 4
+		else:
+			stars_set.font_color = Color(0.55, 0.62, 0.66, 0.5)
+			stars_set.outline_size = 1
+			stars_set.outline_color = Color(0.1, 0.15, 0.2, 0.7)
 
 		btn.mouse_entered.connect(func():
-			icon_lbl.modulate.a = 0.72
+			btn.pivot_offset = btn.size * 0.5
+			icon_lbl.modulate.a = 1.0
 			var t = btn.create_tween()
-			t.tween_property(btn, "scale", Vector2(1.04, 1.04), 0.18).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
-			t.parallel().tween_property(btn, "modulate", Color(1.03, 1.03, 1.03, 1.0), 0.18)
+			t.tween_property(btn, "scale", Vector2(1.05, 1.05), 0.15).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+			t.parallel().tween_property(btn, "modulate", Color(1.05, 1.05, 1.05, 1.0), 0.15)
 		)
 		btn.mouse_exited.connect(func():
-			icon_lbl.modulate.a = 0.32
+			btn.pivot_offset = btn.size * 0.5
+			icon_lbl.modulate.a = 0.85 if best_stars > 0 else (0.95 if is_current_target else 0.4)
 			var t = btn.create_tween()
-			t.tween_property(btn, "scale", Vector2(1.0, 1.0), 0.15).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_IN_OUT)
-			t.parallel().tween_property(btn, "modulate", Color.WHITE, 0.15)
+			t.tween_property(btn, "scale", Vector2(1.0, 1.0), 0.12).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_IN_OUT)
+			t.parallel().tween_property(btn, "modulate", Color.WHITE, 0.12)
 		)
 		btn.pressed.connect(_open_difficulty_panel.bind(level_num))
 
-		var sb = _make_stylebox(LEVEL_CARD_BG, 18, 2, LEVEL_ACCENT * Color(1, 1, 1, 0.62))
-		sb.shadow_size = 8
-		sb.shadow_color = Color(0.12, 0.15, 0.15, 0.14)
-		btn.add_theme_stylebox_override("normal", sb)
-		var hover_sb = _make_stylebox(LEVEL_CARD_HOVER, 18, 3, LEVEL_ACCENT)
-		hover_sb.shadow_size = 12
-		hover_sb.shadow_color = Color(0.18, 0.34, 0.28, 0.2)
-		btn.add_theme_stylebox_override("hover", hover_sb)
-		btn.add_theme_stylebox_override("pressed", _make_stylebox(LEVEL_CARD_PRESSED, 18, 3, LEVEL_ACCENT))
-		btn.add_theme_stylebox_override("focus", hover_sb.duplicate())
+		if is_current_target:
+			# Акцентный светящийся стиль для текущего уровня
+			var active_sb = _make_stylebox(Color(0.09, 0.16, 0.20, 0.96), 16, 2, LEVEL_ACCENT)
+			active_sb.shadow_size = 14
+			active_sb.shadow_color = LEVEL_ACCENT * Color(1, 1, 1, 0.4)
+			btn.add_theme_stylebox_override("normal", active_sb)
+
+			var active_hover_sb = _make_stylebox(Color(0.12, 0.22, 0.26, 1.0), 16, 3, LEVEL_ACCENT)
+			active_hover_sb.shadow_size = 18
+			active_hover_sb.shadow_color = LEVEL_ACCENT * Color(1, 1, 1, 0.6)
+			btn.add_theme_stylebox_override("hover", active_hover_sb)
+			btn.add_theme_stylebox_override("pressed", _make_stylebox(Color(0.07, 0.12, 0.15, 1.0), 16, 3, LEVEL_ACCENT))
+			btn.add_theme_stylebox_override("focus", active_hover_sb.duplicate())
+		else:
+			var normal_sb = _make_stylebox(LEVEL_CARD_BG, 16, 1, LEVEL_PANEL_BORDER * Color(1, 1, 1, 0.4))
+			normal_sb.shadow_size = 6
+			normal_sb.shadow_color = Color(0.04, 0.08, 0.12, 0.25)
+			btn.add_theme_stylebox_override("normal", normal_sb)
+
+			var hover_sb = _make_stylebox(LEVEL_CARD_HOVER, 16, 2, LEVEL_ACCENT_BLUE)
+			hover_sb.shadow_size = 12
+			hover_sb.shadow_color = LEVEL_ACCENT_BLUE * Color(1, 1, 1, 0.3)
+			btn.add_theme_stylebox_override("hover", hover_sb)
+			btn.add_theme_stylebox_override("pressed", _make_stylebox(LEVEL_CARD_PRESSED, 16, 2, LEVEL_ACCENT_BLUE))
+			btn.add_theme_stylebox_override("focus", hover_sb.duplicate())
 	else:
 		icon_lbl.text = "🔒"
+		icon_lbl.add_theme_font_size_override("font_size", 34)
 		num_settings.font_color = LEVEL_LOCKED_TEXT
 		icon_lbl.add_theme_color_override("font_color", LEVEL_LOCKED_TEXT)
-		stars_set.font_color = LEVEL_LOCKED_TEXT * Color(1, 1, 1, 0.62)
-		stars_set.outline_size = 1
-		stars_set.outline_color = Color(0.92, 0.93, 0.92, 0.75)
+		stars_lbl.visible = false
 		btn.disabled = true
-		var locked_sb = _make_stylebox(LEVEL_LOCKED_BG, 18, 2, LEVEL_LOCKED_TEXT * Color(1, 1, 1, 0.38))
+
+		var locked_sb = _make_stylebox(LEVEL_LOCKED_BG, 16, 1, Color(1, 1, 1, 0.08))
 		btn.add_theme_stylebox_override("normal", locked_sb)
 		btn.add_theme_stylebox_override("disabled", locked_sb)
 
 	btn.add_child(num_lbl)
 	btn.add_child(icon_lbl)
 	btn.add_child(stars_lbl)
-	btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	return btn
 
 func _setup_ui_hover_sound() -> void:
@@ -1165,6 +1353,8 @@ func _on_difficulty_cancel() -> void:
 	var tween = create_tween()
 	tween.tween_interval(0.2)
 	tween.tween_callback(func():
+		refresh_unlocked_levels()
+		_update_level_panel_responsive()
 		_show_panel(level_panel)
 	)
 
@@ -1429,6 +1619,8 @@ func _hide_panel(panel: Control) -> void:
 # ========== ОБРАБОТЧИКИ ==========
 
 func _on_play_pressed() -> void:
+	refresh_unlocked_levels()
+	_update_level_panel_responsive()
 	_show_panel(level_panel)
 
 func _on_level_selected(level_num: int) -> void:
