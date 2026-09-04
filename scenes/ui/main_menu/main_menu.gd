@@ -40,13 +40,14 @@ const MASTER_BUS_NAME: StringName = &"Master"
 const MUSIC_BUS_NAME: StringName = &"Music"
 const DEV_CONSOLE_SCENE := preload("res://scenes/ui/dev_console.tscn")
 const BUTTON_HOVER_SOUND := preload("res://audio/Button_click.ogg")
-const BUTTON_HOVER_VOLUME_DB: float = -8.0
+const BUTTON_HOVER_VOLUME_DB: float = 0.0
 const BUTTON_CLICK_SOUND := preload("res://audio/clickWhooh.ogg")
 const BUTTON_CLICK_VOLUME_DB: float = -14.0
 const BUTTON_CLICK_PITCH_SCALE: float = 1.8
 const SHIELD_ICON := preload("res://assets/sprites/shield.png")
 const RAPID_FIRE_ICON := preload("res://assets/sprites/speedfire2.png")
 const SPEED_ICON := preload("res://assets/sprites/speed.png")
+const LEVEL_MAP_PREVIEW_SCRIPT := preload("res://scripts/ui/level_map_preview.gd")
 
 class MenuPerkIcon extends Control:
 	var perk_id: String = ""
@@ -987,94 +988,132 @@ func _build_level_button(level_num: int, is_unlocked: bool) -> Button:
 	var is_current_target := is_unlocked and (level_num == unlocked_levels)
 
 	var btn = Button.new()
-	# Адаптивный размер: расширяется по горизонтали, чтобы гармонично заполнять колонку
-	btn.custom_minimum_size = Vector2(90, 115)
+	# Увеличенная высота карточки для отличного отображения номера, карты и звезд
+	btn.custom_minimum_size = Vector2(96, 144)
 	btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	btn.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND if is_unlocked else Control.CURSOR_FORBIDDEN
 
-	var num_lbl = Label.new()
+	# 1. Верхний бейдж номера уровня
+	var num_pill := PanelContainer.new()
+	num_pill.set_anchors_and_offsets_preset(Control.PRESET_TOP_LEFT)
+	num_pill.position = Vector2(6, 6)
+	num_pill.mouse_filter = Control.MOUSE_FILTER_IGNORE
+
+	var num_pill_border := (LEVEL_ACCENT * Color(1, 1, 1, 0.8)) if is_current_target else (LEVEL_PANEL_BORDER * Color(1, 1, 1, 0.5) if is_unlocked else Color(1, 1, 1, 0.12))
+	var num_pill_sb := _make_stylebox(Color(0.04, 0.08, 0.12, 0.85), 8, 1, num_pill_border)
+	num_pill_sb.content_margin_left = 7
+	num_pill_sb.content_margin_right = 7
+	num_pill_sb.content_margin_top = 2
+	num_pill_sb.content_margin_bottom = 2
+	num_pill.add_theme_stylebox_override("panel", num_pill_sb)
+
+	var num_lbl := Label.new()
 	num_lbl.text = str(level_num)
-	num_lbl.set_anchors_and_offsets_preset(Control.PRESET_TOP_LEFT)
 	num_lbl.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	num_lbl.position = Vector2(10, 6)
-	var num_settings = LabelSettings.new()
+	var num_settings := LabelSettings.new()
 	num_settings.font = level_ui_font
-	num_settings.font_size = 20
-	num_settings.shadow_color = Color(0, 0, 0, 0.4)
+	num_settings.font_size = 15
+	num_settings.font_color = LEVEL_ACCENT if is_current_target else (LEVEL_TEXT if is_unlocked else LEVEL_LOCKED_TEXT)
+	num_settings.shadow_color = Color(0, 0, 0, 0.6)
 	num_settings.shadow_offset = Vector2(0, 1)
 	num_lbl.label_settings = num_settings
+	num_pill.add_child(num_lbl)
 
-	var icon_lbl = Label.new()
+	# 2. Центральная иконка (полупрозрачный ▶ для текущего, 🔒 для закрытого)
+	var icon_lbl := Label.new()
 	icon_lbl.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	icon_lbl.offset_top = 26
+	icon_lbl.offset_bottom = -32
 	icon_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	icon_lbl.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
 	icon_lbl.mouse_filter = Control.MOUSE_FILTER_IGNORE
 
-	var stars_lbl = Label.new()
+	# 3. Нижний стеклянный трей звезд
+	var stars_tray := PanelContainer.new()
+	stars_tray.set_anchors_and_offsets_preset(Control.PRESET_BOTTOM_WIDE)
+	stars_tray.custom_minimum_size.y = 26
+	stars_tray.offset_left = 6
+	stars_tray.offset_right = -6
+	stars_tray.offset_bottom = -6
+	stars_tray.mouse_filter = Control.MOUSE_FILTER_IGNORE
+
+	var tray_border := (LEVEL_ACCENT_GOLD * Color(1, 1, 1, 0.5)) if best_stars > 0 else (LEVEL_PANEL_BORDER * Color(1, 1, 1, 0.3) if is_unlocked else Color(1, 1, 1, 0.08))
+	var tray_sb := _make_stylebox(Color(0.03, 0.06, 0.10, 0.88), 9, 1, tray_border)
+	tray_sb.content_margin_left = 4
+	tray_sb.content_margin_right = 4
+	tray_sb.content_margin_top = 2
+	tray_sb.content_margin_bottom = 2
+	stars_tray.add_theme_stylebox_override("panel", tray_sb)
+
+	var stars_lbl := Label.new()
 	stars_lbl.text = stars_text
-	stars_lbl.set_anchors_and_offsets_preset(Control.PRESET_BOTTOM_WIDE)
 	stars_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	stars_lbl.position.y = -26
-	stars_lbl.custom_minimum_size.y = 22
+	stars_lbl.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
 	stars_lbl.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	
-	var stars_set = LabelSettings.new()
+
+	var stars_set := LabelSettings.new()
 	stars_set.font = level_ui_font
-	stars_set.font_size = 18
+	stars_set.font_size = 15
+	if best_stars > 0:
+		stars_set.font_color = LEVEL_ACCENT_GOLD
+		stars_set.outline_size = 1
+		stars_set.outline_color = Color(0.35, 0.22, 0.04, 0.9)
+		stars_set.shadow_color = Color(1.0, 0.72, 0.15, 0.4)
+		stars_set.shadow_size = 4
+	else:
+		stars_set.font_color = Color(0.48, 0.56, 0.62, 0.45)
 	stars_lbl.label_settings = stars_set
+	stars_tray.add_child(stars_lbl)
 
 	if is_unlocked:
 		_attach_hover_sound(btn)
 		_attach_click_sound(btn)
 
-		if is_current_target:
-			icon_lbl.text = "▶"
-			icon_lbl.add_theme_font_size_override("font_size", 34)
-			icon_lbl.modulate.a = 0.95
-			num_settings.font_color = LEVEL_ACCENT
-			icon_lbl.add_theme_color_override("font_color", LEVEL_ACCENT)
-		elif best_stars > 0:
-			icon_lbl.text = "◈"
-			icon_lbl.add_theme_font_size_override("font_size", 38)
-			icon_lbl.modulate.a = 0.85
-			num_settings.font_color = LEVEL_TEXT
-			icon_lbl.add_theme_color_override("font_color", LEVEL_ACCENT_BLUE)
-		else:
-			icon_lbl.text = "◉"
-			icon_lbl.add_theme_font_size_override("font_size", 38)
-			icon_lbl.modulate.a = 0.4
-			num_settings.font_color = LEVEL_TEXT
-			icon_lbl.add_theme_color_override("font_color", LEVEL_TEXT_DIM)
+		var preview_ctrl := LEVEL_MAP_PREVIEW_SCRIPT.new() as LevelMapPreview
+		var lvl_data: Dictionary = {}
+		if level_manager != null:
+			lvl_data = level_manager.get_level_data(level_num)
+		preview_ctrl.setup(lvl_data)
+		preview_ctrl.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+		preview_ctrl.offset_left = 3
+		preview_ctrl.offset_right = -3
+		preview_ctrl.offset_top = 26
+		preview_ctrl.offset_bottom = -30
+		preview_ctrl.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		btn.add_child(preview_ctrl)
 
-		if best_stars > 0:
-			stars_set.font_color = LEVEL_ACCENT_GOLD
-			stars_set.outline_size = 2
-			stars_set.outline_color = Color(0.35, 0.22, 0.04, 0.9)
-			stars_set.shadow_color = Color(1.0, 0.72, 0.15, 0.35)
-			stars_set.shadow_size = 4
+		icon_lbl.text = "▶"
+		icon_lbl.add_theme_font_size_override("font_size", 36)
+		icon_lbl.add_theme_color_override("font_color", LEVEL_ACCENT)
+
+		if is_current_target:
+			icon_lbl.visible = true
+			icon_lbl.modulate = Color(1.0, 1.0, 1.0, 0.3)
 		else:
-			stars_set.font_color = Color(0.55, 0.62, 0.66, 0.5)
-			stars_set.outline_size = 1
-			stars_set.outline_color = Color(0.1, 0.15, 0.2, 0.7)
+			icon_lbl.visible = false
+			icon_lbl.modulate = Color(1.0, 1.0, 1.0, 0.0)
 
 		btn.mouse_entered.connect(func():
 			btn.pivot_offset = btn.size * 0.5
-			icon_lbl.modulate.a = 1.0
+			icon_lbl.visible = true
 			var t = btn.create_tween()
 			t.tween_property(btn, "scale", Vector2(1.05, 1.05), 0.15).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
 			t.parallel().tween_property(btn, "modulate", Color(1.05, 1.05, 1.05, 1.0), 0.15)
+			t.parallel().tween_property(icon_lbl, "modulate:a", 0.85, 0.15)
 		)
 		btn.mouse_exited.connect(func():
 			btn.pivot_offset = btn.size * 0.5
-			icon_lbl.modulate.a = 0.85 if best_stars > 0 else (0.95 if is_current_target else 0.4)
+			var target_alpha: float = 0.3 if is_current_target else 0.0
 			var t = btn.create_tween()
 			t.tween_property(btn, "scale", Vector2(1.0, 1.0), 0.12).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_IN_OUT)
 			t.parallel().tween_property(btn, "modulate", Color.WHITE, 0.12)
+			t.parallel().tween_property(icon_lbl, "modulate:a", target_alpha, 0.12)
+			if not is_current_target:
+				t.tween_callback(func(): if is_instance_valid(icon_lbl) and not btn.is_hovered(): icon_lbl.visible = false)
 		)
 		btn.pressed.connect(_open_difficulty_panel.bind(level_num))
 
 		if is_current_target:
-			# Акцентный светящийся стиль для текущего уровня
 			var active_sb = _make_stylebox(Color(0.09, 0.16, 0.20, 0.96), 16, 2, LEVEL_ACCENT)
 			active_sb.shadow_size = 14
 			active_sb.shadow_color = LEVEL_ACCENT * Color(1, 1, 1, 0.4)
@@ -1099,20 +1138,21 @@ func _build_level_button(level_num: int, is_unlocked: bool) -> Button:
 			btn.add_theme_stylebox_override("pressed", _make_stylebox(LEVEL_CARD_PRESSED, 16, 2, LEVEL_ACCENT_BLUE))
 			btn.add_theme_stylebox_override("focus", hover_sb.duplicate())
 	else:
+		icon_lbl.offset_top = 0
+		icon_lbl.offset_bottom = 0
 		icon_lbl.text = "🔒"
 		icon_lbl.add_theme_font_size_override("font_size", 34)
-		num_settings.font_color = LEVEL_LOCKED_TEXT
 		icon_lbl.add_theme_color_override("font_color", LEVEL_LOCKED_TEXT)
-		stars_lbl.visible = false
+		stars_tray.visible = false
 		btn.disabled = true
 
 		var locked_sb = _make_stylebox(LEVEL_LOCKED_BG, 16, 1, Color(1, 1, 1, 0.08))
 		btn.add_theme_stylebox_override("normal", locked_sb)
 		btn.add_theme_stylebox_override("disabled", locked_sb)
 
-	btn.add_child(num_lbl)
 	btn.add_child(icon_lbl)
-	btn.add_child(stars_lbl)
+	btn.add_child(num_pill)
+	btn.add_child(stars_tray)
 	return btn
 
 func _setup_ui_hover_sound() -> void:
