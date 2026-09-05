@@ -27,7 +27,7 @@ LoadingManager="*res://scripts/core/LoadingManager.gd"
 
 [internationalization]
 
-locale/translations=PackedStringArray("res://translations/translations.csv")
+locale/translations=PackedStringArray("res://translations/translations.en.translation", "res://translations/translations.fr.translation", "res://translations/translations.it.translation", "res://translations/translations.ru.translation", "res://translations/translations.tr.translation")
 
 
 [dotnet]
