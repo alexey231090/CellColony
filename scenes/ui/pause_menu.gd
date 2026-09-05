@@ -23,13 +23,19 @@ const BUTTON_CLICK_PITCH_SCALE: float = 1.8
 
 var overlay: ColorRect
 var center_panel: PanelContainer
+var title_label: Label
 var resume_btn: Button
 var restart_btn: Button
 var main_menu_btn: Button
+var audio_title_label: Label
+var master_caption_label: Label
+var music_caption_label: Label
+var lang_title_label: Label
 var master_slider: HSlider
 var music_slider: HSlider
 var master_value_label: Label
 var music_value_label: Label
+var language_buttons: Dictionary = {}
 var ui_hover_sfx: AudioStreamPlayer
 var ui_click_sfx: AudioStreamPlayer
 
@@ -39,8 +45,12 @@ func _ready() -> void:
 	layer = 120 # Поверх всего HUD
 	process_mode = Node.PROCESS_MODE_ALWAYS # Работает при паузе
 	
+	if has_node("/root/LocalizationManager"):
+		get_node("/root/LocalizationManager").language_changed.connect(_on_language_changed)
+
 	_setup_ui_sounds()
 	_build_ui()
+	_update_localized_texts()
 	
 	# Скрыто по умолчанию
 	overlay.visible = false
@@ -59,7 +69,7 @@ func _build_ui() -> void:
 	
 	# 3. Сама плашка паузы с glassmorphism
 	center_panel = PanelContainer.new()
-	center_panel.custom_minimum_size = Vector2(360, 570)
+	center_panel.custom_minimum_size = Vector2(380, 640)
 	var panel_sb = StyleBoxFlat.new()
 	panel_sb.bg_color = PANEL_BG
 	panel_sb.corner_radius_top_left = 16
@@ -73,50 +83,50 @@ func _build_ui() -> void:
 	panel_sb.border_color = PANEL_BORDER
 	panel_sb.shadow_size = 16
 	panel_sb.shadow_color = Color(0, 0, 0, 0.6)
-	panel_sb.content_margin_top = 32
-	panel_sb.content_margin_bottom = 32
-	panel_sb.content_margin_left = 32
-	panel_sb.content_margin_right = 32
+	panel_sb.content_margin_top = 28
+	panel_sb.content_margin_bottom = 28
+	panel_sb.content_margin_left = 28
+	panel_sb.content_margin_right = 28
 	center_panel.add_theme_stylebox_override("panel", panel_sb)
 	center.add_child(center_panel)
 	
 	# 4. Внутренности
 	var vbox = VBoxContainer.new()
-	vbox.add_theme_constant_override("separation", 16)
+	vbox.add_theme_constant_override("separation", 14)
 	vbox.alignment = BoxContainer.ALIGNMENT_CENTER
 	center_panel.add_child(vbox)
 	
 	# Заголовок
-	var title = Label.new()
-	title.text = "ПАУЗА"
-	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	title.add_theme_font_size_override("font_size", 36)
-	title.add_theme_color_override("font_color", ACCENT_COLOR)
+	title_label = Label.new()
+	title_label.text = tr("UI_PAUSE")
+	title_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	title_label.add_theme_font_size_override("font_size", 36)
+	title_label.add_theme_color_override("font_color", ACCENT_COLOR)
 	var title_set = LabelSettings.new()
 	title_set.font_size = 36
 	title_set.font_color = ACCENT_COLOR
 	title_set.shadow_size = 3
 	title_set.shadow_offset = Vector2(0, 3)
-	title.label_settings = title_set
-	vbox.add_child(title)
+	title_label.label_settings = title_set
+	vbox.add_child(title_label)
 	
 	var sep = HSeparator.new()
 	sep.add_theme_stylebox_override("separator", StyleBoxEmpty.new())
-	sep.custom_minimum_size.y = 8
+	sep.custom_minimum_size.y = 6
 	vbox.add_child(sep)
 	
 	# Кнопка ПРОДОЛЖИТЬ
-	resume_btn = _make_button("Продолжить", ACCENT_COLOR)
+	resume_btn = _make_button(tr("UI_RESUME"), ACCENT_COLOR)
 	resume_btn.pressed.connect(toggle_pause)
 	vbox.add_child(resume_btn)
 
 	# Кнопка РЕСТАРТ
-	restart_btn = _make_button("Рестарт", ACCENT_BLUE)
+	restart_btn = _make_button(tr("UI_RESTART"), ACCENT_BLUE)
 	restart_btn.pressed.connect(_on_restart_pressed)
 	vbox.add_child(restart_btn)
 	
 	# Кнопка В ГЛАВНОЕ МЕНЮ
-	main_menu_btn = _make_button("Выйти в меню", ACCENT_RED)
+	main_menu_btn = _make_button(tr("UI_EXIT_TO_MENU"), ACCENT_RED)
 	main_menu_btn.pressed.connect(_on_main_menu_pressed)
 	vbox.add_child(main_menu_btn)
 
@@ -124,15 +134,47 @@ func _build_ui() -> void:
 	audio_separator.custom_minimum_size.y = 4
 	vbox.add_child(audio_separator)
 
-	var audio_title := Label.new()
-	audio_title.text = "ЗВУК"
-	audio_title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	audio_title.add_theme_font_size_override("font_size", 18)
-	audio_title.add_theme_color_override("font_color", ACCENT_COLOR)
-	vbox.add_child(audio_title)
+	audio_title_label = Label.new()
+	audio_title_label.text = tr("UI_AUDIO")
+	audio_title_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	audio_title_label.add_theme_font_size_override("font_size", 18)
+	audio_title_label.add_theme_color_override("font_color", ACCENT_COLOR)
+	vbox.add_child(audio_title_label)
 
-	master_slider = _add_audio_slider(vbox, "ОБЩАЯ ГРОМКОСТЬ", _get_bus_volume_percent(MASTER_BUS_NAME), _on_master_volume_changed)
-	music_slider = _add_audio_slider(vbox, "МУЗЫКА УРОВНЯ", _get_level_music_volume_percent(), _on_music_volume_changed)
+	master_slider = _add_audio_slider(vbox, "master", tr("UI_MASTER_VOLUME"), _get_bus_volume_percent(MASTER_BUS_NAME), _on_master_volume_changed)
+	music_slider = _add_audio_slider(vbox, "music", tr("UI_LEVEL_MUSIC"), _get_level_music_volume_percent(), _on_music_volume_changed)
+
+	# Селектор языков в паузе
+	var lang_separator := HSeparator.new()
+	lang_separator.custom_minimum_size.y = 4
+	vbox.add_child(lang_separator)
+
+	lang_title_label = Label.new()
+	lang_title_label.text = tr("UI_LANGUAGE")
+	lang_title_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	lang_title_label.add_theme_font_size_override("font_size", 16)
+	lang_title_label.add_theme_color_override("font_color", ACCENT_BLUE)
+	vbox.add_child(lang_title_label)
+
+	var lang_btn_row = HBoxContainer.new()
+	lang_btn_row.alignment = BoxContainer.ALIGNMENT_CENTER
+	lang_btn_row.add_theme_constant_override("separation", 6)
+	vbox.add_child(lang_btn_row)
+
+	language_buttons.clear()
+	var locales: Array[String] = ["ru", "en", "tr", "fr", "it"]
+	for loc in locales:
+		var btn = Button.new()
+		btn.text = loc.to_upper()
+		btn.custom_minimum_size = Vector2(44, 32)
+		btn.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
+		btn.add_theme_font_size_override("font_size", 13)
+		btn.mouse_entered.connect(_play_ui_hover_sound)
+		btn.pressed.connect(_play_ui_click_sound)
+		btn.pressed.connect(_on_language_button_pressed.bind(loc))
+		lang_btn_row.add_child(btn)
+		language_buttons[loc] = btn
+	_update_language_buttons()
 
 func _make_button(text: String, accent: Color) -> Button:
 	var btn = Button.new()
@@ -172,7 +214,7 @@ func _make_button(text: String, accent: Color) -> Button:
 	btn.pressed.connect(_play_ui_click_sound)
 	return btn
 
-func _add_audio_slider(parent: VBoxContainer, caption: String, initial_value: float, changed_callback: Callable) -> HSlider:
+func _add_audio_slider(parent: VBoxContainer, slider_type: String, caption: String, initial_value: float, changed_callback: Callable) -> HSlider:
 	var row := VBoxContainer.new()
 	row.add_theme_constant_override("separation", 4)
 	parent.add_child(row)
@@ -205,9 +247,11 @@ func _add_audio_slider(parent: VBoxContainer, caption: String, initial_value: fl
 	row.add_child(slider)
 	slider.value_changed.connect(changed_callback.bind(value_label))
 
-	if caption == "ОБЩАЯ ГРОМКОСТЬ":
+	if slider_type == "master":
+		master_caption_label = caption_label
 		master_value_label = value_label
 	else:
+		music_caption_label = caption_label
 		music_value_label = value_label
 	return slider
 
@@ -363,3 +407,82 @@ func _on_restart_pressed() -> void:
 		get_node("/root/LoadingManager").transition_to_scene(scene_path)
 	else:
 		get_tree().reload_current_scene()
+
+# ========== ЛОКАЛИЗАЦИЯ ==========
+
+func _on_language_button_pressed(locale: String) -> void:
+	if has_node("/root/LocalizationManager"):
+		get_node("/root/LocalizationManager").set_locale(locale)
+	else:
+		TranslationServer.set_locale(locale)
+		_on_language_changed(locale)
+
+func _on_language_changed(_locale: String) -> void:
+	_update_localized_texts()
+
+func _update_language_buttons() -> void:
+	var current_lang := "ru"
+	if has_node("/root/LocalizationManager"):
+		current_lang = get_node("/root/LocalizationManager").get_current_language()
+	else:
+		current_lang = TranslationServer.get_locale().substr(0, 2).to_lower()
+
+	for loc in language_buttons.keys():
+		var btn: Button = language_buttons[loc]
+		if not is_instance_valid(btn):
+			continue
+		var is_current: bool = (str(loc) == current_lang)
+		if is_current:
+			var active_sb := StyleBoxFlat.new()
+			active_sb.bg_color = ACCENT_BLUE.darkened(0.3)
+			active_sb.corner_radius_top_left = 8
+			active_sb.corner_radius_top_right = 8
+			active_sb.corner_radius_bottom_left = 8
+			active_sb.corner_radius_bottom_right = 8
+			active_sb.border_width_left = 2
+			active_sb.border_width_right = 2
+			active_sb.border_width_top = 2
+			active_sb.border_width_bottom = 2
+			active_sb.border_color = ACCENT_BLUE
+			active_sb.shadow_size = 6
+			active_sb.shadow_color = ACCENT_BLUE * Color(1, 1, 1, 0.4)
+			btn.add_theme_stylebox_override("normal", active_sb)
+			btn.add_theme_stylebox_override("hover", active_sb)
+			btn.add_theme_color_override("font_color", Color.WHITE)
+		else:
+			var idle_sb := StyleBoxFlat.new()
+			idle_sb.bg_color = BTN_BG
+			idle_sb.corner_radius_top_left = 8
+			idle_sb.corner_radius_top_right = 8
+			idle_sb.corner_radius_bottom_left = 8
+			idle_sb.corner_radius_bottom_right = 8
+			idle_sb.border_width_left = 1
+			idle_sb.border_width_right = 1
+			idle_sb.border_width_top = 1
+			idle_sb.border_width_bottom = 1
+			idle_sb.border_color = PANEL_BORDER
+			var hover_sb = idle_sb.duplicate()
+			hover_sb.bg_color = BTN_HOVER
+			hover_sb.border_color = ACCENT_BLUE * Color(1, 1, 1, 0.5)
+			btn.add_theme_stylebox_override("normal", idle_sb)
+			btn.add_theme_stylebox_override("hover", hover_sb)
+			btn.add_theme_color_override("font_color", TEXT_DIM)
+
+func _update_localized_texts() -> void:
+	if title_label:
+		title_label.text = tr("UI_PAUSE")
+	if resume_btn:
+		resume_btn.text = tr("UI_RESUME")
+	if restart_btn:
+		restart_btn.text = tr("UI_RESTART")
+	if main_menu_btn:
+		main_menu_btn.text = tr("UI_EXIT_TO_MENU")
+	if audio_title_label:
+		audio_title_label.text = tr("UI_AUDIO")
+	if master_caption_label:
+		master_caption_label.text = tr("UI_MASTER_VOLUME")
+	if music_caption_label:
+		music_caption_label.text = tr("UI_LEVEL_MUSIC")
+	if lang_title_label:
+		lang_title_label.text = tr("UI_LANGUAGE")
+	_update_language_buttons()

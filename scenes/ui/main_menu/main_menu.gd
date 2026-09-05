@@ -77,45 +77,57 @@ class MenuPerkIcon extends Control:
 const PERK_INFO: Array[Dictionary] = [
 	{
 		"id": "shield",
-		"title": "ЩИТ",
-		"subtitle": "Щит колонии",
+		"title_key": "PERK_SHIELD_TITLE",
+		"subtitle_key": "PERK_SHIELD_SUB",
 		"color": Color(0.2, 0.8, 1.0, 1.0),
 		"icon": SHIELD_ICON,
-		"desc": "Создает защиту вокруг центра колонии и прикрывает соседние клетки. Щит отражает обычные снаряды и помогает пережить вражеский залп.",
+		"desc_key": "PERK_SHIELD_DESC",
 		"cost": "50",
-		"cooldown": "12с",
+		"cooldown_sec": 12,
 	},
 	{
 		"id": "speed",
-		"title": "СПРИНТ",
-		"subtitle": "Общий буст",
+		"title_key": "PERK_SPEED_TITLE",
+		"subtitle_key": "PERK_SPEED_SUB",
 		"color": Color(1.0, 0.9, 0.1, 1.0),
 		"icon": SPEED_ICON,
-		"desc": "Временно ускоряет всю колонию. Идеален для маневров, быстрого сближения и резкого нападения, когда нужно навязать бой первым.",
+		"desc_key": "PERK_SPEED_DESC",
 		"cost": "30",
-		"cooldown": "18с",
+		"cooldown_sec": 18,
 	},
 	{
 		"id": "rapid_fire",
-		"title": "СКОРОСТРЕЛЬНОСТЬ",
-		"subtitle": "Темп огня",
+		"title_key": "PERK_RAPID_FIRE_TITLE",
+		"subtitle_key": "PERK_RAPID_FIRE_SUB",
 		"color": Color(1.0, 0.5, 0.1, 1.0),
 		"icon": RAPID_FIRE_ICON,
-		"desc": "Временно ускоряет стрельбу всей колонии. Лучше всего раскрывается перед добиванием вражеской группы или во время общего пуша.",
+		"desc_key": "PERK_RAPID_FIRE_DESC",
 		"cost": "50",
-		"cooldown": "15с",
+		"cooldown_sec": 15,
 	},
 	{
 		"id": "virus",
-		"title": "ВИРУС",
-		"subtitle": "Автоцель",
+		"title_key": "PERK_VIRUS_TITLE",
+		"subtitle_key": "PERK_VIRUS_SUB",
 		"color": Color(1.0, 0.22, 0.26, 1.0),
 		"icon": null,
-		"desc": "Запускает вирус во врага. Заражение один раз передаётся соседним клеткам его фракции и проходит волной по колонии. Одна волна не заражает клетку повторно, свои клетки невосприимчивы.",
+		"desc_key": "PERK_VIRUS_DESC",
 		"cost": "100",
-		"cooldown": "20с",
+		"cooldown_sec": 20,
 	},
 ]
+
+func _get_perk_title(perk: Dictionary) -> String:
+	return tr(String(perk.get("title_key", "")))
+
+func _get_perk_subtitle(perk: Dictionary) -> String:
+	return tr(String(perk.get("subtitle_key", "")))
+
+func _get_perk_desc(perk: Dictionary) -> String:
+	return tr(String(perk.get("desc_key", "")))
+
+func _get_perk_cooldown(perk: Dictionary) -> String:
+	return tr("UI_SECONDS_SHORT") % str(perk.get("cooldown_sec", 0))
 
 # ========== НОДЫ ==========
 var background_underlay: TextureRect
@@ -158,6 +170,21 @@ var music_slider: HSlider
 var sound_value_label: Label
 var music_value_label: Label
 var settings_close_btn: Button
+var settings_header_label: Label
+var settings_sound_label: Label
+var settings_music_label: Label
+var settings_lang_label: Label
+var language_buttons: Dictionary = {}
+
+var level_header_label: Label
+var perks_header_label: Label
+var perks_subtitle_label: Label
+var perks_close_btn: Button
+var difficulty_header_label: Label
+var difficulty_subtitle_label: Label
+var difficulty_cancel_btn: Button
+var difficulty_buttons: Dictionary = {}
+
 var perks_desc_title: Label
 var perks_desc_body: Label
 var perks_desc_meta: Label
@@ -173,6 +200,8 @@ var total_levels: int = 4
 var unlocked_levels: int = 1
 
 func _ready() -> void:
+	if has_node("/root/LocalizationManager"):
+		get_node("/root/LocalizationManager").language_changed.connect(_on_language_changed)
 	_sync_audio_state_from_buses()
 	_setup_ui_hover_sound()
 	_setup_ui_click_sound()
@@ -214,6 +243,7 @@ func _ready() -> void:
 	settings_panel.visible = false
 	perks_panel.visible = false
 	overlay.visible = false
+	_update_localized_texts()
 	call_deferred("_open_pending_level_selection")
 	
 	# Запускаем пульсацию СВЕЧЕНИЯ и РАЗМЕРА
@@ -507,7 +537,7 @@ func _build_main_screen() -> void:
 	
 	# Сама кнопка (прозрачная с рамкой и тенью)
 	play_button = Button.new()
-	play_button.text = "▶  ИГРАТЬ"
+	play_button.text = tr("UI_PLAY")
 	play_button.set_anchors_and_offsets_preset(PRESET_FULL_RECT)
 	play_button.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
 	
@@ -598,7 +628,7 @@ func _build_main_screen() -> void:
 
 	settings_wrapper.add_child(settings_membrane)
 
-	settings_btn = _make_button("⚙  НАСТРОЙКИ", ACCENT_BLUE)
+	settings_btn = _make_button(tr("UI_SETTINGS"), ACCENT_BLUE)
 	settings_btn.custom_minimum_size = Vector2(240, 60)
 	settings_btn.set_anchors_and_offsets_preset(PRESET_FULL_RECT)
 
@@ -630,7 +660,7 @@ func _build_main_screen() -> void:
 	perks_container.custom_minimum_size = Vector2(220, 74)
 	center_box.add_child(perks_container)
 
-	perks_btn = _make_button("✦  ПЕРКИ", Color(0.92, 0.78, 0.28, 1.0))
+	perks_btn = _make_button(tr("UI_PERKS"), Color(0.92, 0.78, 0.28, 1.0))
 	perks_btn.custom_minimum_size = Vector2(220, 56)
 	perks_btn.pressed.connect(_on_perks_open)
 	perks_container.add_child(perks_btn)
@@ -640,7 +670,7 @@ func _build_main_screen() -> void:
 	center_box.add_child(sound_container)
 
 	sound_btn = _make_icon_button("🔊", 72)
-	sound_btn.tooltip_text = "Все звуки и музыка вкл/выкл"
+	sound_btn.tooltip_text = tr("UI_SOUND_TOOLTIP")
 	sound_btn.pressed.connect(_on_sound_toggle)
 	sound_container.add_child(sound_btn)
 
@@ -711,15 +741,15 @@ func _build_level_panel() -> void:
 	var title_icon = _make_label("🧬", 28, LEVEL_ACCENT)
 	title_box.add_child(title_icon)
 
-	var header = _make_label("ВЫБОР УРОВНЯ", 30, LEVEL_TEXT)
+	level_header_label = _make_label(tr("UI_LEVEL_SELECT"), 30, LEVEL_TEXT)
 	var head_set = LabelSettings.new()
 	head_set.font = level_ui_font
 	head_set.font_size = 30
 	head_set.font_color = LEVEL_TEXT
 	head_set.shadow_color = LEVEL_ACCENT * Color(1, 1, 1, 0.35)
 	head_set.shadow_size = 8
-	header.label_settings = head_set
-	title_box.add_child(header)
+	level_header_label.label_settings = head_set
+	title_box.add_child(level_header_label)
 
 	var header_spacer = Control.new()
 	header_spacer.size_flags_horizontal = Control.SIZE_EXPAND_FILL
@@ -798,7 +828,7 @@ func _build_level_panel() -> void:
 	footer_box.alignment = BoxContainer.ALIGNMENT_CENTER
 	vbox.add_child(footer_box)
 
-	level_back_btn = _make_button("← НАЗАД В МЕНЮ", LEVEL_ACCENT_BLUE)
+	level_back_btn = _make_button(tr("UI_BACK_TO_MENU"), LEVEL_ACCENT_BLUE)
 	_apply_level_back_button_style(level_back_btn)
 	level_back_btn.custom_minimum_size = Vector2(280, 54)
 	level_back_btn.add_theme_font_size_override("font_size", 20)
@@ -921,11 +951,11 @@ func _populate_levels() -> void:
 		ch_head_row.add_child(ch_left_box)
 
 		var chapter_title_color := LEVEL_ACCENT_BLUE if chapter_unlocked else LEVEL_LOCKED_TEXT
-		var chapter_title = _make_label("ГЛАВА %d" % chapter_index, 22, chapter_title_color)
+		var chapter_title = _make_label(tr("UI_CHAPTER") % chapter_index, 22, chapter_title_color)
 		chapter_title.horizontal_alignment = HORIZONTAL_ALIGNMENT_LEFT
 		ch_left_box.add_child(chapter_title)
 
-		var subtitle_text := "Уровни %d-%d" % [start_level, end_level]
+		var subtitle_text := tr("UI_LEVELS_RANGE") % [start_level, end_level]
 		var subtitle = _make_label(subtitle_text, 15, LEVEL_TEXT_DIM)
 		subtitle.horizontal_alignment = HORIZONTAL_ALIGNMENT_LEFT
 		ch_left_box.add_child(subtitle)
@@ -960,7 +990,7 @@ func _populate_levels() -> void:
 			locked_panel.add_theme_stylebox_override("panel", lock_sb)
 			chapter_box.add_child(locked_panel)
 
-			var lock_text := "🔒 Глава откроется при достижении %d ⭐ (нужно еще %d)" % [required_stars, max(0, required_stars - total_stars_now)]
+			var lock_text := tr("UI_CHAPTER_LOCKED") % [required_stars, max(0, required_stars - total_stars_now)]
 			var locked_hint = _make_label(lock_text, 15, Color(1.0, 0.65, 0.65, 0.95))
 			locked_hint.horizontal_alignment = HORIZONTAL_ALIGNMENT_LEFT
 			locked_panel.add_child(locked_hint)
@@ -1234,35 +1264,38 @@ func _build_difficulty_panel() -> void:
 	vbox.add_theme_constant_override("separation", 24)
 	panel_box.add_child(vbox)
 
-	var header = _make_label("ВЫБЕРИ СЛОЖНОСТЬ", 38, ACCENT_COLOR)
-	header.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	difficulty_header_label = _make_label(tr("UI_SELECT_DIFFICULTY"), 38, ACCENT_COLOR)
+	difficulty_header_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	var head_set = LabelSettings.new()
 	head_set.font_size = 38
 	head_set.font_color = ACCENT_COLOR
 	head_set.shadow_color = ACCENT_COLOR * Color(1,1,1,0.3)
 	head_set.shadow_size = 10
-	header.label_settings = head_set
-	vbox.add_child(header)
+	difficulty_header_label.label_settings = head_set
+	vbox.add_child(difficulty_header_label)
 
-	var subtitle = _make_label("Каждая сложность даст разное число звезд", 20, TEXT_DIM)
-	subtitle.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	vbox.add_child(subtitle)
+	difficulty_subtitle_label = _make_label(tr("UI_DIFFICULTY_SUBTITLE"), 20, TEXT_DIM)
+	difficulty_subtitle_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	vbox.add_child(difficulty_subtitle_label)
 
 	var sep = HSeparator.new()
 	sep.add_theme_stylebox_override("separator", _make_stylebox(PANEL_BORDER * Color(1, 1, 1, 0.3), 0))
 	vbox.add_child(sep)
 
-	vbox.add_child(_make_difficulty_button("ЛЕГКИЙ", "★ ☆ ☆", "Меньше врагов, медленная реакция ИИ", ACCENT_COLOR, "easy"))
-	vbox.add_child(_make_difficulty_button("СРЕДНИЙ", "★ ★ ☆", "Стандартный сбалансированный бой", ACCENT_BLUE, "medium"))
-	vbox.add_child(_make_difficulty_button("СЛОЖНЫЙ", "★ ★ ★", "Усиленный старт врага, агрессивный ИИ", Color(1.0, 0.4, 0.2, 1.0), "hard"))
+	difficulty_buttons.clear()
+	vbox.add_child(_make_difficulty_button("easy", "★ ☆ ☆", ACCENT_COLOR))
+	vbox.add_child(_make_difficulty_button("medium", "★ ★ ☆", ACCENT_BLUE))
+	vbox.add_child(_make_difficulty_button("hard", "★ ★ ★", Color(1.0, 0.4, 0.2, 1.0)))
 
-	var cancel_btn = _make_button("✖ ОТМЕНА", ACCENT_RED)
-	cancel_btn.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
-	cancel_btn.custom_minimum_size = Vector2(220, 56)
-	cancel_btn.pressed.connect(_on_difficulty_cancel)
-	vbox.add_child(cancel_btn)
+	difficulty_cancel_btn = _make_button(tr("UI_CANCEL"), ACCENT_RED)
+	difficulty_cancel_btn.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
+	difficulty_cancel_btn.custom_minimum_size = Vector2(220, 56)
+	difficulty_cancel_btn.pressed.connect(_on_difficulty_cancel)
+	vbox.add_child(difficulty_cancel_btn)
 
-func _make_difficulty_button(title_text: String, stars_text: String, desc_text: String, accent: Color, difficulty: String) -> Button:
+func _make_difficulty_button(difficulty: String, stars_text: String, accent: Color) -> Button:
+	var title_text := tr("DIFF_" + difficulty.to_upper())
+	var desc_text := tr("DIFF_" + difficulty.to_upper() + "_DESC")
 	var btn = Button.new()
 	btn.custom_minimum_size = Vector2(0, 88)
 	btn.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
@@ -1345,6 +1378,11 @@ func _make_difficulty_button(title_text: String, stars_text: String, desc_text: 
 	desc_lbl.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	text_vbox.add_child(desc_lbl)
 
+	difficulty_buttons[difficulty] = {
+		"title": title_lbl,
+		"desc": desc_lbl
+	}
+
 	return btn
 
 func _open_difficulty_panel(level_num: int) -> void:
@@ -1408,7 +1446,7 @@ func _build_settings_panel() -> void:
 	
 	var panel_box = PanelContainer.new()
 	panel_box.name = "SettingsPanelBox"
-	panel_box.custom_minimum_size = Vector2(380, 320)
+	panel_box.custom_minimum_size = Vector2(460, 390)
 	var panel_sb = _make_stylebox(PANEL_BG, CORNER_RADIUS, 2, ACCENT_BLUE * Color(1,1,1,0.4))
 	panel_sb.shadow_size = 16
 	panel_sb.shadow_color = Color(0, 0, 0, 0.6)
@@ -1424,9 +1462,9 @@ func _build_settings_panel() -> void:
 	panel_box.add_child(vbox)
 	
 	# Заголовок
-	var header = _make_label("⚙  НАСТРОЙКИ", 26, ACCENT_BLUE)
-	header.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	vbox.add_child(header)
+	settings_header_label = _make_label(tr("UI_SETTINGS_HEADER"), 26, ACCENT_BLUE)
+	settings_header_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	vbox.add_child(settings_header_label)
 	
 	# Разделитель
 	var sep = HSeparator.new()
@@ -1438,9 +1476,9 @@ func _build_settings_panel() -> void:
 	sound_row.add_theme_constant_override("separation", 12)
 	vbox.add_child(sound_row)
 	
-	var sound_label = _make_label("🔊  Звуки", 18)
-	sound_label.custom_minimum_size.x = 120
-	sound_row.add_child(sound_label)
+	settings_sound_label = _make_label(tr("UI_SOUNDS"), 18)
+	settings_sound_label.custom_minimum_size.x = 120
+	sound_row.add_child(settings_sound_label)
 	
 	sound_slider = _make_slider(0, 100, sound_volume)
 	sound_slider.size_flags_horizontal = Control.SIZE_EXPAND_FILL
@@ -1457,9 +1495,9 @@ func _build_settings_panel() -> void:
 	music_row.add_theme_constant_override("separation", 12)
 	vbox.add_child(music_row)
 	
-	var music_label = _make_label("🎵  Музыка", 18)
-	music_label.custom_minimum_size.x = 120
-	music_row.add_child(music_label)
+	settings_music_label = _make_label(tr("UI_MUSIC"), 18)
+	settings_music_label.custom_minimum_size.x = 120
+	music_row.add_child(settings_music_label)
 	
 	music_slider = _make_slider(0, 100, music_volume)
 	music_slider.size_flags_horizontal = Control.SIZE_EXPAND_FILL
@@ -1470,9 +1508,38 @@ func _build_settings_panel() -> void:
 	music_value_label.custom_minimum_size.x = 48
 	music_value_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
 	music_row.add_child(music_value_label)
+
+	# --- Язык (Language) ---
+	var lang_row = HBoxContainer.new()
+	lang_row.add_theme_constant_override("separation", 12)
+	vbox.add_child(lang_row)
+
+	settings_lang_label = _make_label(tr("UI_LANGUAGE"), 18)
+	settings_lang_label.custom_minimum_size.x = 120
+	lang_row.add_child(settings_lang_label)
+
+	var lang_btn_row = HBoxContainer.new()
+	lang_btn_row.add_theme_constant_override("separation", 8)
+	lang_btn_row.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	lang_row.add_child(lang_btn_row)
+
+	language_buttons.clear()
+	var locales: Array[String] = ["ru", "en", "tr", "fr", "it"]
+	for loc in locales:
+		var btn = Button.new()
+		btn.text = loc.to_upper()
+		btn.custom_minimum_size = Vector2(46, 36)
+		btn.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
+		btn.add_theme_font_size_override("font_size", 14)
+		_attach_hover_sound(btn)
+		_attach_click_sound(btn)
+		btn.pressed.connect(_on_language_button_pressed.bind(loc))
+		lang_btn_row.add_child(btn)
+		language_buttons[loc] = btn
+	_update_language_buttons()
 	
 	# Кнопка закрыть
-	settings_close_btn = _make_button("✓  ГОТОВО", ACCENT_BLUE)
+	settings_close_btn = _make_button(tr("UI_DONE"), ACCENT_BLUE)
 	settings_close_btn.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
 	settings_close_btn.pressed.connect(_on_settings_close)
 	vbox.add_child(settings_close_btn)
@@ -1501,13 +1568,13 @@ func _build_perks_panel() -> void:
 	vbox.add_theme_constant_override("separation", 20)
 	panel_box.add_child(vbox)
 
-	var header = _make_label("✦  ПЕРКИ", 28, Color(0.96, 0.84, 0.34, 1.0))
-	header.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	vbox.add_child(header)
+	perks_header_label = _make_label(tr("UI_PERKS_HEADER"), 28, Color(0.96, 0.84, 0.34, 1.0))
+	perks_header_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	vbox.add_child(perks_header_label)
 
-	var subtitle = _make_label("Нажми на перк, чтобы прочитать как он работает", 18, TEXT_DIM.lightened(0.18))
-	subtitle.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	vbox.add_child(subtitle)
+	perks_subtitle_label = _make_label(tr("UI_PERKS_SUBTITLE"), 18, TEXT_DIM.lightened(0.18))
+	perks_subtitle_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	vbox.add_child(perks_subtitle_label)
 
 	var cards_row = HBoxContainer.new()
 	cards_row.add_theme_constant_override("separation", 14)
@@ -1549,10 +1616,10 @@ func _build_perks_panel() -> void:
 	perks_desc_body.custom_minimum_size = Vector2(860, 190)
 	desc_box.add_child(perks_desc_body)
 
-	var close_btn = _make_button("← НАЗАД", ACCENT_BLUE)
-	close_btn.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
-	close_btn.pressed.connect(_on_perks_close)
-	vbox.add_child(close_btn)
+	perks_close_btn = _make_button(tr("UI_BACK"), ACCENT_BLUE)
+	perks_close_btn.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
+	perks_close_btn.pressed.connect(_on_perks_close)
+	vbox.add_child(perks_close_btn)
 
 	_select_perk_card(selected_perk_id)
 
@@ -1578,6 +1645,7 @@ func _build_perk_card(perk: Dictionary) -> Button:
 	btn.add_theme_stylebox_override("pressed", _make_stylebox(Color(accent.r * 0.12, accent.g * 0.12, accent.b * 0.12, 0.92), BTN_CORNER, 3, accent))
 
 	var card_box = VBoxContainer.new()
+	card_box.name = "CardBox"
 	card_box.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	card_box.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	card_box.alignment = BoxContainer.ALIGNMENT_CENTER
@@ -1595,11 +1663,13 @@ func _build_perk_card(perk: Dictionary) -> Button:
 	icon_preview.custom_minimum_size = Vector2(72, 72)
 	icon_holder.add_child(icon_preview)
 
-	var title_lbl = _make_label(String(perk.title), 20, accent)
+	var title_lbl = _make_label(_get_perk_title(perk), 20, accent)
+	title_lbl.name = "TitleLabel"
 	title_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	card_box.add_child(title_lbl)
 
-	var sub_lbl = _make_label(String(perk.subtitle), 15, TEXT_DIM.lightened(0.22))
+	var sub_lbl = _make_label(_get_perk_subtitle(perk), 15, TEXT_DIM.lightened(0.22))
+	sub_lbl.name = "SubLabel"
 	sub_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	card_box.add_child(sub_lbl)
 
@@ -1610,9 +1680,9 @@ func _select_perk_card(perk_id: String) -> void:
 	selected_perk_id = perk_id
 	for perk in PERK_INFO:
 		if String(perk.id) == perk_id:
-			perks_desc_title.text = String(perk.title)
-			perks_desc_meta.text = "⚡ %s   |   ⏱ %s" % [String(perk.cost), String(perk.cooldown)]
-			perks_desc_body.text = String(perk.desc)
+			perks_desc_title.text = _get_perk_title(perk)
+			perks_desc_meta.text = "⚡ %s   |   ⏱ %s" % [String(perk.cost), _get_perk_cooldown(perk)]
+			perks_desc_body.text = _get_perk_desc(perk)
 			break
 
 	for perk in PERK_INFO:
@@ -1772,3 +1842,106 @@ func _input(event: InputEvent) -> void:
 		elif level_panel.visible:
 			_on_level_back()
 			get_viewport().set_input_as_handled()
+
+# ========== УПРАВЛЕНИЕ ЛОКАЛИЗАЦИЕЙ ==========
+
+func _on_language_button_pressed(locale: String) -> void:
+	if has_node("/root/LocalizationManager"):
+		get_node("/root/LocalizationManager").set_locale(locale)
+	else:
+		TranslationServer.set_locale(locale)
+		_on_language_changed(locale)
+
+func _on_language_changed(_locale: String) -> void:
+	_update_localized_texts()
+
+func _update_language_buttons() -> void:
+	var current_lang := "ru"
+	if has_node("/root/LocalizationManager"):
+		current_lang = get_node("/root/LocalizationManager").get_current_language()
+	else:
+		current_lang = TranslationServer.get_locale().substr(0, 2).to_lower()
+
+	for loc in language_buttons.keys():
+		var btn: Button = language_buttons[loc]
+		if not is_instance_valid(btn):
+			continue
+		var is_current: bool = (str(loc) == current_lang)
+		if is_current:
+			var active_sb := _make_stylebox(ACCENT_BLUE.darkened(0.3), BTN_CORNER, 2, ACCENT_BLUE)
+			active_sb.shadow_size = 10
+			active_sb.shadow_color = ACCENT_BLUE * Color(1, 1, 1, 0.45)
+			btn.add_theme_stylebox_override("normal", active_sb)
+			btn.add_theme_stylebox_override("hover", active_sb)
+			btn.add_theme_color_override("font_color", Color.WHITE)
+		else:
+			var idle_sb := _make_stylebox(BTN_BG, BTN_CORNER, 1, PANEL_BORDER)
+			var hover_sb := _make_stylebox(BTN_HOVER, BTN_CORNER, 1, ACCENT_BLUE * Color(1, 1, 1, 0.5))
+			btn.add_theme_stylebox_override("normal", idle_sb)
+			btn.add_theme_stylebox_override("hover", hover_sb)
+			btn.add_theme_color_override("font_color", TEXT_DIM)
+
+func _update_localized_texts() -> void:
+	# Главный экран
+	if play_button:
+		play_button.text = tr("UI_PLAY")
+	if settings_btn:
+		settings_btn.text = tr("UI_SETTINGS")
+	if perks_btn:
+		perks_btn.text = tr("UI_PERKS")
+	if sound_btn:
+		sound_btn.tooltip_text = tr("UI_SOUND_TOOLTIP")
+
+	# Настройки
+	if settings_header_label:
+		settings_header_label.text = tr("UI_SETTINGS_HEADER")
+	if settings_sound_label:
+		settings_sound_label.text = tr("UI_SOUNDS")
+	if settings_music_label:
+		settings_music_label.text = tr("UI_MUSIC")
+	if settings_lang_label:
+		settings_lang_label.text = tr("UI_LANGUAGE")
+	if settings_close_btn:
+		settings_close_btn.text = tr("UI_DONE")
+	_update_language_buttons()
+
+	# Уровни
+	if level_header_label:
+		level_header_label.text = tr("UI_LEVEL_SELECT")
+	if level_back_btn:
+		level_back_btn.text = tr("UI_BACK_TO_MENU")
+	if level_list:
+		_populate_levels()
+
+	# Перки
+	if perks_header_label:
+		perks_header_label.text = tr("UI_PERKS_HEADER")
+	if perks_subtitle_label:
+		perks_subtitle_label.text = tr("UI_PERKS_SUBTITLE")
+	if perks_close_btn:
+		perks_close_btn.text = tr("UI_BACK")
+	for perk in PERK_INFO:
+		var card: Button = perk_card_buttons.get(String(perk.id), null)
+		if card != null and card.has_node("CardBox"):
+			var card_box = card.get_node("CardBox")
+			if card_box.has_node("TitleLabel"):
+				card_box.get_node("TitleLabel").text = _get_perk_title(perk)
+			if card_box.has_node("SubLabel"):
+				card_box.get_node("SubLabel").text = _get_perk_subtitle(perk)
+	_select_perk_card(selected_perk_id)
+
+	# Сложность
+	if difficulty_header_label:
+		difficulty_header_label.text = tr("UI_SELECT_DIFFICULTY")
+	if difficulty_subtitle_label:
+		difficulty_subtitle_label.text = tr("UI_DIFFICULTY_SUBTITLE")
+	if difficulty_cancel_btn:
+		difficulty_cancel_btn.text = tr("UI_CANCEL")
+	for diff_id in difficulty_buttons.keys():
+		var data: Dictionary = difficulty_buttons[diff_id]
+		var title_lbl: Label = data.get("title", null)
+		var desc_lbl: Label = data.get("desc", null)
+		if title_lbl:
+			title_lbl.text = tr("DIFF_" + diff_id.to_upper())
+		if desc_lbl:
+			desc_lbl.text = tr("DIFF_" + diff_id.to_upper() + "_DESC")

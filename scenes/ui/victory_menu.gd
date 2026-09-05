@@ -19,7 +19,7 @@ const BUTTON_CLICK_PITCH_SCALE: float = 1.8
 const WON_MUSIC := preload("res://audio/won_music.wav")
 const LOSE_MUSIC := preload("res://audio/lose_music_0.ogg")
 const ONE_STAR_BANNER := preload("res://assets/sprites/oneStar.png")
-const TWO_STAR_BANNER := preload("res://assets/sprites/twoStars.png")
+const TWO_STAR_BANNER := preload("res://assets/sprites/WinTwooStars.png")
 const THREE_STAR_BANNER := preload("res://assets/sprites/freeStars.png")
 const DEFEAT_BANNER := preload("res://assets/sprites/lose.png")
 const FIREWORK_SOUNDS := [
@@ -82,6 +82,8 @@ func _ready() -> void:
 	layer = 130
 	process_mode = Node.PROCESS_MODE_ALWAYS
 	_firework_rng.randomize()
+	if has_node("/root/LocalizationManager"):
+		get_node("/root/LocalizationManager").language_changed.connect(_on_language_changed)
 	_setup_audio_players()
 	_build_ui()
 	visible = false
@@ -90,12 +92,12 @@ func setup(current_level: int, difficulty_stars: String, has_next_level: bool, n
 	_result_mode = "victory"
 	_has_next_level = has_next_level
 	_next_level_num = next_level_num
-	title_label.text = "ПОБЕДА"
+	title_label.text = tr("UI_VICTORY")
 	title_label.label_settings.font_color = ACCENT_COLOR
 	title_label.label_settings.shadow_color = Color(0.1, 0.9, 0.58, 0.22)
 	subtitle_label.text = ""
 	subtitle_label.visible = false
-	next_btn.text = "СЛЕДУЮЩИЙ УРОВЕНЬ" if _has_next_level else "В ГЛАВНОЕ МЕНЮ"
+	next_btn.text = tr("UI_NEXT_LEVEL") if _has_next_level else tr("UI_MAIN_MENU")
 	next_btn.visible = true
 	_set_result_banner(difficulty_stars)
 	_apply_result_palette(false)
@@ -104,7 +106,7 @@ func setup_defeat(current_level: int) -> void:
 	_result_mode = "defeat"
 	_has_next_level = false
 	_next_level_num = current_level
-	title_label.text = "ПОРАЖЕНИЕ"
+	title_label.text = tr("UI_DEFEAT")
 	title_label.label_settings.font_color = Color(1.0, 0.42, 0.5, 1.0)
 	title_label.label_settings.shadow_color = Color(0.92, 0.18, 0.22, 0.2)
 	subtitle_label.text = ""
@@ -312,7 +314,7 @@ func _build_ui() -> void:
 	title_label.position = Vector2(20, 85)
 	title_label.size = Vector2(620, 86)
 	title_label.custom_minimum_size = Vector2(620, 86)
-	title_label.text = "ПОБЕДА"
+	title_label.text = tr("UI_VICTORY")
 	title_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	title_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
 	title_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
@@ -374,15 +376,15 @@ func _build_ui() -> void:
 	buttons.add_theme_constant_override("separation", 12)
 	vbox.add_child(buttons)
 
-	next_btn = _make_button("СЛЕДУЮЩИЙ УРОВЕНЬ", ACCENT_COLOR)
+	next_btn = _make_button(tr("UI_NEXT_LEVEL"), ACCENT_COLOR)
 	next_btn.pressed.connect(_on_next_pressed)
 	buttons.add_child(next_btn)
 
-	replay_btn = _make_button("ПЕРЕИГРАТЬ", ACCENT_BLUE)
+	replay_btn = _make_button(tr("UI_REPLAY"), ACCENT_BLUE)
 	replay_btn.pressed.connect(_on_replay_pressed)
 	buttons.add_child(replay_btn)
 
-	menu_btn = _make_button("В МЕНЮ", Color(1.0, 0.52, 0.42, 1.0))
+	menu_btn = _make_button(tr("UI_TO_MENU"), Color(1.0, 0.52, 0.42, 1.0))
 	menu_btn.pressed.connect(_on_menu_pressed)
 	buttons.add_child(menu_btn)
 
@@ -416,14 +418,25 @@ func _apply_result_palette(is_defeat: bool) -> void:
 		result_banner.visible = true
 		title_label.position = Vector2(20, 95)
 		overlay.color = Color(0.0, 0.0, 0.0, 0.8)
-		replay_btn.text = "ПОВТОРИТЬ ПОПЫТКУ"
-		menu_btn.text = "ОТСТУПИТЬ В МЕНЮ"
+		replay_btn.text = tr("UI_RETRY")
+		menu_btn.text = tr("UI_RETREAT_TO_MENU")
 	else:
 		result_banner.visible = true
 		title_label.position = Vector2(20, 85)
 		overlay.color = Color(0.0, 0.0, 0.0, 0.72)
-		replay_btn.text = "ПЕРЕИГРАТЬ"
-		menu_btn.text = "В МЕНЮ"
+		replay_btn.text = tr("UI_REPLAY")
+		menu_btn.text = tr("UI_TO_MENU")
+
+func _on_language_changed(_locale: String) -> void:
+	if _result_mode == "defeat":
+		title_label.text = tr("UI_DEFEAT")
+		replay_btn.text = tr("UI_RETRY")
+		menu_btn.text = tr("UI_RETREAT_TO_MENU")
+	else:
+		title_label.text = tr("UI_VICTORY")
+		next_btn.text = tr("UI_NEXT_LEVEL") if _has_next_level else tr("UI_MAIN_MENU")
+		replay_btn.text = tr("UI_REPLAY")
+		menu_btn.text = tr("UI_TO_MENU")
 
 func _reset_victory_visuals() -> void:
 	_clear_reward_popups()

@@ -133,7 +133,7 @@ func _build_ui() -> void:
 	panel.add_child(spinner)
 
 	title_label = Label.new()
-	title_label.text = "Загрузка..."
+	title_label.text = tr("UI_LOADING")
 	title_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	var title_settings := LabelSettings.new()
 	title_settings.font_size = 22
@@ -181,6 +181,7 @@ func _build_ui() -> void:
 	panel.add_child(percent_label)
 
 func _show_overlay() -> void:
+	title_label.text = tr("UI_LOADING")
 	overlay.visible = true
 	panel.visible = true
 	overlay.modulate.a = 0.0

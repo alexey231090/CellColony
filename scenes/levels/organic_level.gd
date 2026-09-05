@@ -140,7 +140,7 @@ func _ready() -> void:
 		playable_polygon_pts
 	)
 	base_positions.append(player_base_pos)
-	var player_cell = _spawn_cell(player_base_pos, BaseCell.OwnerType.PLAYER, 40.0)
+	var player_cell = _spawn_cell(player_base_pos, BaseCell.OwnerType.PLAYER, 30.0)
 	player_cell.assigned_perk = "speed"
 	player_cell.z_index = 100
 	var difficulty: String = String(level_data.get("selected_difficulty", "easy"))
@@ -227,7 +227,7 @@ func _spawn_cell(pos: Vector2, owner_type: int, energy: float):
 	var cell: BaseCell = cell_scene.instantiate() as BaseCell
 	cell.position = pos
 	cell.owner_type = owner_type
-	cell.stats.current_energy = energy
+	cell.stats.current_energy = minf(energy, cell.stats.max_energy)
 	
 	# ВАЖНО: Добавляем в группы, чтобы SelectionManager и Camera его видели
 	cell.add_to_group("cells")

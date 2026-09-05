@@ -230,7 +230,7 @@ func _go_to_step(step: int) -> void:
 
 func _enter_intro_step() -> void:
 	pointer_auto_hide_timer = -1.0
-	_show_hint("Это твоя колония", "top")
+	_show_hint(tr("TUTORIAL_INTRO"), "top")
 	_disable_freeze_overlay()
 	_clear_neutral_highlights()
 	if is_instance_valid(player_start_cell):
@@ -246,7 +246,7 @@ func _skip_intro() -> void:
 
 func _enter_capture_step() -> void:
 	pointer_auto_hide_timer = -1.0
-	_show_hint("Захвати любую нейтральную клетку", "top")
+	_show_hint(tr("TUTORIAL_CAPTURE_NEUTRAL"), "top")
 	_disable_freeze_overlay()
 	if tutorial_pointer != null:
 		tutorial_pointer.call("hide_pointer")
@@ -255,14 +255,14 @@ func _enter_capture_step() -> void:
 
 func _enter_wait_capture_step() -> void:
 	pointer_auto_hide_timer = -1.0
-	_show_hint("Подожди, пока колония захватит клетку", "top")
+	_show_hint(tr("TUTORIAL_WAIT_CAPTURE"), "top")
 	_disable_freeze_overlay()
 	if tutorial_pointer != null:
 		tutorial_pointer.call("hide_pointer")
 
 func _enter_wait_speed_energy_step() -> void:
 	pointer_auto_hide_timer = 4.0
-	_show_hint("Это энергия перков. Она растет, когда ты захватываешь клетки, и тратится на способности. Захватывай клетки, пока не накопишь энергию на ускорение.", "hud_top")
+	_show_hint(tr("TUTORIAL_ENERGY_BAR"), "hud_top")
 	_disable_freeze_overlay()
 	var energy_bar := _get_energy_bar()
 	if energy_bar != null:
@@ -276,7 +276,7 @@ func _enter_wait_speed_energy_step() -> void:
 func _enter_speed_step() -> void:
 	pointer_auto_hide_timer = -1.0
 	perk_guide_revisit_timer = -1.0
-	_show_hint("Теперь нажми на перк ускорение!", "hud_top")
+	_show_hint(tr("TUTORIAL_SPEED_PERK"), "hud_top")
 	_enable_freeze_overlay()
 	_clear_energy_bar_highlight()
 	_show_perk_guide_panel()
@@ -295,7 +295,7 @@ func _enter_move_step() -> void:
 	_hide_corner_hint()
 	_clear_energy_bar_highlight()
 	_disable_freeze_overlay()
-	_show_hint("Теперь кликни в любое место, чтобы отправить колонию дальше!", "top")
+	_show_hint(tr("TUTORIAL_MOVE_COMMAND"), "top")
 	_apply_pointer_calibration("move_anywhere")
 	_set_pointer_world_position(move_target_position)
 	if tutorial_pointer != null:
@@ -308,7 +308,7 @@ func _enter_free_play_confirm_step() -> void:
 	_hide_perk_guide_panel()
 	_clear_energy_bar_highlight()
 	_disable_freeze_overlay()
-	_show_hint("Отлично! Колония готова к наступлению. Теперь сокруши вражескую колонию и захвати арену!", "top")
+	_show_hint(tr("TUTORIAL_FREE_PLAY_CONFIRM"), "top")
 	if tutorial_pointer != null:
 		tutorial_pointer.call("hide_pointer")
 
@@ -320,7 +320,7 @@ func _enter_free_play_step() -> void:
 	_hide_panel_hint()
 	_clear_energy_bar_highlight()
 	_disable_freeze_overlay()
-	_show_corner_hint("Захвати вражескую колонию")
+	_show_corner_hint(tr("TUTORIAL_CORNER_GOAL"))
 	if tutorial_pointer != null:
 		tutorial_pointer.call("hide_pointer")
 	_clear_neutral_highlights()
@@ -447,10 +447,10 @@ func _build_perk_guide_panel() -> void:
 	if perk_guide_panel == null:
 		return
 	var entries := [
-		{"perk": "shield", "text": "Щит", "color": Color(0.64, 0.9, 1.0, 0.96)},
-		{"perk": "rapid_fire", "text": "Скорострельность", "color": Color(1.0, 0.72, 0.4, 0.96)},
-		{"perk": "speed", "text": "Скорость", "color": Color(1.0, 0.93, 0.52, 1.0)},
-		{"perk": "virus", "text": "Вирус", "color": Color(1.0, 0.56, 0.56, 0.96)},
+		{"perk": "shield", "text": tr("PERK_SHIELD_SHORT"), "color": Color(0.64, 0.9, 1.0, 0.96)},
+		{"perk": "rapid_fire", "text": tr("PERK_RAPID_FIRE_SHORT"), "color": Color(1.0, 0.72, 0.4, 0.96)},
+		{"perk": "speed", "text": tr("PERK_SPEED_SHORT"), "color": Color(1.0, 0.93, 0.52, 1.0)},
+		{"perk": "virus", "text": tr("PERK_VIRUS_SHORT"), "color": Color(1.0, 0.56, 0.56, 0.96)},
 	]
 	for entry in entries:
 		var label := Label.new()
