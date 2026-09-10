@@ -135,28 +135,16 @@ func _save_locale_to_settings(locale_code: String) -> void:
 	config.save(SETTINGS_FILE_PATH)
 
 func _ensure_translations_registered() -> void:
-	# Проверяем, зарегистрированы ли уже переводы в TranslationServer
-	var has_translations := false
-	for loc in SUPPORTED_LOCALES:
-		if not TranslationServer.get_translation_object(loc) == null:
-			has_translations = true
-			break
-	
-	if has_translations:
-		return
-	
-	# Если скомпилированные .translation файлы не загрузились автоматически,
-	# парсим CSV напрямую в Translation объекты для абсолютной автономности
+	# Дополняем и синхронизируем переводы из CSV файла напрямую,
+	# гарантируя доступность всех актуальных ключей в рантайме
 	_load_translations_from_csv(CSV_TRANSLATION_PATH)
 
 func _load_translations_from_csv(path: String) -> void:
 	if not FileAccess.file_exists(path):
-		push_warning("[LocalizationManager] CSV файл переводов не найден: " + path)
 		return
 	
 	var file := FileAccess.open(path, FileAccess.READ)
 	if file == null:
-		push_warning("[LocalizationManager] Не удалось открыть CSV файл: " + path)
 		return
 	
 	var header_line := file.get_csv_line()
@@ -170,10 +158,16 @@ func _load_translations_from_csv(path: String) -> void:
 			locale_indices[col_name] = i
 	
 	var translation_map: Dictionary = {}
+	var newly_created: Array[String] = []
 	for loc in locale_indices.keys():
-		var trans := Translation.new()
-		trans.locale = loc
-		translation_map[loc] = trans
+		var existing: Translation = TranslationServer.get_translation_object(loc)
+		if existing == null:
+			var trans := Translation.new()
+			trans.locale = loc
+			translation_map[loc] = trans
+			newly_created.append(loc)
+		else:
+			translation_map[loc] = existing
 	
 	while not file.eof_reached():
 		var line := file.get_csv_line()
@@ -191,7 +185,5 @@ func _load_translations_from_csv(path: String) -> void:
 	
 	file.close()
 	
-	for loc in translation_map.keys():
+	for loc in newly_created:
 		TranslationServer.add_translation(translation_map[loc])
-	
-	print("[LocalizationManager] Успешно загружены и зарегистрированы переводы из CSV для: ", translation_map.keys())

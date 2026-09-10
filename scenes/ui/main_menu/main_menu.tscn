@@ -1,9 +1,9 @@
-[gd_scene load_steps=3 format=3]
+[gd_scene format=3 uid="uid://c3y2t1fb4udsx"]
 
-[ext_resource type="Script" path="res://scenes/ui/main_menu/main_menu.gd" id="1_menu"]
+[ext_resource type="Script" uid="uid://doemd62rgbefy" path="res://scenes/ui/main_menu/main_menu.gd" id="1_menu"]
 [ext_resource type="AudioStream" uid="uid://d28e7nmea8bsn" path="res://audio/Cell_ColloniyMusic_2.ogg" id="2_music"]
 
-[node name="MainMenu" type="Control"]
+[node name="MainMenu" type="Control" unique_id=1503082868]
 layout_mode = 3
 anchors_preset = 15
 anchor_right = 1.0
@@ -12,7 +12,7 @@ grow_horizontal = 2
 grow_vertical = 2
 script = ExtResource("1_menu")
 
-[node name="MenuMusic" type="AudioStreamPlayer" parent="."]
+[node name="MenuMusic" type="AudioStreamPlayer" parent="." unique_id=91476802]
 stream = ExtResource("2_music")
 autoplay = true
 bus = &"Music"

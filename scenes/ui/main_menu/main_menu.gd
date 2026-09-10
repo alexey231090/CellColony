@@ -74,6 +74,85 @@ class MenuPerkIcon extends Control:
 				draw_line(p1, p2, icon_color, 3.4)
 			return
 
+class SoundIconVisual extends Control:
+	var is_muted: bool = false:
+		set(val):
+			is_muted = val
+			queue_redraw()
+
+	func _ready() -> void:
+		mouse_filter = Control.MOUSE_FILTER_IGNORE
+
+	func _draw() -> void:
+		var w := size.x
+		var h := size.y
+		if w <= 0 or h <= 0:
+			return
+		var cx := w * 0.44
+		var cy := h * 0.5
+		var icon_color := Color(0.92, 0.96, 1.0, 0.95)
+
+		# 1. Корпус динамика
+		var body_w := 7.0
+		var body_h := 14.0
+		draw_rect(Rect2(cx - 14.0, cy - body_h * 0.5, body_w, body_h), icon_color)
+
+		# 2. Раструб
+		var cone_pts := PackedVector2Array([
+			Vector2(cx - 7.0, cy - 7.0),
+			Vector2(cx + 4.0, cy - 15.0),
+			Vector2(cx + 4.0, cy + 15.0),
+			Vector2(cx - 7.0, cy + 7.0)
+		])
+		draw_colored_polygon(cone_pts, icon_color)
+
+		if not is_muted:
+			# Две аккуратные волны звука
+			draw_arc(Vector2(cx + 2.0, cy), 9.0, -PI * 0.32, PI * 0.32, 16, icon_color, 2.6, true)
+			draw_arc(Vector2(cx + 2.0, cy), 17.0, -PI * 0.32, PI * 0.32, 16, icon_color * Color(1, 1, 1, 0.75), 2.6, true)
+		else:
+			# Красная диагональная линия перечёркивания
+			var cross_color := Color(1.0, 0.30, 0.35, 1.0)
+			draw_line(Vector2(cx - 15.0, cy + 15.0), Vector2(cx + 17.0, cy - 15.0), cross_color, 3.6, true)
+
+class LockIconVisual extends Control:
+	var lock_color: Color = Color(0.46, 0.52, 0.60, 0.9)
+
+	func _ready() -> void:
+		mouse_filter = Control.MOUSE_FILTER_IGNORE
+
+	func _draw() -> void:
+		var w := size.x
+		var h := size.y
+		if w <= 0 or h <= 0:
+			return
+		var cx := w * 0.5
+		var cy := h * 0.52
+
+		# Корпус замка
+		var body_w := 26.0
+		var body_h := 20.0
+		var body_rect := Rect2(cx - body_w * 0.5, cy - 3.0, body_w, body_h)
+		draw_rect(body_rect, lock_color, true)
+
+		# Дужка замка (полукруг сверху)
+		var shackle_r := 7.5
+		draw_arc(Vector2(cx, cy - 3.0), shackle_r, PI, 2.0 * PI, 24, lock_color, 3.2, true)
+		draw_line(Vector2(cx - shackle_r, cy - 3.0), Vector2(cx - shackle_r, cy), lock_color, 3.2, true)
+		draw_line(Vector2(cx + shackle_r, cy - 3.0), Vector2(cx + shackle_r, cy), lock_color, 3.2, true)
+
+		# Замочная скважина
+		var hole_color := Color(0.06, 0.09, 0.13, 0.95)
+		draw_circle(Vector2(cx, cy + 4.5), 2.4, hole_color)
+		var hole_pts := PackedVector2Array([
+			Vector2(cx - 1.4, cy + 4.5),
+			Vector2(cx + 1.4, cy + 4.5),
+			Vector2(cx + 2.2, cy + 10.5),
+			Vector2(cx - 2.2, cy + 10.5)
+		])
+		draw_colored_polygon(hole_pts, hole_color)
+
+
 const PERK_INFO: Array[Dictionary] = [
 	{
 		"id": "shield",
@@ -144,6 +223,7 @@ var ui_click_sfx: AudioStreamPlayer
 
 # Кнопки верхней панели
 var sound_btn: Button
+var sound_icon: SoundIconVisual
 var sound_cross: Label
 var settings_btn: Button
 var perks_btn: Button
@@ -669,20 +749,16 @@ func _build_main_screen() -> void:
 	sound_container.custom_minimum_size = Vector2(120, 96)
 	center_box.add_child(sound_container)
 
-	sound_btn = _make_icon_button("🔊", 72)
+	sound_btn = _make_icon_button("", 72)
 	sound_btn.tooltip_text = tr("UI_SOUND_TOOLTIP")
 	sound_btn.pressed.connect(_on_sound_toggle)
 	sound_container.add_child(sound_btn)
 
-	sound_cross = _make_label("✕", 44, Color(1.0, 0.3, 0.35, 1.0))
-	sound_cross.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-	sound_cross.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	sound_cross.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
-	sound_cross.add_theme_constant_override("outline_size", 8)
-	sound_cross.add_theme_color_override("font_outline_color", Color.BLACK)
-	sound_cross.mouse_filter = MOUSE_FILTER_IGNORE
-	sound_cross.visible = not is_sound_on
-	sound_btn.add_child(sound_cross)
+	sound_icon = SoundIconVisual.new()
+	sound_icon.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	sound_icon.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	sound_icon.is_muted = not is_sound_on
+	sound_btn.add_child(sound_icon)
 
 	
 	var center_spacer_bottom = Control.new()
@@ -738,9 +814,6 @@ func _build_level_panel() -> void:
 	title_box.add_theme_constant_override("separation", 10)
 	header_bar.add_child(title_box)
 
-	var title_icon = _make_label("🧬", 28, LEVEL_ACCENT)
-	title_box.add_child(title_icon)
-
 	level_header_label = _make_label(tr("UI_LEVEL_SELECT"), 30, LEVEL_TEXT)
 	var head_set = LabelSettings.new()
 	head_set.font = level_ui_font
@@ -767,7 +840,7 @@ func _build_level_panel() -> void:
 	stars_badge.add_theme_stylebox_override("panel", stars_badge_sb)
 	header_bar.add_child(stars_badge)
 
-	level_header_stars_label = _make_label("⭐ 0 / 90", 18, LEVEL_ACCENT_GOLD)
+	level_header_stars_label = _make_label("★ 0 / 90", 18, LEVEL_ACCENT_GOLD)
 	var badge_settings = LabelSettings.new()
 	badge_settings.font = level_ui_font
 	badge_settings.font_size = 18
@@ -777,9 +850,9 @@ func _build_level_panel() -> void:
 	level_header_stars_label.label_settings = badge_settings
 	stars_badge.add_child(level_header_stars_label)
 
-	# Кнопка закрытия ✖ в правом верхнем углу (для мобильных и ПК)
+	# Кнопка закрытия ✕ в правом верхнем углу (для мобильных и ПК)
 	level_close_top_btn = Button.new()
-	level_close_top_btn.text = "✖"
+	level_close_top_btn.text = "✕"
 	level_close_top_btn.custom_minimum_size = Vector2(40, 40)
 	level_close_top_btn.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
 	level_close_top_btn.add_theme_font_size_override("font_size", 18)
@@ -905,7 +978,7 @@ func _populate_levels() -> void:
 		total_stars_now = int(level_manager.get_total_stars())
 	var max_stars := total_levels * 3
 	if level_header_stars_label != null:
-		level_header_stars_label.text = "⭐ %d / %d" % [total_stars_now, max_stars]
+		level_header_stars_label.text = "★ %d / %d" % [total_stars_now, max_stars]
 
 	var chapters := int(ceili(float(total_levels) / 5.0))
 	for chapter_index in range(1, chapters + 1):
@@ -976,7 +1049,7 @@ func _populate_levels() -> void:
 		ch_head_row.add_child(ch_stars_chip)
 
 		var chip_color := LEVEL_ACCENT_GOLD if chapter_unlocked else LEVEL_LOCKED_TEXT
-		var chip_text := "⭐ %d / %d" % [chapter_stars, chapter_max_stars]
+		var chip_text := "★ %d / %d" % [chapter_stars, chapter_max_stars]
 		var chip_lbl := _make_label(chip_text, 15, chip_color)
 		ch_stars_chip.add_child(chip_lbl)
 
@@ -1112,7 +1185,7 @@ func _build_level_button(level_num: int, is_unlocked: bool) -> Button:
 		preview_ctrl.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		btn.add_child(preview_ctrl)
 
-		icon_lbl.text = "▶"
+		icon_lbl.text = "►"
 		icon_lbl.add_theme_font_size_override("font_size", 36)
 		icon_lbl.add_theme_color_override("font_color", LEVEL_ACCENT)
 
@@ -1168,11 +1241,11 @@ func _build_level_button(level_num: int, is_unlocked: bool) -> Button:
 			btn.add_theme_stylebox_override("pressed", _make_stylebox(LEVEL_CARD_PRESSED, 16, 2, LEVEL_ACCENT_BLUE))
 			btn.add_theme_stylebox_override("focus", hover_sb.duplicate())
 	else:
-		icon_lbl.offset_top = 0
-		icon_lbl.offset_bottom = 0
-		icon_lbl.text = "🔒"
-		icon_lbl.add_theme_font_size_override("font_size", 34)
-		icon_lbl.add_theme_color_override("font_color", LEVEL_LOCKED_TEXT)
+		var lock_icon := LockIconVisual.new()
+		lock_icon.lock_color = LEVEL_LOCKED_TEXT
+		lock_icon.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+		lock_icon.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		btn.add_child(lock_icon)
 		stars_tray.visible = false
 		btn.disabled = true
 
@@ -1180,7 +1253,8 @@ func _build_level_button(level_num: int, is_unlocked: bool) -> Button:
 		btn.add_theme_stylebox_override("normal", locked_sb)
 		btn.add_theme_stylebox_override("disabled", locked_sb)
 
-	btn.add_child(icon_lbl)
+	if is_unlocked:
+		btn.add_child(icon_lbl)
 	btn.add_child(num_pill)
 	btn.add_child(stars_tray)
 	return btn
@@ -1681,7 +1755,7 @@ func _select_perk_card(perk_id: String) -> void:
 	for perk in PERK_INFO:
 		if String(perk.id) == perk_id:
 			perks_desc_title.text = _get_perk_title(perk)
-			perks_desc_meta.text = "⚡ %s   |   ⏱ %s" % [String(perk.cost), _get_perk_cooldown(perk)]
+			perks_desc_meta.text = "%s: %s   |   %s: %s" % [tr("UI_PERK_COST"), String(perk.cost), tr("UI_PERK_COOLDOWN"), _get_perk_cooldown(perk)]
 			perks_desc_body.text = _get_perk_desc(perk)
 			break
 
@@ -1761,6 +1835,8 @@ func refresh_unlocked_levels() -> void:
 
 func _on_sound_toggle() -> void:
 	is_sound_on = not is_sound_on
+	if sound_icon:
+		sound_icon.is_muted = not is_sound_on
 	if sound_cross:
 		sound_cross.visible = not is_sound_on
 	_apply_sound_volume()
@@ -1773,6 +1849,8 @@ func _on_sound_volume_changed(value: float) -> void:
 	sound_volume = value
 	sound_value_label.text = str(int(value)) + "%"
 	is_sound_on = value > 0
+	if sound_icon:
+		sound_icon.is_muted = not is_sound_on
 	if sound_cross:
 		sound_cross.visible = not is_sound_on
 	_apply_sound_volume()

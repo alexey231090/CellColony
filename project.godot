@@ -16,7 +16,7 @@ compatibility/default_parent_skeleton_in_mesh_instance_3d=true
 
 config/name="CellColony"
 run/main_scene="res://scenes/ui/main_menu/main_menu.tscn"
-config/features=PackedStringArray("4.6", "GL Compatibility")
+config/features=PackedStringArray("4.7", "GL Compatibility")
 
 [autoload]
 
@@ -24,11 +24,7 @@ LocalizationManager="*res://scripts/core/LocalizationManager.gd"
 AIProfilerRuntime="*res://addons/ai_profiler_export/runtime/ai_profiler_runtime.gd"
 LevelManager="*res://scripts/core/LevelManager.gd"
 LoadingManager="*res://scripts/core/LoadingManager.gd"
-
-[internationalization]
-
-locale/translations=PackedStringArray("res://translations/translations.en.translation", "res://translations/translations.fr.translation", "res://translations/translations.it.translation", "res://translations/translations.ru.translation", "res://translations/translations.tr.translation")
-
+YandexSDK="*uid://do62bxakwgyfx"
 
 [dotnet]
 
@@ -36,7 +32,11 @@ project/assembly_name="CellColony"
 
 [editor_plugins]
 
-enabled=PackedStringArray("res://addons/ai_profiler_export/plugin.cfg")
+enabled=PackedStringArray("res://addons/ai_profiler_export/plugin.cfg", "res://addons/godot-yandex-games-sdk/plugin.cfg")
+
+[internationalization]
+
+locale/translations=PackedStringArray("res://translations/translations.en.translation", "res://translations/translations.fr.translation", "res://translations/translations.it.translation", "res://translations/translations.ru.translation", "res://translations/translations.tr.translation")
 
 [rendering]
 
