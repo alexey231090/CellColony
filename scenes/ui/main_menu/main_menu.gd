@@ -48,6 +48,9 @@ const SHIELD_ICON := preload("res://assets/sprites/shield.png")
 const RAPID_FIRE_ICON := preload("res://assets/sprites/speedfire2.png")
 const SPEED_ICON := preload("res://assets/sprites/speed.png")
 const LEVEL_MAP_PREVIEW_SCRIPT := preload("res://scripts/ui/level_map_preview.gd")
+const STAR_FILLED_TEX := preload("res://assets/sprites/miniStar.png")
+const STAR_EMPTY_TEX := preload("res://assets/sprites/StarSiluet.png")
+const LEFT_ARROW_TEX := preload("res://assets/sprites/LeftArrow.png")
 
 class MenuPerkIcon extends Control:
 	var perk_id: String = ""
@@ -401,6 +404,20 @@ func _make_icon_button(icon_text: String, size_px: int = 48) -> Button:
 	btn.custom_minimum_size = Vector2(size_px, size_px)
 	btn.add_theme_font_size_override("font_size", 22)
 	return btn
+
+## Добавляет иконку стрелки влево (LeftArrow.png) как TextureRect поверх кнопки
+## Работает во всех браузерах и WebGL без проблем с кодировкой символов.
+func _add_left_arrow_icon(btn: Button) -> void:
+	var arrow := TextureRect.new()
+	arrow.texture = LEFT_ARROW_TEX
+	arrow.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+	arrow.expand_mode = TextureRect.EXPAND_FIT_WIDTH_PROPORTIONAL
+	arrow.custom_minimum_size = Vector2(22, 22)
+	arrow.set_anchors_and_offsets_preset(Control.PRESET_LEFT_WIDE)
+	arrow.offset_left = 14
+	arrow.offset_right = 14 + 22
+	arrow.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	btn.add_child(arrow)
 
 func _make_label(text: String, font_size: int = 20, color: Color = TEXT_COLOR) -> Label:
 	var lbl = Label.new()
@@ -907,6 +924,7 @@ func _build_level_panel() -> void:
 	level_back_btn.add_theme_font_size_override("font_size", 20)
 	level_back_btn.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
 	level_back_btn.pressed.connect(_on_level_back)
+	_add_left_arrow_icon(level_back_btn)
 	footer_box.add_child(level_back_btn)
 
 	# Подключение к ресайзу экрана для адаптивности
@@ -1148,25 +1166,23 @@ func _build_level_button(level_num: int, is_unlocked: bool) -> Button:
 	tray_sb.content_margin_bottom = 2
 	stars_tray.add_theme_stylebox_override("panel", tray_sb)
 
-	var stars_lbl := Label.new()
-	stars_lbl.text = stars_text
-	stars_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	stars_lbl.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
-	stars_lbl.mouse_filter = Control.MOUSE_FILTER_IGNORE
-
-	var stars_set := LabelSettings.new()
-	stars_set.font = level_ui_font
-	stars_set.font_size = 15
-	if best_stars > 0:
-		stars_set.font_color = LEVEL_ACCENT_GOLD
-		stars_set.outline_size = 1
-		stars_set.outline_color = Color(0.35, 0.22, 0.04, 0.9)
-		stars_set.shadow_color = Color(1.0, 0.72, 0.15, 0.4)
-		stars_set.shadow_size = 4
-	else:
-		stars_set.font_color = Color(0.48, 0.56, 0.62, 0.45)
-	stars_lbl.label_settings = stars_set
-	stars_tray.add_child(stars_lbl)
+	var stars_hbox := HBoxContainer.new()
+	stars_hbox.alignment = BoxContainer.ALIGNMENT_CENTER
+	stars_hbox.add_theme_constant_override("separation", 2)
+	stars_hbox.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	for si in range(3):
+		var star_rect := TextureRect.new()
+		star_rect.texture = STAR_FILLED_TEX if si < best_stars else STAR_EMPTY_TEX
+		star_rect.custom_minimum_size = Vector2(16, 16)
+		star_rect.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+		star_rect.expand_mode = TextureRect.EXPAND_FIT_WIDTH_PROPORTIONAL
+		star_rect.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		if si < best_stars:
+			star_rect.modulate = Color(1.0, 0.88, 0.25, 1.0)
+		else:
+			star_rect.modulate = Color(0.48, 0.56, 0.62, 0.5)
+		stars_hbox.add_child(star_rect)
+	stars_tray.add_child(stars_hbox)
 
 	if is_unlocked:
 		_attach_hover_sound(btn)
@@ -1439,14 +1455,25 @@ func _make_difficulty_button(difficulty: String, stars_text: String, accent: Col
 	text_vbox.add_theme_constant_override("separation", 2)
 	hbox.add_child(text_vbox)
 
-	var stars_lbl = _make_label(stars_text, 22, Color(1.0, 0.9, 0.4, 1.0))
-	var sset = LabelSettings.new()
-	sset.font_size = 22
-	sset.font_color = Color(1.0, 0.9, 0.4, 1.0)
-	sset.shadow_color = Color(1.0, 0.5, 0.0, 0.5)
-	sset.shadow_size = 4
-	stars_lbl.label_settings = sset
-	text_vbox.add_child(stars_lbl)
+	# Звёзды через текстуры — надёжно работают в WebGL браузерах
+	var diff_stars_count := stars_text.count("★")
+	var diff_stars_hbox := HBoxContainer.new()
+	diff_stars_hbox.alignment = BoxContainer.ALIGNMENT_CENTER
+	diff_stars_hbox.add_theme_constant_override("separation", 4)
+	diff_stars_hbox.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	for dsi in range(3):
+		var dstar := TextureRect.new()
+		dstar.texture = STAR_FILLED_TEX if dsi < diff_stars_count else STAR_EMPTY_TEX
+		dstar.custom_minimum_size = Vector2(24, 24)
+		dstar.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+		dstar.expand_mode = TextureRect.EXPAND_FIT_WIDTH_PROPORTIONAL
+		dstar.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		if dsi < diff_stars_count:
+			dstar.modulate = Color(1.0, 0.88, 0.25, 1.0)
+		else:
+			dstar.modulate = Color(0.65, 0.70, 0.75, 0.5)
+		diff_stars_hbox.add_child(dstar)
+	text_vbox.add_child(diff_stars_hbox)
 
 	var desc_lbl = _make_label(desc_text, 16, TEXT_DIM.lightened(0.2))
 	desc_lbl.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
@@ -1693,6 +1720,7 @@ func _build_perks_panel() -> void:
 	perks_close_btn = _make_button(tr("UI_BACK"), ACCENT_BLUE)
 	perks_close_btn.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
 	perks_close_btn.pressed.connect(_on_perks_close)
+	_add_left_arrow_icon(perks_close_btn)
 	vbox.add_child(perks_close_btn)
 
 	_select_perk_card(selected_perk_id)
