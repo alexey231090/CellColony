@@ -48,9 +48,10 @@ const SHIELD_ICON := preload("res://assets/sprites/shield.png")
 const RAPID_FIRE_ICON := preload("res://assets/sprites/speedfire2.png")
 const SPEED_ICON := preload("res://assets/sprites/speed.png")
 const LEVEL_MAP_PREVIEW_SCRIPT := preload("res://scripts/ui/level_map_preview.gd")
-const STAR_FILLED_TEX := preload("res://assets/sprites/miniStar.png")
-const STAR_EMPTY_TEX := preload("res://assets/sprites/StarSiluet.png")
-const LEFT_ARROW_TEX := preload("res://assets/sprites/LeftArrow.png")
+const STAR_FILLED_TEX: Texture2D = preload("res://assets/sprites/miniStar.png")
+const STAR_EMPTY_TEX: Texture2D = preload("res://assets/sprites/StarSiluet.png")
+const LEFT_ARROW_TEX: Texture2D = preload("res://assets/sprites/LeftArrow.png")
+const PLAY_BUTTON_TEX: Texture2D = preload("res://assets/sprites/playButton.png")
 
 class MenuPerkIcon extends Control:
 	var perk_id: String = ""
@@ -857,7 +858,22 @@ func _build_level_panel() -> void:
 	stars_badge.add_theme_stylebox_override("panel", stars_badge_sb)
 	header_bar.add_child(stars_badge)
 
-	level_header_stars_label = _make_label("★ 0 / 90", 18, LEVEL_ACCENT_GOLD)
+	var badge_hbox := HBoxContainer.new()
+	badge_hbox.alignment = BoxContainer.ALIGNMENT_CENTER
+	badge_hbox.add_theme_constant_override("separation", 6)
+	badge_hbox.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	stars_badge.add_child(badge_hbox)
+
+	var badge_star := TextureRect.new()
+	badge_star.texture = STAR_FILLED_TEX
+	badge_star.custom_minimum_size = Vector2(20, 20)
+	badge_star.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+	badge_star.expand_mode = TextureRect.EXPAND_FIT_WIDTH_PROPORTIONAL
+	badge_star.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	badge_star.modulate = Color(1.0, 0.88, 0.25, 1.0)
+	badge_hbox.add_child(badge_star)
+
+	level_header_stars_label = _make_label("0 / 90", 18, LEVEL_ACCENT_GOLD)
 	var badge_settings = LabelSettings.new()
 	badge_settings.font = level_ui_font
 	badge_settings.font_size = 18
@@ -865,11 +881,11 @@ func _build_level_panel() -> void:
 	badge_settings.shadow_color = Color(0, 0, 0, 0.5)
 	badge_settings.shadow_size = 2
 	level_header_stars_label.label_settings = badge_settings
-	stars_badge.add_child(level_header_stars_label)
+	badge_hbox.add_child(level_header_stars_label)
 
 	# Кнопка закрытия ✕ в правом верхнем углу (для мобильных и ПК)
 	level_close_top_btn = Button.new()
-	level_close_top_btn.text = "✕"
+	level_close_top_btn.text = "X"
 	level_close_top_btn.custom_minimum_size = Vector2(40, 40)
 	level_close_top_btn.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
 	level_close_top_btn.add_theme_font_size_override("font_size", 18)
@@ -996,7 +1012,7 @@ func _populate_levels() -> void:
 		total_stars_now = int(level_manager.get_total_stars())
 	var max_stars := total_levels * 3
 	if level_header_stars_label != null:
-		level_header_stars_label.text = "★ %d / %d" % [total_stars_now, max_stars]
+		level_header_stars_label.text = "%d / %d" % [total_stars_now, max_stars]
 
 	var chapters := int(ceili(float(total_levels) / 5.0))
 	for chapter_index in range(1, chapters + 1):
@@ -1066,10 +1082,25 @@ func _populate_levels() -> void:
 		ch_stars_chip.add_theme_stylebox_override("panel", chip_sb)
 		ch_head_row.add_child(ch_stars_chip)
 
+		var chip_hbox := HBoxContainer.new()
+		chip_hbox.alignment = BoxContainer.ALIGNMENT_CENTER
+		chip_hbox.add_theme_constant_override("separation", 5)
+		chip_hbox.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		ch_stars_chip.add_child(chip_hbox)
+
+		var chip_star := TextureRect.new()
+		chip_star.texture = STAR_FILLED_TEX
+		chip_star.custom_minimum_size = Vector2(16, 16)
+		chip_star.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+		chip_star.expand_mode = TextureRect.EXPAND_FIT_WIDTH_PROPORTIONAL
+		chip_star.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		chip_star.modulate = Color(1.0, 0.88, 0.25, 1.0) if chapter_unlocked else Color(0.48, 0.56, 0.62, 0.5)
+		chip_hbox.add_child(chip_star)
+
 		var chip_color := LEVEL_ACCENT_GOLD if chapter_unlocked else LEVEL_LOCKED_TEXT
-		var chip_text := "★ %d / %d" % [chapter_stars, chapter_max_stars]
+		var chip_text := "%d / %d" % [chapter_stars, chapter_max_stars]
 		var chip_lbl := _make_label(chip_text, 15, chip_color)
-		ch_stars_chip.add_child(chip_lbl)
+		chip_hbox.add_child(chip_lbl)
 
 		if not chapter_unlocked:
 			var locked_panel := PanelContainer.new()
@@ -1140,14 +1171,15 @@ func _build_level_button(level_num: int, is_unlocked: bool) -> Button:
 	num_lbl.label_settings = num_settings
 	num_pill.add_child(num_lbl)
 
-	# 2. Центральная иконка (полупрозрачный ▶ для текущего, 🔒 для закрытого)
-	var icon_lbl := Label.new()
-	icon_lbl.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-	icon_lbl.offset_top = 26
-	icon_lbl.offset_bottom = -32
-	icon_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	icon_lbl.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
-	icon_lbl.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	# 2. Центральная иконка (зеленый треугольник playButton для открытого, 🔒 для закрытого)
+	var play_icon := TextureRect.new()
+	play_icon.texture = PLAY_BUTTON_TEX
+	play_icon.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	play_icon.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+	play_icon.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	play_icon.offset_top = 26
+	play_icon.offset_bottom = -32
+	play_icon.mouse_filter = Control.MOUSE_FILTER_IGNORE
 
 	# 3. Нижний стеклянный трей звезд
 	var stars_tray := PanelContainer.new()
@@ -1201,34 +1233,30 @@ func _build_level_button(level_num: int, is_unlocked: bool) -> Button:
 		preview_ctrl.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		btn.add_child(preview_ctrl)
 
-		icon_lbl.text = "►"
-		icon_lbl.add_theme_font_size_override("font_size", 36)
-		icon_lbl.add_theme_color_override("font_color", LEVEL_ACCENT)
-
 		if is_current_target:
-			icon_lbl.visible = true
-			icon_lbl.modulate = Color(1.0, 1.0, 1.0, 0.3)
+			play_icon.visible = true
+			play_icon.modulate = Color(1.0, 1.0, 1.0, 0.4)
 		else:
-			icon_lbl.visible = false
-			icon_lbl.modulate = Color(1.0, 1.0, 1.0, 0.0)
+			play_icon.visible = false
+			play_icon.modulate = Color(1.0, 1.0, 1.0, 0.0)
 
 		btn.mouse_entered.connect(func():
 			btn.pivot_offset = btn.size * 0.5
-			icon_lbl.visible = true
+			play_icon.visible = true
 			var t = btn.create_tween()
 			t.tween_property(btn, "scale", Vector2(1.05, 1.05), 0.15).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
 			t.parallel().tween_property(btn, "modulate", Color(1.05, 1.05, 1.05, 1.0), 0.15)
-			t.parallel().tween_property(icon_lbl, "modulate:a", 0.85, 0.15)
+			t.parallel().tween_property(play_icon, "modulate:a", 1.0, 0.15)
 		)
 		btn.mouse_exited.connect(func():
 			btn.pivot_offset = btn.size * 0.5
-			var target_alpha: float = 0.3 if is_current_target else 0.0
+			var target_alpha: float = 0.4 if is_current_target else 0.0
 			var t = btn.create_tween()
 			t.tween_property(btn, "scale", Vector2(1.0, 1.0), 0.12).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_IN_OUT)
 			t.parallel().tween_property(btn, "modulate", Color.WHITE, 0.12)
-			t.parallel().tween_property(icon_lbl, "modulate:a", target_alpha, 0.12)
+			t.parallel().tween_property(play_icon, "modulate:a", target_alpha, 0.12)
 			if not is_current_target:
-				t.tween_callback(func(): if is_instance_valid(icon_lbl) and not btn.is_hovered(): icon_lbl.visible = false)
+				t.tween_callback(func(): if is_instance_valid(play_icon) and not btn.is_hovered(): play_icon.visible = false)
 		)
 		btn.pressed.connect(_open_difficulty_panel.bind(level_num))
 
@@ -1270,7 +1298,7 @@ func _build_level_button(level_num: int, is_unlocked: bool) -> Button:
 		btn.add_theme_stylebox_override("disabled", locked_sb)
 
 	if is_unlocked:
-		btn.add_child(icon_lbl)
+		btn.add_child(play_icon)
 	btn.add_child(num_pill)
 	btn.add_child(stars_tray)
 	return btn
@@ -1310,16 +1338,6 @@ func _play_ui_click_sound() -> void:
 	ui_click_sfx.stop()
 	ui_click_sfx.play()
 
-func _stars_to_text(stars: int) -> String:
-	match clampi(stars, 0, 3):
-		3:
-			return "★ ★ ★"
-		2:
-			return "★ ★ ☆"
-		1:
-			return "★ ☆ ☆"
-		_:
-			return "☆ ☆ ☆"
 
 func _open_pending_level_selection() -> void:
 	var lm := get_node_or_null("/root/LevelManager")
@@ -1373,9 +1391,9 @@ func _build_difficulty_panel() -> void:
 	vbox.add_child(sep)
 
 	difficulty_buttons.clear()
-	vbox.add_child(_make_difficulty_button("easy", "★ ☆ ☆", ACCENT_COLOR))
-	vbox.add_child(_make_difficulty_button("medium", "★ ★ ☆", ACCENT_BLUE))
-	vbox.add_child(_make_difficulty_button("hard", "★ ★ ★", Color(1.0, 0.4, 0.2, 1.0)))
+	vbox.add_child(_make_difficulty_button("easy", 1, ACCENT_COLOR))
+	vbox.add_child(_make_difficulty_button("medium", 2, ACCENT_BLUE))
+	vbox.add_child(_make_difficulty_button("hard", 3, Color(1.0, 0.4, 0.2, 1.0)))
 
 	difficulty_cancel_btn = _make_button(tr("UI_CANCEL"), ACCENT_RED)
 	difficulty_cancel_btn.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
@@ -1383,7 +1401,7 @@ func _build_difficulty_panel() -> void:
 	difficulty_cancel_btn.pressed.connect(_on_difficulty_cancel)
 	vbox.add_child(difficulty_cancel_btn)
 
-func _make_difficulty_button(difficulty: String, stars_text: String, accent: Color) -> Button:
+func _make_difficulty_button(difficulty: String, stars_count: int, accent: Color) -> Button:
 	var title_text := tr("DIFF_" + difficulty.to_upper())
 	var desc_text := tr("DIFF_" + difficulty.to_upper() + "_DESC")
 	var btn = Button.new()
@@ -1456,19 +1474,18 @@ func _make_difficulty_button(difficulty: String, stars_text: String, accent: Col
 	hbox.add_child(text_vbox)
 
 	# Звёзды через текстуры — надёжно работают в WebGL браузерах
-	var diff_stars_count := stars_text.count("★")
 	var diff_stars_hbox := HBoxContainer.new()
 	diff_stars_hbox.alignment = BoxContainer.ALIGNMENT_CENTER
 	diff_stars_hbox.add_theme_constant_override("separation", 4)
 	diff_stars_hbox.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	for dsi in range(3):
 		var dstar := TextureRect.new()
-		dstar.texture = STAR_FILLED_TEX if dsi < diff_stars_count else STAR_EMPTY_TEX
+		dstar.texture = STAR_FILLED_TEX if dsi < stars_count else STAR_EMPTY_TEX
 		dstar.custom_minimum_size = Vector2(24, 24)
 		dstar.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
 		dstar.expand_mode = TextureRect.EXPAND_FIT_WIDTH_PROPORTIONAL
 		dstar.mouse_filter = Control.MOUSE_FILTER_IGNORE
-		if dsi < diff_stars_count:
+		if dsi < stars_count:
 			dstar.modulate = Color(1.0, 0.88, 0.25, 1.0)
 		else:
 			dstar.modulate = Color(0.65, 0.70, 0.75, 0.5)
