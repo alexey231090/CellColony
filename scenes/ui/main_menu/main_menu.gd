@@ -866,9 +866,9 @@ func _build_level_panel() -> void:
 
 	var badge_star := TextureRect.new()
 	badge_star.texture = STAR_FILLED_TEX
-	badge_star.custom_minimum_size = Vector2(20, 20)
+	badge_star.custom_minimum_size = Vector2(16, 16)  # 20% уменьшение (было 20x20)
 	badge_star.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
-	badge_star.expand_mode = TextureRect.EXPAND_FIT_WIDTH_PROPORTIONAL
+	badge_star.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
 	badge_star.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	badge_star.modulate = Color(1.0, 0.88, 0.25, 1.0)
 	badge_hbox.add_child(badge_star)
@@ -1090,9 +1090,9 @@ func _populate_levels() -> void:
 
 		var chip_star := TextureRect.new()
 		chip_star.texture = STAR_FILLED_TEX
-		chip_star.custom_minimum_size = Vector2(16, 16)
+		chip_star.custom_minimum_size = Vector2(10, 10)  # 35% уменьшение (было 16x16)
 		chip_star.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
-		chip_star.expand_mode = TextureRect.EXPAND_FIT_WIDTH_PROPORTIONAL
+		chip_star.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
 		chip_star.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		chip_star.modulate = Color(1.0, 0.88, 0.25, 1.0) if chapter_unlocked else Color(0.48, 0.56, 0.62, 0.5)
 		chip_hbox.add_child(chip_star)
@@ -1135,7 +1135,6 @@ func _build_level_button(level_num: int, is_unlocked: bool) -> Button:
 	var best_stars := 0
 	if level_manager != null:
 		best_stars = int(level_manager.get_level_best_stars(level_num))
-	var stars_text := _stars_to_text(best_stars)
 
 	var is_current_target := is_unlocked and (level_num == unlocked_levels)
 
@@ -1177,8 +1176,11 @@ func _build_level_button(level_num: int, is_unlocked: bool) -> Button:
 	play_icon.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
 	play_icon.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
 	play_icon.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-	play_icon.offset_top = 26
-	play_icon.offset_bottom = -32
+	# 50% уменьшение: увеличиваем отступы чтобы область была вдвое меньше
+	play_icon.offset_left = 24
+	play_icon.offset_right = -24
+	play_icon.offset_top = 48
+	play_icon.offset_bottom = -54
 	play_icon.mouse_filter = Control.MOUSE_FILTER_IGNORE
 
 	# 3. Нижний стеклянный трей звезд
