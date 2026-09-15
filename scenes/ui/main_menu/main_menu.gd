@@ -52,6 +52,16 @@ const STAR_FILLED_TEX: Texture2D = preload("res://assets/sprites/miniStar.png")
 const STAR_EMPTY_TEX: Texture2D = preload("res://assets/sprites/StarSiluet.png")
 const LEFT_ARROW_TEX: Texture2D = preload("res://assets/sprites/LeftArrow.png")
 const PLAY_BUTTON_TEX: Texture2D = preload("res://assets/sprites/playButton.png")
+const SOUND_ON_TEX: Texture2D = preload("res://assets/sprites/Sound.png")
+const SOUND_OFF_TEX: Texture2D = preload("res://assets/sprites/NoSound.png")
+const SOUND_CROSS_TEX: Texture2D = preload("res://assets/sprites/soundcross.png")
+const FLAG_TEXTURES: Dictionary = {
+	"ru": preload("res://assets/sprites/ruFlag.png"),
+	"en": preload("res://assets/sprites/enFlag.png"),
+	"tr": preload("res://assets/sprites/trFlag.png"),
+	"fr": preload("res://assets/sprites/frFlag.png"),
+	"it": preload("res://assets/sprites/itFlag.png"),
+}
 
 class MenuPerkIcon extends Control:
 	var perk_id: String = ""
@@ -79,45 +89,84 @@ class MenuPerkIcon extends Control:
 			return
 
 class SoundIconVisual extends Control:
+	var sound_on_rect: TextureRect
+	var sound_off_rect: TextureRect
+	var cross_rect: TextureRect
+	var icon_rect: TextureRect # для обратной совместимости
 	var is_muted: bool = false:
 		set(val):
 			is_muted = val
-			queue_redraw()
+			_update_visuals()
 
 	func _ready() -> void:
 		mouse_filter = Control.MOUSE_FILTER_IGNORE
+		set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 
-	func _draw() -> void:
-		var w := size.x
-		var h := size.y
-		if w <= 0 or h <= 0:
-			return
-		var cx := w * 0.44
-		var cy := h * 0.5
-		var icon_color := Color(0.92, 0.96, 1.0, 0.95)
+		# Базовый контейнер динамика с единым соотношением сторон 608:436
+		var speaker_box := Control.new()
+		speaker_box.anchor_left = 0.5
+		speaker_box.anchor_right = 0.5
+		speaker_box.anchor_top = 0.5
+		speaker_box.anchor_bottom = 0.5
+		speaker_box.offset_left = -30.0
+		speaker_box.offset_right = 30.0
+		speaker_box.offset_top = -21.5
+		speaker_box.offset_bottom = 21.5
+		speaker_box.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		add_child(speaker_box)
 
-		# 1. Корпус динамика
-		var body_w := 7.0
-		var body_h := 14.0
-		draw_rect(Rect2(cx - 14.0, cy - body_h * 0.5, body_w, body_h), icon_color)
+		# 1. Колонка с волнами Sound.png (занимает 100% ширины и высоты)
+		sound_on_rect = TextureRect.new()
+		sound_on_rect.texture = SOUND_ON_TEX
+		sound_on_rect.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+		sound_on_rect.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+		sound_on_rect.stretch_mode = TextureRect.STRETCH_SCALE
+		sound_on_rect.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		speaker_box.add_child(sound_on_rect)
+		icon_rect = sound_on_rect
 
-		# 2. Раструб
-		var cone_pts := PackedVector2Array([
-			Vector2(cx - 7.0, cy - 7.0),
-			Vector2(cx + 4.0, cy - 15.0),
-			Vector2(cx + 4.0, cy + 15.0),
-			Vector2(cx - 7.0, cy + 7.0)
-		])
-		draw_colored_polygon(cone_pts, icon_color)
+		# 2. Колонка без волн NoSound.png (занимает ровно область колонки: 423/608 = 69.57% ширины)
+		# Благодаря этому размер и позиция колонки на 100% совпадают с колонкой из Sound.png!
+		sound_off_rect = TextureRect.new()
+		sound_off_rect.texture = SOUND_OFF_TEX
+		sound_off_rect.anchor_left = 0.0
+		sound_off_rect.anchor_top = 0.0
+		sound_off_rect.anchor_right = 423.0 / 608.0
+		sound_off_rect.anchor_bottom = 1.0
+		sound_off_rect.offset_left = 0.0
+		sound_off_rect.offset_top = 0.0
+		sound_off_rect.offset_right = 0.0
+		sound_off_rect.offset_bottom = 0.0
+		sound_off_rect.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+		sound_off_rect.stretch_mode = TextureRect.STRETCH_SCALE
+		sound_off_rect.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		speaker_box.add_child(sound_off_rect)
 
-		if not is_muted:
-			# Две аккуратные волны звука
-			draw_arc(Vector2(cx + 2.0, cy), 9.0, -PI * 0.32, PI * 0.32, 16, icon_color, 2.6, true)
-			draw_arc(Vector2(cx + 2.0, cy), 17.0, -PI * 0.32, PI * 0.32, 16, icon_color * Color(1, 1, 1, 0.75), 2.6, true)
-		else:
-			# Красная диагональная линия перечёркивания
-			var cross_color := Color(1.0, 0.30, 0.35, 1.0)
-			draw_line(Vector2(cx - 15.0, cy + 15.0), Vector2(cx + 17.0, cy - 15.0), cross_color, 3.6, true)
+		# 3. Красный крестик soundcross.png (накладывается строго поверх NoSound)
+		cross_rect = TextureRect.new()
+		cross_rect.texture = SOUND_CROSS_TEX
+		cross_rect.anchor_left = 0.0
+		cross_rect.anchor_top = 0.0
+		cross_rect.anchor_right = 423.0 / 608.0
+		cross_rect.anchor_bottom = 1.0
+		cross_rect.offset_left = 0.0
+		cross_rect.offset_top = 0.0
+		cross_rect.offset_right = 0.0
+		cross_rect.offset_bottom = 0.0
+		cross_rect.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+		cross_rect.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+		cross_rect.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		speaker_box.add_child(cross_rect)
+
+		_update_visuals()
+
+	func _update_visuals() -> void:
+		if sound_on_rect != null:
+			sound_on_rect.visible = not is_muted
+		if sound_off_rect != null:
+			sound_off_rect.visible = is_muted
+		if cross_rect != null:
+			cross_rect.visible = is_muted
 
 class LockIconVisual extends Control:
 	var lock_color: Color = Color(0.46, 0.52, 0.60, 0.9)
@@ -228,7 +277,7 @@ var ui_click_sfx: AudioStreamPlayer
 # Кнопки верхней панели
 var sound_btn: Button
 var sound_icon: SoundIconVisual
-var sound_cross: Label
+var sound_cross: TextureRect
 var settings_btn: Button
 var perks_btn: Button
 
@@ -259,6 +308,10 @@ var settings_sound_label: Label
 var settings_music_label: Label
 var settings_lang_label: Label
 var language_buttons: Dictionary = {}
+var flag_dropdown_btn: Button
+var flag_dropdown_list: VBoxContainer
+var flag_dropdown_open: bool = false
+var flag_dropdown_panel: PanelContainer
 
 var level_header_label: Label
 var perks_header_label: Label
@@ -409,15 +462,27 @@ func _make_icon_button(icon_text: String, size_px: int = 48) -> Button:
 ## Добавляет иконку стрелки влево (LeftArrow.png) как TextureRect поверх кнопки
 ## Работает во всех браузерах и WebGL без проблем с кодировкой символов.
 func _add_left_arrow_icon(btn: Button) -> void:
+	# Увеличиваем внутренние отступы кнопки, чтобы текст гарантированно не налезал на стрелку
+	for style_name in ["normal", "hover", "pressed", "focus"]:
+		var sb := btn.get_theme_stylebox(style_name)
+		if sb is StyleBoxFlat:
+			var sb_copy := sb.duplicate() as StyleBoxFlat
+			sb_copy.content_margin_left = 44
+			sb_copy.content_margin_right = 44
+			btn.add_theme_stylebox_override(style_name, sb_copy)
+
 	var arrow := TextureRect.new()
 	arrow.texture = LEFT_ARROW_TEX
 	arrow.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
-	arrow.expand_mode = TextureRect.EXPAND_FIT_WIDTH_PROPORTIONAL
-	arrow.custom_minimum_size = Vector2(22, 22)
-	arrow.set_anchors_and_offsets_preset(Control.PRESET_LEFT_WIDE)
-	arrow.offset_left = 14
-	arrow.offset_right = 14 + 22
+	arrow.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	arrow.custom_minimum_size = Vector2(16, 14)
+	arrow.set_anchors_and_offsets_preset(Control.PRESET_CENTER_LEFT)
+	arrow.offset_left = 16
+	arrow.offset_right = 32
+	arrow.offset_top = -7
+	arrow.offset_bottom = 7
 	arrow.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	arrow.modulate = Color(0.95, 0.98, 1.0, 0.9)
 	btn.add_child(arrow)
 
 func _make_label(text: String, font_size: int = 20, color: Color = TEXT_COLOR) -> Label:
@@ -541,11 +606,11 @@ func _build_main_screen() -> void:
 	main_screen.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	main_screen.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	safe_area.add_child(main_screen)
-	
-	# === ЦЕНТР: Логотип + Кнопка ===
+
+	# === ЦЕНТР: Логотип + Кнопки ===
 	var center_spacer_top = Control.new()
 	center_spacer_top.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	center_spacer_top.size_flags_stretch_ratio = 1.35 # Опускаем главный блок еще ниже
+	center_spacer_top.size_flags_stretch_ratio = 1.1
 	main_screen.add_child(center_spacer_top)
 	
 	var center_box = VBoxContainer.new()
@@ -555,13 +620,146 @@ func _build_main_screen() -> void:
 	center_box.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
 	main_screen.add_child(center_box)
 
-	var buttons_offset = Control.new()
-	buttons_offset.custom_minimum_size = Vector2(0, 200)
-	center_box.add_child(buttons_offset)
-	
-	# Обертка-контейнер, которая статична и не дает VBox дёргаться
+	# === ВЕРХНИЙ РЯД: [Звук] (влево на 200px, выше на 200px) и [Флаги] (вправо на 200px, выше на 200px) ===
+	var top_controls_row := HBoxContainer.new()
+	top_controls_row.name = "TopControlsRow"
+	top_controls_row.alignment = BoxContainer.ALIGNMENT_CENTER
+	top_controls_row.custom_minimum_size = Vector2(904, 72)
+	top_controls_row.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
+	top_controls_row.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	center_box.add_child(top_controls_row)
+
+	# --- 1. Кнопка звука (слева, 72x72) ---
+	var sound_wrapper := Control.new()
+	sound_wrapper.name = "SoundWrapper"
+	sound_wrapper.custom_minimum_size = Vector2(72, 72)
+	sound_wrapper.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	top_controls_row.add_child(sound_wrapper)
+
+	sound_btn = _make_icon_button("", 72)
+	sound_btn.custom_minimum_size = Vector2(72, 72)
+	sound_btn.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	sound_btn.tooltip_text = tr("UI_SOUND_TOOLTIP")
+	sound_btn.pressed.connect(_on_sound_toggle)
+	sound_wrapper.add_child(sound_btn)
+
+	sound_icon = SoundIconVisual.new()
+	sound_icon.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	sound_icon.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	sound_icon.is_muted = not is_sound_on
+	sound_btn.add_child(sound_icon)
+	sound_cross = sound_icon.cross_rect
+
+	# Разделитель между звуком и флагами (760px для симметричного смещения ±200px)
+	var top_row_spacer := Control.new()
+	top_row_spacer.custom_minimum_size = Vector2(760, 72)
+	top_row_spacer.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	top_row_spacer.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	top_controls_row.add_child(top_row_spacer)
+
+	# --- 2. Dropdown-флаг (справа, 72x72) ---
+	var flag_wrapper := Control.new()
+	flag_wrapper.name = "FlagWrapper"
+	flag_wrapper.custom_minimum_size = Vector2(72, 72)
+	flag_wrapper.clip_children = CanvasItem.CLIP_CHILDREN_DISABLED
+	flag_wrapper.z_index = 100
+	flag_wrapper.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	top_controls_row.add_child(flag_wrapper)
+
+	# Кнопка текущего флага
+	flag_dropdown_btn = Button.new()
+	flag_dropdown_btn.custom_minimum_size = Vector2(72, 72)
+	flag_dropdown_btn.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	flag_dropdown_btn.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
+	flag_dropdown_btn.focus_mode = Control.FOCUS_NONE
+	flag_dropdown_btn.pivot_offset = Vector2(36, 36)
+	_attach_hover_sound(flag_dropdown_btn)
+	_attach_click_sound(flag_dropdown_btn)
+
+	var dd_btn_sb := _make_stylebox(Color(0.08, 0.12, 0.18, 0.88), 16, 2, Color(0.2, 0.65, 0.95, 0.4))
+	dd_btn_sb.shadow_size = 10
+	dd_btn_sb.shadow_color = Color(0, 0, 0, 0.4)
+	flag_dropdown_btn.add_theme_stylebox_override("normal", dd_btn_sb)
+	var dd_btn_hover_sb := _make_stylebox(Color(0.12, 0.20, 0.30, 0.95), 16, 2, ACCENT_BLUE * Color(1, 1, 1, 0.7))
+	dd_btn_hover_sb.shadow_size = 14
+	dd_btn_hover_sb.shadow_color = ACCENT_BLUE * Color(1, 1, 1, 0.3)
+	flag_dropdown_btn.add_theme_stylebox_override("hover", dd_btn_hover_sb)
+	flag_dropdown_btn.add_theme_stylebox_override("pressed", dd_btn_hover_sb)
+	flag_dropdown_btn.add_theme_stylebox_override("focus", StyleBoxEmpty.new())
+
+	# Текстура текущего флага внутри кнопки
+	var current_flag_rect := TextureRect.new()
+	current_flag_rect.name = "CurrentFlagRect"
+	var cur_lang := _get_current_locale()
+	current_flag_rect.texture = FLAG_TEXTURES.get(cur_lang, FLAG_TEXTURES.get("en", null))
+	current_flag_rect.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	current_flag_rect.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+	current_flag_rect.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	current_flag_rect.offset_left = 8
+	current_flag_rect.offset_top = 8
+	current_flag_rect.offset_right = -8
+	current_flag_rect.offset_bottom = -8
+	current_flag_rect.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	flag_dropdown_btn.add_child(current_flag_rect)
+
+	# Маленькая стрелка вниз (▼) в углу кнопки
+	var dd_arrow := Label.new()
+	dd_arrow.text = "▼"
+	dd_arrow.add_theme_font_size_override("font_size", 10)
+	dd_arrow.add_theme_color_override("font_color", Color(0.7, 0.8, 0.9, 0.7))
+	dd_arrow.set_anchors_and_offsets_preset(Control.PRESET_BOTTOM_RIGHT)
+	dd_arrow.offset_left = -18
+	dd_arrow.offset_top = -16
+	dd_arrow.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	flag_dropdown_btn.add_child(dd_arrow)
+
+	flag_dropdown_btn.pressed.connect(_toggle_flag_dropdown)
+	flag_wrapper.add_child(flag_dropdown_btn)
+
+	# Выпадающий список флагов (изначально скрыт)
+	flag_dropdown_panel = PanelContainer.new()
+	flag_dropdown_panel.name = "FlagDropdownPanel"
+	var dd_panel_sb := _make_stylebox(Color(0.06, 0.10, 0.16, 0.94), 14, 1, Color(0.2, 0.65, 0.95, 0.35))
+	dd_panel_sb.content_margin_left = 6
+	dd_panel_sb.content_margin_right = 6
+	dd_panel_sb.content_margin_top = 6
+	dd_panel_sb.content_margin_bottom = 6
+	dd_panel_sb.shadow_size = 16
+	dd_panel_sb.shadow_color = Color(0, 0, 0, 0.55)
+	flag_dropdown_panel.add_theme_stylebox_override("panel", dd_panel_sb)
+	flag_dropdown_panel.custom_minimum_size = Vector2(74, 0)
+	flag_dropdown_panel.position = Vector2(0, 78)
+	flag_dropdown_panel.visible = false
+	flag_dropdown_panel.z_index = 100
+	flag_dropdown_panel.mouse_filter = Control.MOUSE_FILTER_STOP
+	flag_wrapper.add_child(flag_dropdown_panel)
+
+	flag_dropdown_list = VBoxContainer.new()
+	flag_dropdown_list.add_theme_constant_override("separation", 4)
+	flag_dropdown_list.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	flag_dropdown_panel.add_child(flag_dropdown_list)
+
+	language_buttons.clear()
+	var locales: Array[String] = ["ru", "en", "tr", "fr", "it"]
+	for loc in locales:
+		var flag_btn := _build_flag_button(loc)
+		flag_dropdown_list.add_child(flag_btn)
+		language_buttons[loc] = flag_btn
+
+	_update_language_buttons()
+
+	# Вертикальный отступ до кнопки «ИГРАТЬ» (200px от верха панели до кнопки «ИГРАТЬ»)
+	var buttons_spacer := Control.new()
+	buttons_spacer.custom_minimum_size = Vector2(0, 64)
+	buttons_spacer.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	center_box.add_child(buttons_spacer)
+
+	# --- 3. Кнопка «Играть» (центр) ---
 	var play_container = CenterContainer.new()
+	play_container.name = "PlayContainer"
 	play_container.custom_minimum_size = Vector2(320, 100)
+	play_container.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
+	play_container.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	center_box.add_child(play_container)
 	
 	# Обёртка для кнопки "ИГРАТЬ", чтобы масштабирование было ТОЧНО из центра и не влияло на VBox
@@ -674,6 +872,8 @@ func _build_main_screen() -> void:
 	# Кнопка настроек под игрой
 	var settings_container = CenterContainer.new()
 	settings_container.custom_minimum_size = Vector2(280, 82)
+	settings_container.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
+	settings_container.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	center_box.add_child(settings_container)
 
 	var settings_wrapper = Control.new()
@@ -756,6 +956,8 @@ func _build_main_screen() -> void:
 
 	var perks_container = CenterContainer.new()
 	perks_container.custom_minimum_size = Vector2(220, 74)
+	perks_container.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
+	perks_container.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	center_box.add_child(perks_container)
 
 	perks_btn = _make_button(tr("UI_PERKS"), Color(0.92, 0.78, 0.28, 1.0))
@@ -763,20 +965,7 @@ func _build_main_screen() -> void:
 	perks_btn.pressed.connect(_on_perks_open)
 	perks_container.add_child(perks_btn)
 
-	var sound_container = CenterContainer.new()
-	sound_container.custom_minimum_size = Vector2(120, 96)
-	center_box.add_child(sound_container)
 
-	sound_btn = _make_icon_button("", 72)
-	sound_btn.tooltip_text = tr("UI_SOUND_TOOLTIP")
-	sound_btn.pressed.connect(_on_sound_toggle)
-	sound_container.add_child(sound_btn)
-
-	sound_icon = SoundIconVisual.new()
-	sound_icon.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-	sound_icon.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	sound_icon.is_muted = not is_sound_on
-	sound_btn.add_child(sound_icon)
 
 	
 	var center_spacer_bottom = Control.new()
@@ -936,7 +1125,7 @@ func _build_level_panel() -> void:
 
 	level_back_btn = _make_button(tr("UI_BACK_TO_MENU"), LEVEL_ACCENT_BLUE)
 	_apply_level_back_button_style(level_back_btn)
-	level_back_btn.custom_minimum_size = Vector2(280, 54)
+	level_back_btn.custom_minimum_size = Vector2(290, 54)
 	level_back_btn.add_theme_font_size_override("font_size", 20)
 	level_back_btn.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
 	level_back_btn.pressed.connect(_on_level_back)
@@ -1112,10 +1301,40 @@ func _populate_levels() -> void:
 			locked_panel.add_theme_stylebox_override("panel", lock_sb)
 			chapter_box.add_child(locked_panel)
 
+			var lock_text_color := Color(1.0, 0.65, 0.65, 0.95)
 			var lock_text := tr("UI_CHAPTER_LOCKED") % [required_stars, max(0, required_stars - total_stars_now)]
-			var locked_hint = _make_label(lock_text, 15, Color(1.0, 0.65, 0.65, 0.95))
-			locked_hint.horizontal_alignment = HORIZONTAL_ALIGNMENT_LEFT
-			locked_panel.add_child(locked_hint)
+
+			if lock_text.contains("★"):
+				var lock_hbox := HBoxContainer.new()
+				lock_hbox.alignment = BoxContainer.ALIGNMENT_BEGIN
+				lock_hbox.add_theme_constant_override("separation", 4)
+				lock_hbox.mouse_filter = Control.MOUSE_FILTER_IGNORE
+				locked_panel.add_child(lock_hbox)
+
+				var parts := lock_text.split("★")
+
+				var part1 := _make_label(parts[0].strip_edges(false, true), 15, lock_text_color)
+				part1.mouse_filter = Control.MOUSE_FILTER_IGNORE
+				lock_hbox.add_child(part1)
+
+				var lock_star := TextureRect.new()
+				lock_star.texture = STAR_FILLED_TEX
+				lock_star.custom_minimum_size = Vector2(10, 10)
+				lock_star.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+				lock_star.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+				lock_star.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+				lock_star.mouse_filter = Control.MOUSE_FILTER_IGNORE
+				lock_star.modulate = Color(1.0, 0.88, 0.25, 1.0)
+				lock_hbox.add_child(lock_star)
+
+				if parts.size() > 1:
+					var part2 := _make_label(parts[1].strip_edges(true, false), 15, lock_text_color)
+					part2.mouse_filter = Control.MOUSE_FILTER_IGNORE
+					lock_hbox.add_child(part2)
+			else:
+				var locked_hint = _make_label(lock_text, 15, lock_text_color)
+				locked_hint.horizontal_alignment = HORIZONTAL_ALIGNMENT_LEFT
+				locked_panel.add_child(locked_hint)
 
 		var chapter_grid = GridContainer.new()
 		chapter_grid.columns = level_grid_columns
@@ -1404,8 +1623,8 @@ func _build_difficulty_panel() -> void:
 	vbox.add_child(difficulty_cancel_btn)
 
 func _make_difficulty_button(difficulty: String, stars_count: int, accent: Color) -> Button:
-	var title_text := tr("DIFF_" + difficulty.to_upper())
-	var desc_text := tr("DIFF_" + difficulty.to_upper() + "_DESC")
+	var title_text := tr("UI_DIFF_" + difficulty.to_upper())
+	var desc_text := tr("UI_DIFF_" + difficulty.to_upper() + "_DESC")
 	var btn = Button.new()
 	btn.custom_minimum_size = Vector2(0, 88)
 	btn.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
@@ -1629,35 +1848,6 @@ func _build_settings_panel() -> void:
 	music_value_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
 	music_row.add_child(music_value_label)
 
-	# --- Язык (Language) ---
-	var lang_row = HBoxContainer.new()
-	lang_row.add_theme_constant_override("separation", 12)
-	vbox.add_child(lang_row)
-
-	settings_lang_label = _make_label(tr("UI_LANGUAGE"), 18)
-	settings_lang_label.custom_minimum_size.x = 120
-	lang_row.add_child(settings_lang_label)
-
-	var lang_btn_row = HBoxContainer.new()
-	lang_btn_row.add_theme_constant_override("separation", 8)
-	lang_btn_row.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	lang_row.add_child(lang_btn_row)
-
-	language_buttons.clear()
-	var locales: Array[String] = ["ru", "en", "tr", "fr", "it"]
-	for loc in locales:
-		var btn = Button.new()
-		btn.text = loc.to_upper()
-		btn.custom_minimum_size = Vector2(46, 36)
-		btn.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
-		btn.add_theme_font_size_override("font_size", 14)
-		_attach_hover_sound(btn)
-		_attach_click_sound(btn)
-		btn.pressed.connect(_on_language_button_pressed.bind(loc))
-		lang_btn_row.add_child(btn)
-		language_buttons[loc] = btn
-	_update_language_buttons()
-	
 	# Кнопка закрыть
 	settings_close_btn = _make_button(tr("UI_DONE"), ACCENT_BLUE)
 	settings_close_btn.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
@@ -1737,6 +1927,7 @@ func _build_perks_panel() -> void:
 	desc_box.add_child(perks_desc_body)
 
 	perks_close_btn = _make_button(tr("UI_BACK"), ACCENT_BLUE)
+	perks_close_btn.custom_minimum_size = Vector2(160, 54)
 	perks_close_btn.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
 	perks_close_btn.pressed.connect(_on_perks_close)
 	_add_left_arrow_icon(perks_close_btn)
@@ -1825,6 +2016,9 @@ func _select_perk_card(perk_id: String) -> void:
 # ========== АНИМАЦИИ ==========
 
 func _show_panel(panel: Control) -> void:
+	# Закрываем dropdown флагов если он открыт, чтобы не перекрывал панели
+	if flag_dropdown_open:
+		_toggle_flag_dropdown()
 	overlay.visible = true
 	overlay.modulate = Color(1, 1, 1, 0)
 	panel.visible = true
@@ -1953,9 +2147,28 @@ func _input(event: InputEvent) -> void:
 	if dev and dev._is_open:
 		return
 
+	# Закрываем dropdown флагов при клике мимо
+	if flag_dropdown_open and event is InputEventMouseButton and event.pressed:
+		if is_instance_valid(flag_dropdown_panel) and is_instance_valid(flag_dropdown_btn):
+			var mouse_pos: Vector2 = flag_dropdown_panel.get_global_mouse_position()
+			var dd_btn_rect := flag_dropdown_btn.get_global_rect()
+			var dd_panel_rect := flag_dropdown_panel.get_global_rect()
+			var is_inside: bool = dd_btn_rect.has_point(mouse_pos) or dd_panel_rect.has_point(mouse_pos)
+			if not is_inside:
+				for loc in language_buttons.keys():
+					var b: Button = language_buttons[loc]
+					if is_instance_valid(b) and b.is_visible_in_tree() and b.get_global_rect().has_point(mouse_pos):
+						is_inside = true
+						break
+			if not is_inside:
+				_toggle_flag_dropdown()
+
 	# ESC закрывает открытые панели
 	if event is InputEventKey and event.pressed and event.keycode == KEY_ESCAPE:
-		if settings_panel.visible:
+		if flag_dropdown_open:
+			_toggle_flag_dropdown()
+			get_viewport().set_input_as_handled()
+		elif settings_panel.visible:
 			_on_settings_close()
 			get_viewport().set_input_as_handled()
 		elif perks_panel.visible:
@@ -1970,7 +2183,92 @@ func _input(event: InputEvent) -> void:
 
 # ========== УПРАВЛЕНИЕ ЛОКАЛИЗАЦИЕЙ ==========
 
+func _get_current_locale() -> String:
+	if has_node("/root/LocalizationManager"):
+		return get_node("/root/LocalizationManager").get_current_language()
+	return TranslationServer.get_locale().substr(0, 2).to_lower()
+
+func _toggle_flag_dropdown() -> void:
+	if not is_instance_valid(flag_dropdown_panel):
+		return
+	flag_dropdown_open = not flag_dropdown_open
+	if flag_dropdown_open:
+		flag_dropdown_panel.visible = true
+		flag_dropdown_panel.reset_size()
+		flag_dropdown_panel.modulate = Color(1, 1, 1, 0)
+		flag_dropdown_panel.position = Vector2(0, 60)
+		var t := create_tween()
+		t.set_parallel(true)
+		t.tween_property(flag_dropdown_panel, "modulate:a", 1.0, 0.18).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
+		t.tween_property(flag_dropdown_panel, "position:y", 78.0, 0.22).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+	else:
+		var t := create_tween()
+		t.set_parallel(true)
+		t.tween_property(flag_dropdown_panel, "modulate:a", 0.0, 0.14).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_IN)
+		t.tween_property(flag_dropdown_panel, "position:y", 60.0, 0.14).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_IN)
+		t.chain().tween_callback(func():
+			if is_instance_valid(flag_dropdown_panel):
+				flag_dropdown_panel.visible = false
+		)
+
+func _build_flag_button(loc: String) -> Button:
+	var btn := Button.new()
+	btn.custom_minimum_size = Vector2(62, 52)
+	btn.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
+	btn.focus_mode = Control.FOCUS_NONE
+	btn.mouse_filter = Control.MOUSE_FILTER_STOP
+	btn.pivot_offset = Vector2(31, 26)
+	_attach_hover_sound(btn)
+	_attach_click_sound(btn)
+
+	# Стиль элемента dropdown
+	var item_sb := _make_stylebox(Color(0.08, 0.14, 0.22, 0.7), 12, 0, Color.TRANSPARENT)
+	var item_hover_sb := _make_stylebox(Color(0.14, 0.30, 0.50, 0.9), 12, 1, ACCENT_BLUE * Color(1, 1, 1, 0.5))
+	item_hover_sb.shadow_size = 6
+	item_hover_sb.shadow_color = ACCENT_BLUE * Color(1, 1, 1, 0.25)
+	btn.add_theme_stylebox_override("normal", item_sb)
+	btn.add_theme_stylebox_override("hover", item_hover_sb)
+	btn.add_theme_stylebox_override("pressed", item_hover_sb)
+	btn.add_theme_stylebox_override("focus", StyleBoxEmpty.new())
+
+	var flag_rect := TextureRect.new()
+	flag_rect.name = "FlagRect"
+	flag_rect.texture = FLAG_TEXTURES.get(loc, null)
+	flag_rect.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	flag_rect.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+	flag_rect.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	flag_rect.offset_left = 6
+	flag_rect.offset_top = 6
+	flag_rect.offset_right = -6
+	flag_rect.offset_bottom = -6
+	flag_rect.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	btn.add_child(flag_rect)
+
+	btn.mouse_entered.connect(func():
+		var t := btn.create_tween()
+		t.tween_property(btn, "scale", Vector2(1.08, 1.08), 0.1).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+	)
+	btn.mouse_exited.connect(func():
+		var t := btn.create_tween()
+		t.tween_property(btn, "scale", Vector2(1.0, 1.0), 0.1).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_IN_OUT)
+	)
+
+	btn.pressed.connect(_on_language_button_pressed.bind(loc))
+	return btn
+
 func _on_language_button_pressed(locale: String) -> void:
+	# Закрываем dropdown
+	flag_dropdown_open = false
+	if is_instance_valid(flag_dropdown_panel):
+		var t := create_tween()
+		t.set_parallel(true)
+		t.tween_property(flag_dropdown_panel, "modulate:a", 0.0, 0.12).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_IN)
+		t.tween_property(flag_dropdown_panel, "position:y", 60.0, 0.12).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_IN)
+		t.chain().tween_callback(func():
+			if is_instance_valid(flag_dropdown_panel):
+				flag_dropdown_panel.visible = false
+		)
+
 	if has_node("/root/LocalizationManager"):
 		get_node("/root/LocalizationManager").set_locale(locale)
 	else:
@@ -1978,33 +2276,26 @@ func _on_language_button_pressed(locale: String) -> void:
 		_on_language_changed(locale)
 
 func _on_language_changed(_locale: String) -> void:
+	_update_language_buttons()
 	_update_localized_texts()
 
 func _update_language_buttons() -> void:
-	var current_lang := "ru"
-	if has_node("/root/LocalizationManager"):
-		current_lang = get_node("/root/LocalizationManager").get_current_language()
-	else:
-		current_lang = TranslationServer.get_locale().substr(0, 2).to_lower()
+	var current_lang := _get_current_locale()
 
+	# Обновляем текстуру в основной кнопке dropdown
+	if is_instance_valid(flag_dropdown_btn):
+		var current_rect := flag_dropdown_btn.get_node_or_null("CurrentFlagRect") as TextureRect
+		if current_rect:
+			current_rect.texture = FLAG_TEXTURES.get(current_lang, FLAG_TEXTURES.get("en", null))
+
+	# В выпадающем списке: скрываем текущий язык, показываем остальные
 	for loc in language_buttons.keys():
 		var btn: Button = language_buttons[loc]
 		if not is_instance_valid(btn):
 			continue
 		var is_current: bool = (str(loc) == current_lang)
-		if is_current:
-			var active_sb := _make_stylebox(ACCENT_BLUE.darkened(0.3), BTN_CORNER, 2, ACCENT_BLUE)
-			active_sb.shadow_size = 10
-			active_sb.shadow_color = ACCENT_BLUE * Color(1, 1, 1, 0.45)
-			btn.add_theme_stylebox_override("normal", active_sb)
-			btn.add_theme_stylebox_override("hover", active_sb)
-			btn.add_theme_color_override("font_color", Color.WHITE)
-		else:
-			var idle_sb := _make_stylebox(BTN_BG, BTN_CORNER, 1, PANEL_BORDER)
-			var hover_sb := _make_stylebox(BTN_HOVER, BTN_CORNER, 1, ACCENT_BLUE * Color(1, 1, 1, 0.5))
-			btn.add_theme_stylebox_override("normal", idle_sb)
-			btn.add_theme_stylebox_override("hover", hover_sb)
-			btn.add_theme_color_override("font_color", TEXT_DIM)
+		btn.visible = not is_current
+		btn.scale = Vector2(1.0, 1.0)
 
 func _update_localized_texts() -> void:
 	# Главный экран
@@ -2067,6 +2358,6 @@ func _update_localized_texts() -> void:
 		var title_lbl: Label = data.get("title", null)
 		var desc_lbl: Label = data.get("desc", null)
 		if title_lbl:
-			title_lbl.text = tr("DIFF_" + diff_id.to_upper())
+			title_lbl.text = tr("UI_DIFF_" + diff_id.to_upper())
 		if desc_lbl:
-			desc_lbl.text = tr("DIFF_" + diff_id.to_upper() + "_DESC")
+			desc_lbl.text = tr("UI_DIFF_" + diff_id.to_upper() + "_DESC")

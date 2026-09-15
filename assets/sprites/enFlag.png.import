@@ -2,16 +2,16 @@
 
 importer="texture"
 type="CompressedTexture2D"
-uid="uid://c7i2304x18qvu"
-path="res://.godot/imported/cellbakground.jpg-747bbf0e3b0db66334ee11ef56ef21f0.ctex"
+uid="uid://cann28a0togi2"
+path="res://.godot/imported/enFlag.png-011ac05930d429a6c8e76df5a8abb97f.ctex"
 metadata={
 "vram_texture": false
 }
 
 [deps]
 
-source_file="res://assets/background/cellbakground.jpg"
-dest_files=["res://.godot/imported/cellbakground.jpg-747bbf0e3b0db66334ee11ef56ef21f0.ctex"]
+source_file="res://assets/sprites/enFlag.png"
+dest_files=["res://.godot/imported/enFlag.png-011ac05930d429a6c8e76df5a8abb97f.ctex"]
 
 [params]
 
