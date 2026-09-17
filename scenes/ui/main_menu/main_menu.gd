@@ -206,6 +206,66 @@ class LockIconVisual extends Control:
 		draw_colored_polygon(hole_pts, hole_color)
 
 
+class CloseCrossVisual extends Control:
+	var cross_color: Color = Color(0.88, 0.92, 0.96, 0.9)
+	var cross_width: float = 2.4
+
+	func _ready() -> void:
+		mouse_filter = Control.MOUSE_FILTER_IGNORE
+
+	func set_color(c: Color) -> void:
+		cross_color = c
+		queue_redraw()
+
+	func _draw() -> void:
+		var w := size.x
+		var h := size.y
+		if w <= 0 or h <= 0:
+			return
+		var cx := w * 0.5
+		var cy := h * 0.5
+		var arm := minf(w, h) * 0.22
+
+		# Тень под крестиком
+		draw_line(Vector2(cx - arm, cy - arm + 1.0), Vector2(cx + arm, cy + arm + 1.0), Color(0, 0, 0, 0.45), cross_width, true)
+		draw_line(Vector2(cx + arm, cy - arm + 1.0), Vector2(cx - arm, cy + arm + 1.0), Color(0, 0, 0, 0.45), cross_width, true)
+
+		# Основные линии крестика
+		draw_line(Vector2(cx - arm, cy - arm), Vector2(cx + arm, cy + arm), cross_color, cross_width, true)
+		draw_line(Vector2(cx + arm, cy - arm), Vector2(cx - arm, cy + arm), cross_color, cross_width, true)
+
+
+class DropdownArrowVisual extends Control:
+	var arrow_color: Color = Color(0.75, 0.88, 1.0, 0.85)
+
+	func _ready() -> void:
+		mouse_filter = Control.MOUSE_FILTER_IGNORE
+
+	func _draw() -> void:
+		var w := size.x
+		var h := size.y
+		if w <= 0 or h <= 0:
+			return
+		var cx := w * 0.5
+		var cy := h * 0.5
+
+		# Тень под стрелкой
+		var shadow_pts := PackedVector2Array([
+			Vector2(cx - 3.5, cy - 1.5 + 1.0),
+			Vector2(cx + 3.5, cy - 1.5 + 1.0),
+			Vector2(cx, cy + 2.5 + 1.0)
+		])
+		draw_colored_polygon(shadow_pts, Color(0, 0, 0, 0.5))
+
+		# Основной треугольник стрелки вниз
+		var pts := PackedVector2Array([
+			Vector2(cx - 3.5, cy - 1.5),
+			Vector2(cx + 3.5, cy - 1.5),
+			Vector2(cx, cy + 2.5)
+		])
+		draw_colored_polygon(pts, arrow_color)
+
+
 const PERK_INFO: Array[Dictionary] = [
 	{
 		"id": "shield",
@@ -382,6 +442,8 @@ func _ready() -> void:
 	overlay.visible = false
 	_update_localized_texts()
 	call_deferred("_open_pending_level_selection")
+	if OS.has_feature("web"):
+		JavaScriptBridge.eval("if (window.callYandexGameReady) { window.callYandexGameReady(); }")
 	
 	# Запускаем пульсацию СВЕЧЕНИЯ и РАЗМЕРА
 	if play_button.has_meta("glow") and play_button.has_meta("wrapper"):
@@ -475,14 +537,13 @@ func _add_left_arrow_icon(btn: Button) -> void:
 	arrow.texture = LEFT_ARROW_TEX
 	arrow.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
 	arrow.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
-	arrow.custom_minimum_size = Vector2(16, 14)
+	arrow.custom_minimum_size = Vector2(20, 20)
 	arrow.set_anchors_and_offsets_preset(Control.PRESET_CENTER_LEFT)
-	arrow.offset_left = 16
-	arrow.offset_right = 32
-	arrow.offset_top = -7
-	arrow.offset_bottom = 7
+	arrow.offset_left = 18
+	arrow.offset_right = 38
+	arrow.offset_top = -10
+	arrow.offset_bottom = 10
 	arrow.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	arrow.modulate = Color(0.95, 0.98, 1.0, 0.9)
 	btn.add_child(arrow)
 
 func _make_label(text: String, font_size: int = 20, color: Color = TEXT_COLOR) -> Label:
@@ -702,15 +763,14 @@ func _build_main_screen() -> void:
 	current_flag_rect.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	flag_dropdown_btn.add_child(current_flag_rect)
 
-	# Маленькая стрелка вниз (▼) в углу кнопки
-	var dd_arrow := Label.new()
-	dd_arrow.text = "▼"
-	dd_arrow.add_theme_font_size_override("font_size", 10)
-	dd_arrow.add_theme_color_override("font_color", Color(0.7, 0.8, 0.9, 0.7))
+	# Маленькая стрелка вниз в углу кнопки (векторный треугольник вместо текста)
+	var dd_arrow := DropdownArrowVisual.new()
+	dd_arrow.custom_minimum_size = Vector2(12, 10)
 	dd_arrow.set_anchors_and_offsets_preset(Control.PRESET_BOTTOM_RIGHT)
 	dd_arrow.offset_left = -18
 	dd_arrow.offset_top = -16
-	dd_arrow.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	dd_arrow.offset_right = -6
+	dd_arrow.offset_bottom = -6
 	flag_dropdown_btn.add_child(dd_arrow)
 
 	flag_dropdown_btn.pressed.connect(_toggle_flag_dropdown)
@@ -871,7 +931,7 @@ func _build_main_screen() -> void:
 	
 	# Кнопка настроек под игрой
 	var settings_container = CenterContainer.new()
-	settings_container.custom_minimum_size = Vector2(280, 82)
+	settings_container.custom_minimum_size = Vector2(290, 94)
 	settings_container.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
 	settings_container.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	center_box.add_child(settings_container)
@@ -884,11 +944,11 @@ func _build_main_screen() -> void:
 	var settings_membrane = preload("res://scripts/ui/play_button_membrane.gd").new()
 	settings_membrane.name = "SettingsMembrane"
 	settings_membrane.set_anchors_and_offsets_preset(PRESET_FULL_RECT)
-	settings_membrane.offset_left = -10.0
-	settings_membrane.offset_top = -8.0
-	settings_membrane.offset_right = 10.0
-	settings_membrane.offset_bottom = 8.0
-	settings_membrane.thickness_scale = 0.58
+	settings_membrane.offset_left = -20.0
+	settings_membrane.offset_top = -16.0
+	settings_membrane.offset_right = 20.0
+	settings_membrane.offset_bottom = 16.0
+	settings_membrane.thickness_scale = 0.85
 	settings_membrane.outer_glow_color = Color(0.08, 0.34, 0.62, 0.12)
 	settings_membrane.flesh_color = Color(0.05, 0.16, 0.32, 0.82)
 	settings_membrane.edge_color = Color(0.22, 0.62, 1.0, 0.72)
@@ -1075,10 +1135,9 @@ func _build_level_panel() -> void:
 
 	# Кнопка закрытия ✕ в правом верхнем углу (для мобильных и ПК)
 	level_close_top_btn = Button.new()
-	level_close_top_btn.text = "X"
+	level_close_top_btn.text = ""
 	level_close_top_btn.custom_minimum_size = Vector2(40, 40)
 	level_close_top_btn.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
-	level_close_top_btn.add_theme_font_size_override("font_size", 18)
 	var close_norm_sb = _make_stylebox(Color(0.14, 0.18, 0.24, 0.9), 12, 1, Color(1, 1, 1, 0.18))
 	var close_hover_sb = _make_stylebox(Color(0.35, 0.15, 0.18, 0.95), 12, 2, ACCENT_RED)
 	close_hover_sb.shadow_size = 8
@@ -1087,6 +1146,18 @@ func _build_level_panel() -> void:
 	level_close_top_btn.add_theme_stylebox_override("hover", close_hover_sb)
 	level_close_top_btn.add_theme_stylebox_override("focus", close_hover_sb.duplicate())
 	level_close_top_btn.add_theme_stylebox_override("pressed", _make_stylebox(Color(0.25, 0.10, 0.12, 1.0), 12, 2, ACCENT_RED))
+
+	var close_cross := CloseCrossVisual.new()
+	close_cross.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	level_close_top_btn.add_child(close_cross)
+
+	level_close_top_btn.mouse_entered.connect(func():
+		close_cross.set_color(Color(1.0, 0.85, 0.88, 1.0))
+	)
+	level_close_top_btn.mouse_exited.connect(func():
+		close_cross.set_color(Color(0.88, 0.92, 0.96, 0.9))
+	)
+
 	_attach_hover_sound(level_close_top_btn)
 	_attach_click_sound(level_close_top_btn)
 	level_close_top_btn.pressed.connect(_on_level_back)
@@ -1209,17 +1280,17 @@ func _populate_levels() -> void:
 		var chapter_panel := PanelContainer.new()
 		chapter_panel.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		var chapter_sb := _make_stylebox(LEVEL_CHAPTER_BG, 18, 1, LEVEL_PANEL_BORDER * Color(1, 1, 1, 0.4))
-		chapter_sb.content_margin_left = 16
-		chapter_sb.content_margin_right = 16
-		chapter_sb.content_margin_top = 14
-		chapter_sb.content_margin_bottom = 16
-		chapter_sb.shadow_size = 10
-		chapter_sb.shadow_color = Color(0.04, 0.08, 0.12, 0.35)
+		chapter_sb.content_margin_left = 18
+		chapter_sb.content_margin_right = 18
+		chapter_sb.content_margin_top = 18
+		chapter_sb.content_margin_bottom = 22
+		chapter_sb.shadow_size = 12
+		chapter_sb.shadow_color = Color(0.04, 0.08, 0.12, 0.4)
 		chapter_panel.add_theme_stylebox_override("panel", chapter_sb)
 		level_list.add_child(chapter_panel)
 
 		var chapter_box := VBoxContainer.new()
-		chapter_box.add_theme_constant_override("separation", 12)
+		chapter_box.add_theme_constant_override("separation", 16)
 		chapter_panel.add_child(chapter_box)
 
 		var chapter_unlocked := true
@@ -1340,7 +1411,7 @@ func _populate_levels() -> void:
 		var chapter_grid = GridContainer.new()
 		chapter_grid.columns = level_grid_columns
 		chapter_grid.add_theme_constant_override("h_separation", 14)
-		chapter_grid.add_theme_constant_override("v_separation", 14)
+		chapter_grid.add_theme_constant_override("v_separation", 18)
 		chapter_grid.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		chapter_box.add_child(chapter_grid)
 
@@ -1350,7 +1421,7 @@ func _populate_levels() -> void:
 				is_available = bool(level_manager.is_level_available(level_num))
 			chapter_grid.add_child(_build_level_button(level_num, is_available))
 
-func _build_level_button(level_num: int, is_unlocked: bool) -> Button:
+func _build_level_button(level_num: int, is_unlocked: bool) -> Control:
 	var level_manager := get_node_or_null("/root/LevelManager")
 	var best_stars := 0
 	if level_manager != null:
@@ -1358,11 +1429,17 @@ func _build_level_button(level_num: int, is_unlocked: bool) -> Button:
 
 	var is_current_target := is_unlocked and (level_num == unlocked_levels)
 
+	# Общий контейнер ячейки уровня (Карточка + Звёзды под ней)
+	var cell := VBoxContainer.new()
+	cell.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	cell.alignment = BoxContainer.ALIGNMENT_BEGIN
+	cell.add_theme_constant_override("separation", 6)
+
 	var btn = Button.new()
-	# Увеличенная высота карточки для отличного отображения номера, карты и звезд
-	btn.custom_minimum_size = Vector2(96, 144)
+	btn.custom_minimum_size = Vector2(96, 126)
 	btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	btn.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND if is_unlocked else Control.CURSOR_FORBIDDEN
+	btn.clip_contents = true
 
 	# 1. Верхний бейдж номера уровня
 	var num_pill := PanelContainer.new()
@@ -1396,33 +1473,47 @@ func _build_level_button(level_num: int, is_unlocked: bool) -> Button:
 	play_icon.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
 	play_icon.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
 	play_icon.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-	# 50% уменьшение: увеличиваем отступы чтобы область была вдвое меньше
-	play_icon.offset_left = 24
-	play_icon.offset_right = -24
-	play_icon.offset_top = 48
-	play_icon.offset_bottom = -54
+	play_icon.offset_left = 22
+	play_icon.offset_right = -22
+	play_icon.offset_top = 36
+	play_icon.offset_bottom = -36
 	play_icon.mouse_filter = Control.MOUSE_FILTER_IGNORE
 
-	# 3. Нижний стеклянный трей звезд
+	# 3. Нижний стеклянный трей звезд, вынесенный ПОД карточку
 	var stars_tray := PanelContainer.new()
-	stars_tray.set_anchors_and_offsets_preset(Control.PRESET_BOTTOM_WIDE)
-	stars_tray.custom_minimum_size.y = 26
-	stars_tray.offset_left = 6
-	stars_tray.offset_right = -6
-	stars_tray.offset_bottom = -6
+	stars_tray.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
 	stars_tray.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	stars_tray.custom_minimum_size = Vector2(76, 24)
 
-	var tray_border := (LEVEL_ACCENT_GOLD * Color(1, 1, 1, 0.5)) if best_stars > 0 else (LEVEL_PANEL_BORDER * Color(1, 1, 1, 0.3) if is_unlocked else Color(1, 1, 1, 0.08))
-	var tray_sb := _make_stylebox(Color(0.03, 0.06, 0.10, 0.88), 9, 1, tray_border)
-	tray_sb.content_margin_left = 4
-	tray_sb.content_margin_right = 4
-	tray_sb.content_margin_top = 2
-	tray_sb.content_margin_bottom = 2
+	var tray_border: Color
+	var tray_bg: Color
+	if is_unlocked:
+		if best_stars == 3:
+			tray_border = LEVEL_ACCENT_GOLD * Color(1, 1, 1, 0.8)
+			tray_bg = Color(0.06, 0.10, 0.15, 0.92)
+		elif best_stars > 0:
+			tray_border = LEVEL_ACCENT_GOLD * Color(1, 1, 1, 0.45)
+			tray_bg = Color(0.04, 0.08, 0.13, 0.88)
+		else:
+			tray_border = LEVEL_PANEL_BORDER * Color(1, 1, 1, 0.35)
+			tray_bg = Color(0.03, 0.06, 0.10, 0.82)
+	else:
+		tray_border = Color(1, 1, 1, 0.08)
+		tray_bg = Color(0.02, 0.04, 0.07, 0.65)
+
+	var tray_sb := _make_stylebox(tray_bg, 10, 1, tray_border)
+	tray_sb.content_margin_left = 7
+	tray_sb.content_margin_right = 7
+	tray_sb.content_margin_top = 3
+	tray_sb.content_margin_bottom = 3
+	if is_unlocked and best_stars == 3:
+		tray_sb.shadow_size = 8
+		tray_sb.shadow_color = LEVEL_ACCENT_GOLD * Color(1, 1, 1, 0.3)
 	stars_tray.add_theme_stylebox_override("panel", tray_sb)
 
 	var stars_hbox := HBoxContainer.new()
 	stars_hbox.alignment = BoxContainer.ALIGNMENT_CENTER
-	stars_hbox.add_theme_constant_override("separation", 2)
+	stars_hbox.add_theme_constant_override("separation", 5)
 	stars_hbox.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	for si in range(3):
 		var star_rect := TextureRect.new()
@@ -1434,7 +1525,7 @@ func _build_level_button(level_num: int, is_unlocked: bool) -> Button:
 		if si < best_stars:
 			star_rect.modulate = Color(1.0, 0.88, 0.25, 1.0)
 		else:
-			star_rect.modulate = Color(0.48, 0.56, 0.62, 0.5)
+			star_rect.modulate = Color(0.42, 0.52, 0.62, 0.5) if is_unlocked else Color(0.24, 0.28, 0.32, 0.35)
 		stars_hbox.add_child(star_rect)
 	stars_tray.add_child(stars_hbox)
 
@@ -1448,10 +1539,10 @@ func _build_level_button(level_num: int, is_unlocked: bool) -> Button:
 			lvl_data = level_manager.get_level_data(level_num)
 		preview_ctrl.setup(lvl_data)
 		preview_ctrl.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-		preview_ctrl.offset_left = 3
-		preview_ctrl.offset_right = -3
-		preview_ctrl.offset_top = 26
-		preview_ctrl.offset_bottom = -30
+		preview_ctrl.offset_left = 0
+		preview_ctrl.offset_right = 0
+		preview_ctrl.offset_top = 0
+		preview_ctrl.offset_bottom = 0
 		preview_ctrl.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		btn.add_child(preview_ctrl)
 
@@ -1464,19 +1555,25 @@ func _build_level_button(level_num: int, is_unlocked: bool) -> Button:
 
 		btn.mouse_entered.connect(func():
 			btn.pivot_offset = btn.size * 0.5
+			stars_tray.pivot_offset = stars_tray.size * 0.5
 			play_icon.visible = true
 			var t = btn.create_tween()
 			t.tween_property(btn, "scale", Vector2(1.05, 1.05), 0.15).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
 			t.parallel().tween_property(btn, "modulate", Color(1.05, 1.05, 1.05, 1.0), 0.15)
 			t.parallel().tween_property(play_icon, "modulate:a", 1.0, 0.15)
+			t.parallel().tween_property(stars_tray, "scale", Vector2(1.06, 1.06), 0.15).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+			t.parallel().tween_property(stars_tray, "modulate", Color(1.15, 1.15, 1.15, 1.0), 0.15)
 		)
 		btn.mouse_exited.connect(func():
 			btn.pivot_offset = btn.size * 0.5
+			stars_tray.pivot_offset = stars_tray.size * 0.5
 			var target_alpha: float = 0.4 if is_current_target else 0.0
 			var t = btn.create_tween()
 			t.tween_property(btn, "scale", Vector2(1.0, 1.0), 0.12).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_IN_OUT)
 			t.parallel().tween_property(btn, "modulate", Color.WHITE, 0.12)
 			t.parallel().tween_property(play_icon, "modulate:a", target_alpha, 0.12)
+			t.parallel().tween_property(stars_tray, "scale", Vector2(1.0, 1.0), 0.12).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_IN_OUT)
+			t.parallel().tween_property(stars_tray, "modulate", Color.WHITE, 0.12)
 			if not is_current_target:
 				t.tween_callback(func(): if is_instance_valid(play_icon) and not btn.is_hovered(): play_icon.visible = false)
 		)
@@ -1512,7 +1609,6 @@ func _build_level_button(level_num: int, is_unlocked: bool) -> Button:
 		lock_icon.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 		lock_icon.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		btn.add_child(lock_icon)
-		stars_tray.visible = false
 		btn.disabled = true
 
 		var locked_sb = _make_stylebox(LEVEL_LOCKED_BG, 16, 1, Color(1, 1, 1, 0.08))
@@ -1522,8 +1618,10 @@ func _build_level_button(level_num: int, is_unlocked: bool) -> Button:
 	if is_unlocked:
 		btn.add_child(play_icon)
 	btn.add_child(num_pill)
-	btn.add_child(stars_tray)
-	return btn
+
+	cell.add_child(btn)
+	cell.add_child(stars_tray)
+	return cell
 
 func _setup_ui_hover_sound() -> void:
 	ui_hover_sfx = AudioStreamPlayer.new()

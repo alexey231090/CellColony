@@ -16,13 +16,15 @@ const ENERGY_COLOR_FULL: Color = Color(0.0, 1.0, 0.7)  # Бирюзовый
 const BG_COLOR: Color = Color(0.05, 0.05, 0.1, 0.7)  # Тёмно-синий прозрачный
 const OUTLINE_COLOR: Color = Color(1.0, 1.0, 1.0, 0.2)  # Тонкая светлая обводка
 
+const STAR_TEX: Texture2D = preload("res://assets/sprites/miniStar.png")
+
 # --- Состояние ---
 var current_energy: float = 0.0
 var max_energy: float = 100.0
 var display_energy: float = 0.0
 var selection_manager: Node = null
 var pulse_time: float = 0.0
-var difficulty_text: String = ""
+var difficulty_stars_count: int = 0
 var tutorial_highlight: bool = false
 
 # --- StyleBoxes (для оптимизации создаем один раз) ---
@@ -65,9 +67,9 @@ func _process(delta: float) -> void:
 		current_energy = selection_manager.perk_energy
 		max_energy = selection_manager.MAX_PERK_ENERGY
 
-	var new_difficulty_text := _get_difficulty_stars_text()
-	if difficulty_text != new_difficulty_text:
-		difficulty_text = new_difficulty_text
+	var new_stars_count := _get_difficulty_stars_count()
+	if difficulty_stars_count != new_stars_count:
+		difficulty_stars_count = new_stars_count
 		queue_redraw()
 	
 	if max_energy <= 0.0: max_energy = 1.0 # Защита от деления на 0
@@ -159,15 +161,21 @@ func _draw() -> void:
 	draw_string(font, text_pos + Vector2(1, 1), text, HORIZONTAL_ALIGNMENT_LEFT, -1, font_size, Color(0, 0, 0, 0.8))
 	draw_string(font, text_pos, text, HORIZONTAL_ALIGNMENT_LEFT, -1, font_size, Color.WHITE)
 
-	if difficulty_text != "":
-		var diff_font_size := 16
-		var diff_size = font.get_string_size(difficulty_text, HORIZONTAL_ALIGNMENT_CENTER, -1, diff_font_size)
-		var diff_pos = Vector2(
-			bar_rect.position.x + BAR_WIDTH / 2.0 - diff_size.x / 2.0,
-			bar_rect.position.y + BAR_HEIGHT + DIFFICULTY_TEXT_GAP
-		)
-		draw_string(font, diff_pos + Vector2(1, 1), difficulty_text, HORIZONTAL_ALIGNMENT_LEFT, -1, diff_font_size, Color(0, 0, 0, 0.85))
-		draw_string(font, diff_pos, difficulty_text, HORIZONTAL_ALIGNMENT_LEFT, -1, diff_font_size, Color(1.0, 0.9, 0.45, 0.95))
+	# 5. Звёзды сложности под полосой энергии (текстура miniStar.png)
+	if difficulty_stars_count > 0:
+		var star_size := 16.0
+		var star_gap := 5.0
+		var total_stars_w: float = float(difficulty_stars_count) * star_size + float(difficulty_stars_count - 1) * star_gap
+		var start_x: float = bar_rect.position.x + (BAR_WIDTH - total_stars_w) * 0.5
+		var start_y: float = bar_rect.position.y + BAR_HEIGHT + 6.0
+
+		for i in range(difficulty_stars_count):
+			var star_pos := Vector2(start_x + float(i) * (star_size + star_gap), start_y)
+			var star_rect := Rect2(star_pos, Vector2(star_size, star_size))
+			# Тень под звездой для отличного контраста
+			draw_texture_rect(STAR_TEX, Rect2(star_pos + Vector2(0, 1), Vector2(star_size, star_size)), false, Color(0, 0, 0, 0.65))
+			# Яркая золотая звезда
+			draw_texture_rect(STAR_TEX, star_rect, false, Color(1.0, 0.88, 0.25, 1.0))
 
 func _draw_lightning_icon(center: Vector2, size: float) -> void:
 	var s = size * 0.45
@@ -203,22 +211,22 @@ func _draw_bolt_shape(center: Vector2, s: float, col: Color) -> void:
 	])
 	draw_colored_polygon(pts2, col)
 
-func _get_difficulty_stars_text() -> String:
+func _get_difficulty_stars_count() -> int:
 	var level_manager := get_node_or_null("/root/LevelManager")
 	if level_manager == null:
-		return ""
+		return 0
 	var level_data: Dictionary = level_manager.get_current_level_data()
 	if bool(level_data.get("is_tutorial", false)):
-		return ""
+		return 0
 
 	var difficulty: String = String(level_manager.get_selected_difficulty())
 	match difficulty:
 		"hard":
-			return "★ ★ ★"
+			return 3
 		"medium":
-			return "★ ★ ☆"
+			return 2
 		_:
-			return "★ ☆ ☆"
+			return 1
 
 func set_tutorial_highlight(enabled: bool) -> void:
 	if tutorial_highlight == enabled:
