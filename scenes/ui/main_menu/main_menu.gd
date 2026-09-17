@@ -581,6 +581,7 @@ func _build_overlay() -> void:
 	overlay.set_anchors_and_offsets_preset(PRESET_FULL_RECT)
 	overlay.color = Color(0, 0, 0, 0.6)
 	overlay.mouse_filter = MOUSE_FILTER_STOP
+	overlay.z_index = 50
 	add_child(overlay)
 
 func _build_dev_console() -> void:
@@ -662,7 +663,6 @@ func _build_main_screen() -> void:
 	flag_wrapper.name = "FlagWrapper"
 	flag_wrapper.custom_minimum_size = Vector2(72, 72)
 	flag_wrapper.clip_children = CanvasItem.CLIP_CHILDREN_DISABLED
-	flag_wrapper.z_index = 100
 	flag_wrapper.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	top_controls_row.add_child(flag_wrapper)
 
@@ -730,7 +730,7 @@ func _build_main_screen() -> void:
 	flag_dropdown_panel.custom_minimum_size = Vector2(74, 0)
 	flag_dropdown_panel.position = Vector2(0, 78)
 	flag_dropdown_panel.visible = false
-	flag_dropdown_panel.z_index = 100
+	flag_dropdown_panel.z_index = 20
 	flag_dropdown_panel.mouse_filter = Control.MOUSE_FILTER_STOP
 	flag_wrapper.add_child(flag_dropdown_panel)
 
@@ -984,6 +984,7 @@ func _build_level_panel() -> void:
 	level_panel.name = "LevelPanel"
 	level_panel.set_anchors_and_offsets_preset(PRESET_FULL_RECT)
 	level_panel.mouse_filter = MOUSE_FILTER_IGNORE
+	level_panel.z_index = 60
 	add_child(level_panel)
 	
 	level_panel_box = PanelContainer.new()
@@ -1574,6 +1575,7 @@ func _build_difficulty_panel() -> void:
 	difficulty_panel.name = "DifficultyPanel"
 	difficulty_panel.set_anchors_and_offsets_preset(PRESET_FULL_RECT)
 	difficulty_panel.mouse_filter = MOUSE_FILTER_IGNORE
+	difficulty_panel.z_index = 60
 	add_child(difficulty_panel)
 
 	var panel_box = PanelContainer.new()
@@ -1781,6 +1783,7 @@ func _build_settings_panel() -> void:
 	settings_panel.name = "SettingsPanel"
 	settings_panel.set_anchors_and_offsets_preset(PRESET_FULL_RECT)
 	settings_panel.mouse_filter = MOUSE_FILTER_IGNORE
+	settings_panel.z_index = 60
 	add_child(settings_panel)
 	
 	var panel_box = PanelContainer.new()
@@ -1859,6 +1862,7 @@ func _build_perks_panel() -> void:
 	perks_panel.name = "PerksPanel"
 	perks_panel.set_anchors_and_offsets_preset(PRESET_FULL_RECT)
 	perks_panel.mouse_filter = MOUSE_FILTER_IGNORE
+	perks_panel.z_index = 60
 	add_child(perks_panel)
 
 	var panel_box = PanelContainer.new()
@@ -2017,8 +2021,9 @@ func _select_perk_card(perk_id: String) -> void:
 
 func _show_panel(panel: Control) -> void:
 	# Закрываем dropdown флагов если он открыт, чтобы не перекрывал панели
-	if flag_dropdown_open:
-		_toggle_flag_dropdown()
+	flag_dropdown_open = false
+	if is_instance_valid(flag_dropdown_panel):
+		flag_dropdown_panel.visible = false
 	overlay.visible = true
 	overlay.modulate = Color(1, 1, 1, 0)
 	panel.visible = true
