@@ -188,6 +188,17 @@ body {
 
 		<div id="status">
 			<img id="status-splash" class="show-image--true fullsize--false use-filter--true" src="$GODOT_SPLASH" alt="AllexS Games" onerror="this.style.display='none'">
+			<script>
+				(function() {
+					var splash = document.getElementById('status-splash');
+					if (splash) {
+						var s = splash.getAttribute('src');
+						if (s && s !== '$GODOT_SPLASH') {
+							splash.src = s + (s.indexOf('?') === -1 ? '?' : '&') + 'v=' + Date.now();
+						}
+					}
+				})();
+			</script>
 			<progress id="status-progress"></progress>
 			<div id="status-notice"></div>
 		</div>
