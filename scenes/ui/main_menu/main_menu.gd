@@ -55,6 +55,7 @@ const PLAY_BUTTON_TEX: Texture2D = preload("res://assets/sprites/playButton.png"
 const SOUND_ON_TEX: Texture2D = preload("res://assets/sprites/Sound.png")
 const SOUND_OFF_TEX: Texture2D = preload("res://assets/sprites/NoSound.png")
 const SOUND_CROSS_TEX: Texture2D = preload("res://assets/sprites/soundcross.png")
+const LOGO_YG_TEX: Texture2D = preload("res://assets/sprites/LogoYG2.png")
 const FLAG_TEXTURES: Dictionary = {
 	"ru": preload("res://assets/sprites/ruFlag.png"),
 	"en": preload("res://assets/sprites/enFlag.png"),
@@ -389,6 +390,7 @@ var perk_card_buttons: Dictionary = {}
 var selected_perk_id: String = "shield"
 
 # Состояние
+static var _splash_shown: bool = false
 var is_sound_on: bool = true
 var is_music_on: bool = true
 var sound_volume: float = 80.0
@@ -453,6 +455,67 @@ func _ready() -> void:
 		# Пульсация свечения
 		t.tween_property(glow, "modulate:a", 0.75, 1.7).from(0.4)
 		t.chain().tween_property(glow, "modulate:a", 0.4, 1.7)
+	
+	if not _splash_shown:
+		_splash_shown = true
+		_show_intro_splash()
+
+## Плавная заставка логотипа студии на старте игры (ровно 3.0 секунды)
+func _show_intro_splash() -> void:
+	var splash_layer := Control.new()
+	splash_layer.name = "IntroSplashLayer"
+	splash_layer.set_anchors_and_offsets_preset(PRESET_FULL_RECT)
+	splash_layer.z_index = 200
+	splash_layer.mouse_filter = MOUSE_FILTER_STOP
+
+	# Темная подложка, скрывающая кнопки меню
+	var splash_bg := ColorRect.new()
+	splash_bg.name = "SplashBg"
+	splash_bg.set_anchors_and_offsets_preset(PRESET_FULL_RECT)
+	splash_bg.color = Color(0.04, 0.05, 0.08, 1.0)
+	splash_bg.mouse_filter = MOUSE_FILTER_IGNORE
+	splash_layer.add_child(splash_bg)
+
+	# Центрированный логотип
+	var logo_rect := TextureRect.new()
+	logo_rect.name = "SplashLogo"
+	logo_rect.texture = LOGO_YG_TEX
+	logo_rect.anchor_left = 0.5
+	logo_rect.anchor_top = 0.5
+	logo_rect.anchor_right = 0.5
+	logo_rect.anchor_bottom = 0.5
+	var logo_size := 180.0
+	logo_rect.offset_left = -logo_size * 0.5
+	logo_rect.offset_right = logo_size * 0.5
+	logo_rect.offset_top = -logo_size * 0.5
+	logo_rect.offset_bottom = logo_size * 0.5
+	logo_rect.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	logo_rect.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+	logo_rect.mouse_filter = MOUSE_FILTER_IGNORE
+	logo_rect.modulate.a = 0.0
+	splash_layer.add_child(logo_rect)
+
+	add_child(splash_layer)
+
+	# Анимация: появление 0.8с -> пауза 1.4с -> исчезновение 0.8с (всего 3.0с)
+	var tween := create_tween()
+	tween.tween_property(logo_rect, "modulate:a", 1.0, 0.8).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_OUT)
+	tween.tween_interval(1.4)
+	tween.set_parallel(true)
+	tween.tween_property(logo_rect, "modulate:a", 0.0, 0.8).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN)
+	tween.tween_property(splash_bg, "color:a", 0.0, 0.8).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN)
+	tween.chain().tween_callback(splash_layer.queue_free)
+
+	# Пропуск заставки по клику или тапу
+	splash_layer.gui_input.connect(func(event: InputEvent) -> void:
+		if (event is InputEventMouseButton and event.pressed) or (event is InputEventScreenTouch and event.pressed):
+			if tween and tween.is_valid():
+				tween.kill()
+			var skip_tween := create_tween().set_parallel(true)
+			skip_tween.tween_property(logo_rect, "modulate:a", 0.0, 0.2)
+			skip_tween.tween_property(splash_bg, "color:a", 0.0, 0.2)
+			skip_tween.chain().tween_callback(splash_layer.queue_free)
+	)
 
 # ========== ФАБРИКА ЭЛЕМЕНТОВ ==========
 

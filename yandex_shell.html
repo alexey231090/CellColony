@@ -46,11 +46,27 @@ body {
 	visibility: hidden;
 }
 
+@keyframes splashFadeInOut {
+	0% {
+		opacity: 0;
+	}
+	27% {
+		opacity: 1;
+	}
+	73% {
+		opacity: 1;
+	}
+	100% {
+		opacity: 0;
+	}
+}
+
 #status-splash {
 	max-height: min(22vh, 135px);
 	max-width: min(26vw, 135px);
 	margin: auto;
 	object-fit: contain;
+	animation: splashFadeInOut 3s ease-in-out forwards;
 }
 
 #status-splash.show-image--false {
