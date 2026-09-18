@@ -497,14 +497,17 @@ func _show_intro_splash() -> void:
 
 	add_child(splash_layer)
 
-	# Анимация: появление 0.8с -> пауза 1.4с -> исчезновение 0.8с (всего 3.0с)
+	# Последовательная анимация: появление 0.7с -> постоял 1.4с -> исчезновение логотипа в темноту 0.7с -> открытие меню 0.35с
 	var tween := create_tween()
-	tween.tween_property(logo_rect, "modulate:a", 1.0, 0.8).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_OUT)
+	# 1. Плавное появление логотипа
+	tween.tween_property(logo_rect, "modulate:a", 1.0, 0.7).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_OUT)
+	# 2. Постоял
 	tween.tween_interval(1.4)
-	tween.set_parallel(true)
-	tween.tween_property(logo_rect, "modulate:a", 0.0, 0.8).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN)
-	tween.tween_property(splash_bg, "color:a", 0.0, 0.8).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN)
-	tween.chain().tween_callback(splash_layer.queue_free)
+	# 3. Полное исчезновение логотипа в темноту (фон меню еще полностью закрыт!)
+	tween.tween_property(logo_rect, "modulate:a", 0.0, 0.7).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN)
+	# 4. И только теперь плавное раскрытие главного меню
+	tween.tween_property(splash_bg, "color:a", 0.0, 0.35).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_OUT)
+	tween.tween_callback(splash_layer.queue_free)
 
 	# Пропуск заставки по клику или тапу
 	splash_layer.gui_input.connect(func(event: InputEvent) -> void:
@@ -512,7 +515,7 @@ func _show_intro_splash() -> void:
 			if tween and tween.is_valid():
 				tween.kill()
 			var skip_tween := create_tween().set_parallel(true)
-			skip_tween.tween_property(logo_rect, "modulate:a", 0.0, 0.2)
+			skip_tween.tween_property(logo_rect, "modulate:a", 0.0, 0.15)
 			skip_tween.tween_property(splash_bg, "color:a", 0.0, 0.2)
 			skip_tween.chain().tween_callback(splash_layer.queue_free)
 	)
