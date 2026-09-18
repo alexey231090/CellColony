@@ -51,10 +51,16 @@ void fragment() {
 	
 	vec4 final_color = mix(color1, color2, clamp(t, 0.0, 1.0));
 	
-	// Микрочастицы (пылинки/органеллы, плавающие в жидкости)
-	// Оставили только самые редкие и тусклые точки
-	float particles = smoothstep(0.995, 0.999, 1.0 - cellular_noise(uv * 12.0 + vec2(TIME * 0.15)));
-	final_color.rgb += vec3(particles * 0.03); 
+	// Микрочастицы (круглые пылинки/органеллы, плавающие в жидкости)
+	vec2 p_uv = uv * 10.0 + vec2(TIME * 0.12);
+	vec2 p_grid = floor(p_uv);
+	vec2 p_rand = random2(p_grid);
+	if (p_rand.x > 0.97) {
+		vec2 p_pos = vec2(0.25) + vec2(0.5) * p_rand;
+		float p_dist = length(fract(p_uv) - p_pos);
+		float p_circle = smoothstep(0.36, 0.04, p_dist);
+		final_color.rgb += vec3(p_circle * 0.12);
+	}
 	
 	COLOR = final_color;
 }

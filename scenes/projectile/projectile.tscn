@@ -1,14 +1,14 @@
-[gd_scene load_steps=3 format=3]
+[gd_scene format=3 uid="uid://d37d6tgy4rhos"]
 
-[ext_resource type="Script" path="res://scenes/projectile/projectile.gd" id="1_proj"]
+[ext_resource type="Script" uid="uid://do25t36ctm8ji" path="res://scenes/projectile/projectile.gd" id="1_proj"]
 
 [sub_resource type="CircleShape2D" id="CircleShape2D_2"]
 radius = 5.0
 
-[node name="Projectile" type="Area2D"]
+[node name="Projectile" type="Area2D" unique_id=1225914191]
 script = ExtResource("1_proj")
 
-[node name="CollisionShape2D" type="CollisionShape2D" parent="."]
+[node name="CollisionShape2D" type="CollisionShape2D" parent="." unique_id=477561317]
 shape = SubResource("CircleShape2D_2")
 
 [connection signal="body_entered" from="." to="." method="_on_body_entered"]

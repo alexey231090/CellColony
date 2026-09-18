@@ -350,7 +350,14 @@ func _sync_audio_controls() -> void:
 	if music_value_label != null:
 		music_value_label.text = "%d%%" % roundi(music_percent)
 
+var _last_toggle_time: int = 0
+
 func toggle_pause() -> void:
+	var now := Time.get_ticks_msec()
+	if now - _last_toggle_time < 200:
+		return
+	_last_toggle_time = now
+
 	is_open = not is_open
 	get_tree().paused = is_open
 	
@@ -399,10 +406,15 @@ func _on_restart_pressed() -> void:
 		overlay.modulate.a = 0.0
 	if center_panel:
 		center_panel.scale = Vector2.ONE
-	var current_scene := get_tree().current_scene
+
 	var scene_path := ""
-	if current_scene:
-		scene_path = String(current_scene.scene_file_path)
+	if has_node("/root/LevelManager"):
+		scene_path = get_node("/root/LevelManager").get_current_level_scene_path()
+	if scene_path.is_empty():
+		var current_scene := get_tree().current_scene
+		if current_scene:
+			scene_path = String(current_scene.scene_file_path)
+
 	if not scene_path.is_empty() and has_node("/root/LoadingManager"):
 		get_node("/root/LoadingManager").transition_to_scene(scene_path)
 	else:

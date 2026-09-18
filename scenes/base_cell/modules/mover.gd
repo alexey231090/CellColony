@@ -20,6 +20,9 @@ const SEPARATION_RANGE_PADDING: float = 24.0
 const SPATIAL_GRID_CELL_SIZE: float = 220.0
 static var _spatial_grid: Dictionary = {}
 
+static func clear_grid() -> void:
+	_spatial_grid.clear()
+
 func _ready() -> void:
 	_main_root = get_tree().get_first_node_in_group("main")
 	var parent_cell := get_parent() as BaseCell
@@ -78,7 +81,8 @@ func _get_nearby_cells(parent_cell: BaseCell) -> Array:
 				continue
 			var bucket: Array = _spatial_grid[key]
 			for other in bucket:
-				result.append(other)
+				if is_instance_valid(other) and (other is BaseCell) and other.is_inside_tree():
+					result.append(other)
 	return result
 
 func _cast_ray(space: PhysicsDirectSpaceState2D, origin: Vector2, dir: Vector2, dist: float, parent: BaseCell) -> Dictionary:

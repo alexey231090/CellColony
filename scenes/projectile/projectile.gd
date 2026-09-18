@@ -17,9 +17,9 @@ var trail_timer: float = 0.0
 const MAX_TRAIL_POINTS: int = 15
 
 # Жизненный цикл снаряда
-var max_lifetime: float = 5.0
-var current_lifetime: float = 5.0
-var fade_start_time: float = 1.0
+var max_lifetime: float = 4.0
+var current_lifetime: float = 4.0
+var fade_start_time: float = 0.5
 
 func _ready() -> void:
 	_sync_visual_direction()
@@ -33,6 +33,8 @@ func _sync_visual_direction() -> void:
 	rotation = direction.angle()
 
 func _draw() -> void:
+	if not _is_pos_on_screen(global_position):
+		return
 	var current_radius = 5.5
 	
 	# Свечение (Glow)
@@ -91,20 +93,8 @@ func _draw() -> void:
 func _process(delta: float) -> void:
 	_sync_visual_direction()
 
-	var motion: Vector2 = direction * speed * delta
-	var next_position: Vector2 = position + motion
-	var next_global_position: Vector2 = global_position + motion
-	var wall_query: PhysicsRayQueryParameters2D = PhysicsRayQueryParameters2D.create(global_position, next_global_position)
-	wall_query.exclude = [self]
-	var wall_hit: Dictionary = get_world_2d().direct_space_state.intersect_ray(wall_query)
-	if not wall_hit.is_empty():
-		var collider: Object = wall_hit.get("collider")
-		if collider is StaticBody2D:
-			_impact_wall_at(Vector2(wall_hit.get("position", global_position)))
-			return
-
-	# Используем простую физику прямого полета
-	position = next_position
+	# Прямой полёт снаряда
+	position += direction * speed * delta
 	
 	# Уменьшаем время жизни
 	current_lifetime -= delta
@@ -238,8 +228,20 @@ func _reflect(cell: BaseCell) -> void:
 	_spawn_impact_effect(global_position, Color.WHITE, Vector2(1.5, 1.5))
 
 func _spawn_impact_effect(pos: Vector2, p_color: Color, p_scale: Vector2 = Vector2.ONE) -> void:
+	if not _is_pos_on_screen(pos):
+		return
 	var impact = impact_effect_scene.instantiate()
 	get_tree().current_scene.add_child(impact)
 	impact.global_position = pos
 	impact.color = p_color
 	impact.scale = p_scale
+
+func _is_pos_on_screen(pos: Vector2) -> bool:
+	var vp := get_viewport()
+	if vp == null:
+		return true
+	var screen_pos: Vector2 = vp.get_canvas_transform() * pos
+	var vp_rect := vp.get_visible_rect()
+	var margin := 100.0
+	return screen_pos.x >= -margin and screen_pos.x <= vp_rect.size.x + margin and \
+		   screen_pos.y >= -margin and screen_pos.y <= vp_rect.size.y + margin

@@ -22,6 +22,9 @@ enum OwnerType { NEUTRAL, PLAYER, ENEMY_RED, ENEMY_GREEN, ENEMY_YELLOW }
 @onready var energy_label: Label = $EnergyLabel
 @onready var contr_label: Label = $ContrLabel
 @onready var shield_overlay: ColorRect = $ShieldOverlay
+@onready var screen_notifier: VisibleOnScreenNotifier2D = get_node_or_null("VisibleOnScreenNotifier2D")
+
+var is_on_screen: bool = true
 
 # Визуальные эффекты при попадании
 var hit_flash_timer: float = 0.0
@@ -124,6 +127,10 @@ func _ready() -> void:
 	add_to_group("cells")
 	mouse_entered.connect(_on_mouse_entered)
 	mouse_exited.connect(_on_mouse_exited)
+	if screen_notifier:
+		screen_notifier.screen_entered.connect(_on_screen_entered)
+		screen_notifier.screen_exited.connect(_on_screen_exited)
+		is_on_screen = screen_notifier.is_on_screen()
 	_update_groups()
 	_update_visuals()
 	_set_energy_ui_visible(false)
@@ -255,6 +262,16 @@ func _on_mouse_exited() -> void:
 	_is_mouse_hovered = false
 	queue_redraw()
 
+func _on_screen_entered() -> void:
+	is_on_screen = true
+	queue_redraw()
+	_update_ui()
+
+func _on_screen_exited() -> void:
+	is_on_screen = false
+	_set_energy_ui_visible(false)
+	_set_contribution_ui_visible(false)
+
 func set_tutorial_highlight(enabled: bool) -> void:
 	if tutorial_highlight == enabled:
 		return
@@ -323,6 +340,8 @@ func _spawn_reward_popup(amount: float) -> void:
 	tween.chain().tween_callback(canvas_layer.queue_free)
 
 func _draw() -> void:
+	if not is_on_screen:
+		return
 	var base_color = _get_cell_color()
 	var time = Time.get_ticks_msec() / 1000.0
 	
@@ -456,9 +475,8 @@ func _draw() -> void:
 			draw_polyline(v_pts, vein_color, 2.0 + _vein_rng.randf_range(0.0, 1.5), true)
 	
 	# 3. Основная обводка (мембрана)
-	var main_points = points.duplicate()
-	main_points.append(main_points[0]) # Замыкаем
-	draw_polyline(main_points, outline_color, 2.5, true)
+	points.append(points[0]) # Замыкаем без дублирования массива
+	draw_polyline(points, outline_color, 2.5, true)
 
 	# 3.1 Маркер отставшей клетки: тревожное кольцо и стрелка к центру колонии
 	if is_stranded and has_stranded_return_target and owner_type != OwnerType.NEUTRAL and not is_low_detail:
@@ -628,7 +646,8 @@ func _process(delta: float) -> void:
 	_ui_timer += delta
 	if _ui_timer >= UI_UPDATE_INTERVAL:
 		_ui_timer = 0.0
-		_update_ui()
+		if is_on_screen:
+			_update_ui()
 	
 	# Распад вклада через 10 секунд бездействия
 	var current_time = Time.get_ticks_msec() / 1000.0
@@ -638,19 +657,21 @@ func _process(delta: float) -> void:
 			decay_accum = 0.0
 			for key in contributions.keys():
 				contributions[key] = max(0.0, contributions[key] - 1.0)
-			queue_redraw()
+			if is_on_screen:
+				queue_redraw()
 
 	# Обновление ShieldOverlay (перенесено из _draw, чтобы не вызывать побочные эффекты при отрисовке)
-	if reflect_chance > 0.0 or speed_boost_timer > 0.0:
+	if is_on_screen and (reflect_chance > 0.0 or speed_boost_timer > 0.0):
 		_update_shield_overlay()
 	elif shield_overlay and shield_overlay.visible:
 		shield_overlay.visible = false
 
-	# Оптимизация: перерисовка только ~30 раз в секунду (физика остаётся 60fps)
-	_redraw_timer += delta
-	if _redraw_timer >= REDRAW_INTERVAL:
-		_redraw_timer = 0.0
-		queue_redraw()
+	# Оптимизация: перерисовка только ~30 раз в секунду и только для видимых клеток
+	if is_on_screen:
+		_redraw_timer += delta
+		if _redraw_timer >= REDRAW_INTERVAL:
+			_redraw_timer = 0.0
+			queue_redraw()
 
 func _apply_energy_regeneration(delta: float) -> void:
 	if stats.current_energy >= stats.max_energy:

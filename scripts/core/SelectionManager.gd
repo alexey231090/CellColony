@@ -708,7 +708,10 @@ func _activate_virus_auto() -> void:
 	trajectory_line.default_color = Color(0.9, 0.1, 0.9, 1.0)
 	trajectory_line.z_index = 50
 	trajectory_line.z_as_relative = false  # Глобальный z_index
-	get_tree().root.add_child(trajectory_line)  # Добавляем в root для глобальных координат
+	var scene_host: Node = get_tree().current_scene
+	if scene_host == null:
+		scene_host = get_tree().root
+	scene_host.add_child(trajectory_line)
 	trajectory_line.add_point(shooter_cell.global_position)
 	trajectory_line.add_point(closest_enemy.global_position)
 	

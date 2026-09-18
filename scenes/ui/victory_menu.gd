@@ -711,6 +711,9 @@ func _make_button(text: String, accent: Color) -> Button:
 
 func _on_next_pressed() -> void:
 	_stop_result_animations()
+	get_tree().paused = false
+	Engine.time_scale = 1.0
+	visible = false
 	var level_manager := get_node_or_null("/root/LevelManager")
 	if not _has_next_level or level_manager == null:
 		_on_menu_pressed()
@@ -724,10 +727,18 @@ func _on_next_pressed() -> void:
 
 func _on_replay_pressed() -> void:
 	_stop_result_animations()
-	var current_scene := get_tree().current_scene
+	get_tree().paused = false
+	Engine.time_scale = 1.0
+	visible = false
+
 	var scene_path := ""
-	if current_scene:
-		scene_path = String(current_scene.scene_file_path)
+	if has_node("/root/LevelManager"):
+		scene_path = get_node("/root/LevelManager").get_current_level_scene_path()
+	if scene_path.is_empty():
+		var current_scene := get_tree().current_scene
+		if current_scene:
+			scene_path = String(current_scene.scene_file_path)
+
 	if not scene_path.is_empty() and has_node("/root/LoadingManager"):
 		get_node("/root/LoadingManager").transition_to_scene(scene_path)
 	else:
@@ -735,6 +746,9 @@ func _on_replay_pressed() -> void:
 
 func _on_menu_pressed() -> void:
 	_stop_result_animations()
+	get_tree().paused = false
+	Engine.time_scale = 1.0
+	visible = false
 	if has_node("/root/LoadingManager"):
 		get_node("/root/LoadingManager").transition_to_scene("res://scenes/ui/main_menu/main_menu.tscn")
 	else:

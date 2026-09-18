@@ -34,6 +34,9 @@ func _capture_editor_message(message: String, _data: Array) -> bool:
 	if message != "request_snapshot":
 		return false
 
+	if OS.is_debug_build():
+		print_orphan_nodes()
+
 	EngineDebugger.send_message("%s:snapshot" % CAPTURE_PREFIX, [_build_snapshot()])
 	return true
 

@@ -53,7 +53,13 @@ func _on_gui_input(event: InputEvent) -> void:
             target_scale = 1.0
         get_viewport().set_input_as_handled()
 
+var _last_tap_time: int = 0
+
 func _on_tap() -> void:
+    var now := Time.get_ticks_msec()
+    if now - _last_tap_time < 250:
+        return
+    _last_tap_time = now
     # Испускаем сигнал нажатия
     pressed_btn.emit()
 

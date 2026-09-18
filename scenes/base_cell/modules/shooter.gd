@@ -100,6 +100,7 @@ func _find_closest_target(parent: BaseCell) -> Node2D:
 				closest = cell
 	return closest
 
+
 func shoot(current_target: Node2D) -> void:
 	var parent_cell = get_parent() as BaseCell
 	if not parent_cell: return
@@ -107,7 +108,7 @@ func shoot(current_target: Node2D) -> void:
 	parent_cell.stats.current_energy -= parent_cell.stats.attack_cost
 	
 	var proj = projectile_scene.instantiate() as Projectile
-	get_tree().root.add_child(proj)
+	_get_spawn_host().add_child(proj)
 	
 	var shoot_dir = (current_target.global_position - global_position).normalized()
 	var spread = deg_to_rad(randf_range(-5, 5))
@@ -142,7 +143,7 @@ func shoot_virus(current_target: Node2D, duration: float, outbreak_id: int) -> b
 		return false
 	
 	var proj = projectile_scene.instantiate() as Projectile
-	get_tree().root.add_child(proj)
+	_get_spawn_host().add_child(proj)
 	
 	var shoot_dir = (current_target.global_position - global_position).normalized()
 	parent_cell.play_shoot_effect(shoot_dir)
@@ -168,6 +169,10 @@ func _spawn_virus_trajectory_line(from: Vector2, to: Vector2) -> void:
 	var trajectory_line := Line2D.new()
 	trajectory_line.set_script(VIRUS_TRAJECTORY_LINE_SCRIPT)
 	trajectory_line.z_as_relative = false
-	get_tree().root.add_child(trajectory_line)
+	_get_spawn_host().add_child(trajectory_line)
 	trajectory_line.add_point(from)
 	trajectory_line.add_point(to)
+
+func _get_spawn_host() -> Node:
+	var scene: Node = get_tree().current_scene
+	return scene if scene != null else get_tree().root

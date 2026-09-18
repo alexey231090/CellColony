@@ -631,9 +631,10 @@ func _build_fire_particles() -> void:
 	background.add_child(particles)
 	
 	# Чтобы искры корректно обновлялись при ресайзе окна
-	get_tree().root.size_changed.connect(func():
-		particles.position = Vector2(get_viewport_rect().size.x / 2.0, get_viewport_rect().size.y)
-		particles.emission_rect_extents = Vector2(get_viewport_rect().size.x / 2.0, 20.0)
+	resized.connect(func():
+		if is_instance_valid(particles):
+			particles.position = Vector2(get_viewport_rect().size.x / 2.0, get_viewport_rect().size.y)
+			particles.emission_rect_extents = Vector2(get_viewport_rect().size.x / 2.0, 20.0)
 	)
 
 func _build_overlay() -> void:
@@ -1205,7 +1206,7 @@ func _build_level_panel() -> void:
 	footer_box.add_child(level_back_btn)
 
 	# Подключение к ресайзу экрана для адаптивности
-	get_tree().root.size_changed.connect(_update_level_panel_responsive)
+	resized.connect(_update_level_panel_responsive)
 	_update_level_panel_responsive()
 	_populate_levels()
 

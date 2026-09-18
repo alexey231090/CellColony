@@ -319,6 +319,8 @@ func _setup_victory_menu() -> void:
 
 func _exit_tree() -> void:
 	Engine.time_scale = 1.0
+	get_tree().paused = false
+	MoverModule.clear_grid()
 
 func _setup_tutorial(level_data: Dictionary, player_cell: BaseCell) -> void:
 	if not bool(level_data.get("is_tutorial", false)):
