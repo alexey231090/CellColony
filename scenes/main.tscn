@@ -21,9 +21,11 @@
 [ext_resource type="AudioStream" uid="uid://bi5ifyp2ot54u" path="res://audio/shot_shield.ogg" id="19_shield_1"]
 [ext_resource type="AudioStream" uid="uid://dbb4d6ja71fr7" path="res://audio/shot_shield_1.ogg" id="20_shield_2"]
 [ext_resource type="AudioStream" uid="uid://3svhtt05k5fa" path="res://audio/active_perk.ogg" id="21_active_perk"]
+[ext_resource type="Texture2D" path="res://scenes/environment/cellular_noise.png" id="22_noise"]
 
 [sub_resource type="ShaderMaterial" id="ShaderMaterial_bg"]
 shader = ExtResource("9_bg_shader")
+shader_parameter/noise_texture = ExtResource("22_noise")
 shader_parameter/color1 = Color(0.02, 0.05, 0.1, 1)
 shader_parameter/color2 = Color(0.05, 0.15, 0.25, 1)
 shader_parameter/speed = 0.5

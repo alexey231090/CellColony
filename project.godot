@@ -19,10 +19,8 @@ run/main_scene="res://scenes/ui/main_menu/main_menu.tscn"
 config/features=PackedStringArray("4.7", "GL Compatibility")
 boot_splash/bg_color=Color(0, 0, 0, 1)
 boot_splash/show_image=false
+boot_splash/stretch_mode=0
 boot_splash/image="res://assets/sprites/LogoYG2.png"
-boot_splash/fullsize=false
-boot_splash/use_filter=true
-boot_splash/minimum_display_time=0
 config/icon="res://assets/sprites/LogoYG2.png"
 
 [autoload]
@@ -32,6 +30,13 @@ AIProfilerRuntime="*res://addons/ai_profiler_export/runtime/ai_profiler_runtime.
 LevelManager="*res://scripts/core/LevelManager.gd"
 LoadingManager="*res://scripts/core/LoadingManager.gd"
 YandexSDK="*uid://do62bxakwgyfx"
+
+[display]
+
+window/size/viewport_width=1280
+window/size/viewport_height=720
+window/stretch/mode="canvas_items"
+window/stretch/aspect="expand"
 
 [dotnet]
 

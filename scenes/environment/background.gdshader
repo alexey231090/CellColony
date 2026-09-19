@@ -1,65 +1,55 @@
 shader_type canvas_item;
 
+uniform sampler2D noise_texture : repeat_enable, filter_linear;
 uniform vec4 color1 : source_color = vec4(0.02, 0.05, 0.1, 1.0);
 uniform vec4 color2 : source_color = vec4(0.05, 0.15, 0.25, 1.0);
-uniform float speed = 0.5;
-uniform float scale = 3.0;
+uniform float speed : hint_range(0.0, 2.0) = 0.25;
+uniform float scale : hint_range(0.1, 10.0) = 2.0;
 uniform vec2 cam_offset = vec2(0.0, 0.0);
 
-// Функция для генерации случайных чисел
-vec2 random2(vec2 p) {
-	return fract(sin(vec2(dot(p, vec2(127.1, 311.7)), dot(p, vec2(269.5, 183.3)))) * 43758.5453);
-}
-
-// Биологический 'клеточный' шум
-float cellular_noise(vec2 x) {
-	vec2 n = floor(x);
-	vec2 f = fract(x);
-	float min_dist = 1.0;
-	
-	for (int j = -1; j <= 1; j++) {
-		for (int i = -1; i <= 1; i++) {
-			vec2 g = vec2(float(i), float(j));
-			vec2 o = random2(n + g);
-			// Анимация движения "клеток"
-			o = 0.5 + 0.5 * sin(TIME * speed + 6.2831 * o);
-			vec2 r = g + o - f;
-			float d = dot(r, r); // Квадрат расстояния
-			if (d < min_dist) {
-				min_dist = d;
-			}
-		}
-	}
-	return min_dist;
-}
-
 void fragment() {
-	// Основные координаты с учетом экрана и масштаба (плюс смещение камеры)
-	vec2 uv = ((FRAGCOORD.xy + cam_offset) / 1000.0) * scale;
+	// Базовые координаты с учетом масштаба и параллакса камеры
+	vec2 uv = ((FRAGCOORD.xy + cam_offset) / 1000.0) * (scale * 0.25);
 	
-	// Главный клеточный шум (крупный)
-	float noise_val = cellular_noise(uv);
+	// Очень медленное, умиротворяющее покачивание жидкости в разные стороны
+	float t = TIME * speed * 0.06;
 	
-	// Мелкий шум (завихрения)
-	float detail_noise = cellular_noise(uv * 2.5 - vec2(TIME * 0.2, TIME * -0.1));
+	// Колебания в разные стороны (круговой дрейф вместо одностороннего движения)
+	vec2 sway1 = vec2(sin(t * 0.9), cos(t * 0.7)) * 0.04;
+	vec2 sway2 = vec2(cos(t * 0.6 + 1.5), sin(t * 0.8 + 2.4)) * 0.035;
 	
-	// Смешивание цветов
-	// Инвертируем шум, чтобы "клетки" выделялись темным, а промежутки светлым
-	float t = 1.0 - smoothstep(0.0, 0.6, noise_val);
-	// Добавляем детали
-	t += (1.0 - detail_noise) * 0.2;
+	// Мелкая прозрачная водная рябь на поверхности жидкости
+	vec2 wave_uv = uv * 2.5;
+	vec2 water_ripple = vec2(
+		sin(wave_uv.y * 2.5 + t * 4.0) + cos(wave_uv.x * 2.0 - t * 3.0),
+		cos(wave_uv.x * 2.5 + t * 3.5) + sin(wave_uv.y * 2.0 - t * 4.5)
+	) * 0.012;
 	
-	vec4 final_color = mix(color1, color2, clamp(t, 0.0, 1.0));
+	// Слой 1: глубокий мягкий фон микросреды
+	vec4 bg_sample = texture(noise_texture, uv + sway1 + water_ripple);
 	
-	// Микрочастицы (круглые пылинки/органеллы, плавающие в жидкости)
-	vec2 p_uv = uv * 10.0 + vec2(TIME * 0.12);
-	vec2 p_grid = floor(p_uv);
-	vec2 p_rand = random2(p_grid);
-	if (p_rand.x > 0.97) {
-		vec2 p_pos = vec2(0.25) + vec2(0.5) * p_rand;
-		float p_dist = length(fract(p_uv) - p_pos);
-		float p_circle = smoothstep(0.36, 0.04, p_dist);
-		final_color.rgb += vec3(p_circle * 0.12);
+	// Слой 2: прозрачное преломление верхнего слоя воды (доменное искривление)
+	vec2 refraction = (bg_sample.rg - vec2(0.5)) * 0.08;
+	vec4 water_sample = texture(noise_texture, uv * 1.35 + sway2 + refraction + water_ripple * 1.5);
+	
+	// Прозрачная водная игра света / каустика на поверхности
+	float water_depth = bg_sample.r;
+	float water_highlight = abs(water_sample.r - bg_sample.r);
+	
+	// Базовое мягкое тонирование цветами уровня
+	float blend = smoothstep(0.1, 0.85, water_depth);
+	vec4 final_color = mix(color1, color2, blend);
+	
+	// Эффект чистой прозрачной воды: мягкие светящиеся переливы и блики ряби
+	float caustics = smoothstep(0.12, 0.4, water_highlight) * 0.28;
+	final_color.rgb += color2.rgb * caustics;
+	
+	// Едва заметные взвешенные микрочастицы в толще воды
+	vec2 p_uv = uv * 2.8 + vec2(sin(t * 1.2) * 0.05, cos(t * 1.0) * 0.05);
+	vec4 p_samp = texture(noise_texture, p_uv);
+	if (p_samp.b > 0.85) {
+		float dust = smoothstep(0.85, 0.98, p_samp.b) * 0.12;
+		final_color.rgb += vec3(dust);
 	}
 	
 	COLOR = final_color;

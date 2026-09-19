@@ -120,6 +120,7 @@ func _ready() -> void:
 	
 	# 1. Генерация органических физических границ уровня
 	playable_polygon_pts = _generate_borders_organic(level_data)
+	_setup_level_background(level_data)
 	var level_rect: Rect2 = _get_polygon_bounds(playable_polygon_pts)
 	
 	# 2. Настройка камеры
@@ -607,6 +608,46 @@ func _get_level_palette(level_data: Dictionary) -> Dictionary:
 			return CHAPTER_6_PALETTE
 		_:
 			return default_palette
+
+func _setup_level_background(level_data: Dictionary) -> void:
+	if not bg_rect or not bg_rect.material:
+		return
+	var chapter: int = int(level_data.get("chapter", 1))
+	var bg_tex_path: String = "res://assets/background/bg_micro_amoeba.png"
+	var c1: Color = Color(0.04, 0.08, 0.12, 1.0)
+	var c2: Color = Color(0.08, 0.18, 0.28, 1.0)
+	
+	match chapter:
+		2:
+			bg_tex_path = "res://assets/background/bg_petri_dish.png"
+			c1 = Color(0.05, 0.10, 0.05, 1.0)
+			c2 = Color(0.12, 0.22, 0.10, 1.0)
+		3:
+			bg_tex_path = "res://assets/background/bg_tissue_cells.png"
+			c1 = Color(0.12, 0.08, 0.03, 1.0)
+			c2 = Color(0.24, 0.15, 0.07, 1.0)
+		4:
+			bg_tex_path = "res://assets/background/bg_micro_amoeba.png"
+			c1 = Color(0.09, 0.05, 0.13, 1.0)
+			c2 = Color(0.18, 0.11, 0.26, 1.0)
+		5:
+			bg_tex_path = "res://assets/background/bg_petri_dish.png"
+			c1 = Color(0.13, 0.05, 0.05, 1.0)
+			c2 = Color(0.25, 0.09, 0.09, 1.0)
+		6:
+			bg_tex_path = "res://assets/background/bg_tissue_cells.png"
+			c1 = Color(0.04, 0.06, 0.13, 1.0)
+			c2 = Color(0.09, 0.14, 0.26, 1.0)
+		_:
+			bg_tex_path = "res://assets/background/bg_micro_amoeba.png"
+			c1 = Color(0.04, 0.08, 0.12, 1.0)
+			c2 = Color(0.08, 0.18, 0.28, 1.0)
+			
+	if ResourceLoader.exists(bg_tex_path):
+		var tex = load(bg_tex_path)
+		bg_rect.material.set_shader_parameter("noise_texture", tex)
+	bg_rect.material.set_shader_parameter("color1", c1)
+	bg_rect.material.set_shader_parameter("color2", c2)
 
 func _generate_organic_islands(border_node: StaticBody2D, level_data: Dictionary, center: Vector2, outer_radius: float, wall_color: Color, edge_color: Color, highlight_color: Color, line_width: float, highlight_width: float) -> void:
 	island_collision_polygons.clear()
