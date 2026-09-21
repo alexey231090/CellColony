@@ -86,10 +86,27 @@ var _victory_menu: CanvasLayer = null
 var _pause_menu: PauseMenu = null
 var _tutorial_manager: Node = null
 @onready var camera: Camera2D = $Camera2D
-@onready var bg_rect: ColorRect = $BackgroundLayer/ColorRect
+@onready var bg_rect: TextureRect = $BackgroundLayer/ColorRect
+var _bg_shader_material: Material = null
+
+const LEVEL_BACKGROUNDS: Array[String] = [
+	"res://assets/background/level_bg_1.jpg",
+	"res://assets/background/level_bg_2.jpg",
+	"res://assets/background/level_bg_3.jpg",
+]
+
+func get_background_art_path_for_level(level_id: int) -> String:
+	var idx := posmod(level_id - 1, LEVEL_BACKGROUNDS.size())
+	return LEVEL_BACKGROUNDS[idx]
 
 func _ready() -> void:
 	add_to_group("main") # Важно для DevConsole и Mover
+	if bg_rect and bg_rect.material:
+		_bg_shader_material = bg_rect.material
+	elif ResourceLoader.exists("res://scenes/environment/background.gdshader"):
+		var sm := ShaderMaterial.new()
+		sm.shader = load("res://scenes/environment/background.gdshader")
+		_bg_shader_material = sm
 	
 	# 0. Получаем данные (у нас они фиксированные для органики обычно)
 	var level_data: Dictionary = {
@@ -610,44 +627,76 @@ func _get_level_palette(level_data: Dictionary) -> Dictionary:
 			return default_palette
 
 func _setup_level_background(level_data: Dictionary) -> void:
-	if not bg_rect or not bg_rect.material:
+	if not bg_rect:
 		return
+	if _bg_shader_material == null and bg_rect.material != null:
+		_bg_shader_material = bg_rect.material
 	var chapter: int = int(level_data.get("chapter", 1))
-	var bg_tex_path: String = "res://assets/background/bg_micro_amoeba.png"
 	var c1: Color = Color(0.04, 0.08, 0.12, 1.0)
-	var c2: Color = Color(0.08, 0.18, 0.28, 1.0)
+	var c2: Color = Color(0.25, 0.65, 0.85, 1.0)
 	
 	match chapter:
 		2:
-			bg_tex_path = "res://assets/background/bg_petri_dish.png"
-			c1 = Color(0.05, 0.10, 0.05, 1.0)
-			c2 = Color(0.12, 0.22, 0.10, 1.0)
+			c1 = Color(0.04, 0.09, 0.04, 1.0)
+			c2 = Color(0.45, 0.85, 0.25, 1.0)
 		3:
-			bg_tex_path = "res://assets/background/bg_tissue_cells.png"
-			c1 = Color(0.12, 0.08, 0.03, 1.0)
-			c2 = Color(0.24, 0.15, 0.07, 1.0)
+			c1 = Color(0.10, 0.06, 0.02, 1.0)
+			c2 = Color(0.85, 0.55, 0.15, 1.0)
 		4:
-			bg_tex_path = "res://assets/background/bg_micro_amoeba.png"
-			c1 = Color(0.09, 0.05, 0.13, 1.0)
-			c2 = Color(0.18, 0.11, 0.26, 1.0)
+			c1 = Color(0.08, 0.04, 0.12, 1.0)
+			c2 = Color(0.70, 0.32, 0.88, 1.0)
 		5:
-			bg_tex_path = "res://assets/background/bg_petri_dish.png"
-			c1 = Color(0.13, 0.05, 0.05, 1.0)
-			c2 = Color(0.25, 0.09, 0.09, 1.0)
+			c1 = Color(0.12, 0.04, 0.04, 1.0)
+			c2 = Color(0.85, 0.35, 0.30, 1.0)
 		6:
-			bg_tex_path = "res://assets/background/bg_tissue_cells.png"
-			c1 = Color(0.04, 0.06, 0.13, 1.0)
-			c2 = Color(0.09, 0.14, 0.26, 1.0)
+			c1 = Color(0.04, 0.06, 0.14, 1.0)
+			c2 = Color(0.30, 0.60, 0.95, 1.0)
 		_:
-			bg_tex_path = "res://assets/background/bg_micro_amoeba.png"
 			c1 = Color(0.04, 0.08, 0.12, 1.0)
-			c2 = Color(0.08, 0.18, 0.28, 1.0)
+			c2 = Color(0.25, 0.65, 0.85, 1.0)
 			
-	if ResourceLoader.exists(bg_tex_path):
-		var tex = load(bg_tex_path)
-		bg_rect.material.set_shader_parameter("noise_texture", tex)
-	bg_rect.material.set_shader_parameter("color1", c1)
-	bg_rect.material.set_shader_parameter("color2", c2)
+	var current_level_num: int = 1
+	var level_manager := get_node_or_null("/root/LevelManager")
+	if level_manager != null and "current_level" in level_manager:
+		current_level_num = int(level_manager.current_level)
+	elif "id" in level_data:
+		current_level_num = int(level_data.id)
+
+	var art_path := get_background_art_path_for_level(current_level_num)
+	var art_tex: Texture2D = null
+	if ResourceLoader.exists(art_path):
+		art_tex = load(art_path) as Texture2D
+
+	if bg_rect is TextureRect and art_tex != null:
+		(bg_rect as TextureRect).texture = art_tex
+
+	if _bg_shader_material != null and _bg_shader_material is ShaderMaterial:
+		var sm := _bg_shader_material as ShaderMaterial
+		sm.set_shader_parameter("color1", c1)
+		sm.set_shader_parameter("color2", c2)
+	elif bg_rect.material is ShaderMaterial:
+		var sm := bg_rect.material as ShaderMaterial
+		sm.set_shader_parameter("color1", c1)
+		sm.set_shader_parameter("color2", c2)
+
+	var shader_enabled := true
+	if level_manager != null and "level_shader_enabled" in level_manager:
+		shader_enabled = bool(level_manager.level_shader_enabled)
+	set_shader_enabled(shader_enabled)
+
+func set_shader_enabled(enabled: bool) -> void:
+	if not bg_rect:
+		return
+	if enabled:
+		if _bg_shader_material != null:
+			bg_rect.material = _bg_shader_material
+	else:
+		if bg_rect.material != null and _bg_shader_material == null:
+			_bg_shader_material = bg_rect.material
+		bg_rect.material = null
+
+func is_shader_enabled() -> bool:
+	return bg_rect != null and bg_rect.material != null
 
 func _generate_organic_islands(border_node: StaticBody2D, level_data: Dictionary, center: Vector2, outer_radius: float, wall_color: Color, edge_color: Color, highlight_color: Color, line_width: float, highlight_width: float) -> void:
 	island_collision_polygons.clear()

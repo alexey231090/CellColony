@@ -14,6 +14,9 @@ var unlocked_levels: int = 1
 var selected_difficulty: String = DIFFICULTY_EASY
 var level_best_stars: Dictionary = {}
 var pending_level_selection: int = 0
+var level_shader_enabled: bool = true
+
+
 
 const DEFAULT_LEVEL_DATA := {
 	"scene_path": "res://scenes/levels/organic_level.tscn",
@@ -2491,3 +2494,9 @@ func get_chapter_range(chapter_index: int) -> Vector2i:
 	var start_level := (chapter_index - 1) * CHAPTER_SIZE + 1
 	var end_level := mini(chapter_index * CHAPTER_SIZE, get_total_levels())
 	return Vector2i(start_level, end_level)
+
+func is_level_shader_enabled() -> bool:
+	return level_shader_enabled
+
+func set_level_shader_enabled(enabled: bool) -> void:
+	level_shader_enabled = enabled

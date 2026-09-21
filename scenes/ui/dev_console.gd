@@ -87,6 +87,9 @@ func _toggle(force: Variant = null) -> void:
 		visible = true
 		mouse_filter = Control.MOUSE_FILTER_STOP
 		_refresh_audio_settings()
+		var lm := get_node_or_null("/root/LevelManager")
+		if lm != null and "level_shader_enabled" in lm:
+			_set_setting_value_by_id("level_shader_enabled", bool(lm.level_shader_enabled), false)
 		_refresh_options()
 		options.grab_focus()
 		_select_index(_selected)
@@ -336,6 +339,21 @@ func _build_settings() -> void:
 		"value": true,
 		"desc": "Enter/←→ — переключить.",
 		"apply": Callable(self, "_apply_show_fps")
+	})
+	var shader_enabled := true
+	if level_manager != null and "level_shader_enabled" in level_manager:
+		shader_enabled = bool(level_manager.level_shader_enabled)
+	else:
+		var root := get_tree().current_scene
+		if root != null and root.has_method("is_shader_enabled"):
+			shader_enabled = bool(root.is_shader_enabled())
+	_settings.append({
+		"id": "level_shader_enabled",
+		"name": "Шейдер на уровнях",
+		"type": "bool",
+		"value": shader_enabled,
+		"desc": "ON — включен шейдер фона на уровнях. OFF — шейдер выключен (сплошной фон).",
+		"apply": Callable(self, "_apply_level_shader_enabled")
 	})
 	_settings.append({
 		"id": "audio_master_volume_db",
@@ -835,6 +853,19 @@ func _apply_show_fps(enabled: bool) -> void:
 	var fps := root.get_node_or_null("HUDLayer/FPSCounter")
 	if fps != null and fps is CanvasItem:
 		(fps as CanvasItem).visible = enabled
+
+func _apply_level_shader_enabled(enabled: bool) -> void:
+	var level_manager := get_node_or_null("/root/LevelManager")
+	if level_manager != null and "level_shader_enabled" in level_manager:
+		level_manager.level_shader_enabled = enabled
+	var root := get_tree().current_scene
+	if root != null:
+		if root.has_method("set_shader_enabled"):
+			root.set_shader_enabled(enabled)
+		else:
+			var main_node = get_tree().get_first_node_in_group("main")
+			if main_node != null and main_node.has_method("set_shader_enabled"):
+				main_node.set_shader_enabled(enabled)
 
 func _get_bus_volume_db(bus_name: StringName, fallback: float) -> float:
 	var bus_index: int = AudioServer.get_bus_index(bus_name)
