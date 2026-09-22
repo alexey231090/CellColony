@@ -85,13 +85,16 @@ func _get_nearby_cells(parent_cell: BaseCell) -> Array:
 					result.append(other)
 	return result
 
+static var _cached_ray_query: PhysicsRayQueryParameters2D = null
+
 func _cast_ray(space: PhysicsDirectSpaceState2D, origin: Vector2, dir: Vector2, dist: float, parent: BaseCell) -> Dictionary:
-	var query: PhysicsRayQueryParameters2D = PhysicsRayQueryParameters2D.create(
-		origin, origin + dir * dist
-	)
-	query.exclude = [parent]
-	query.collision_mask = parent.collision_mask
-	var hit: Dictionary = space.intersect_ray(query)
+	if _cached_ray_query == null:
+		_cached_ray_query = PhysicsRayQueryParameters2D.new()
+	_cached_ray_query.from = origin
+	_cached_ray_query.to = origin + dir * dist
+	_cached_ray_query.exclude = [parent]
+	_cached_ray_query.collision_mask = 2 # Слой 2: Только стены и острова
+	var hit: Dictionary = space.intersect_ray(_cached_ray_query)
 	if not hit.is_empty():
 		var collider: Object = hit.get("collider")
 		if not (collider is StaticBody2D):
@@ -186,26 +189,32 @@ func _physics_process(delta: float) -> void:
 	var separation_range: float = my_scaled_radius * 2.5 + SEPARATION_RANGE_PADDING
 	var separation_range_sq: float = separation_range * separation_range
 	
-	# 1. Отталкивание от соседей
+	# 1. Отталкивание от соседей (прямой обход хеш-сетки без аллокации временного массива)
 	var push_vector: Vector2 = Vector2.ZERO
-	var nearby_cells := _get_nearby_cells(parent_cell)
-	for other in nearby_cells:
-		if other == parent_cell or not (other is BaseCell):
-			continue
-		if not _is_relevant_separation_target(parent_cell.owner_type, other.owner_type):
-			continue
-		var diff: Vector2 = my_pos - other.global_position
-		var dist_sq: float = diff.length_squared()
-		if dist_sq > separation_range_sq or dist_sq <= 0.01:
-			continue
-		var min_dist: float = my_scaled_radius + (other.radius * other.scale.x) + 5.0
-		var min_dist_sq: float = min_dist * min_dist
-		if dist_sq >= min_dist_sq:
-			continue
-		var dist: float = sqrt(dist_sq)
-		var dir: Vector2 = diff / dist
-		var force: float = (1.0 - (dist / min_dist)) * push_force
-		push_vector += dir * force
+	var center_key := _get_grid_key(my_pos)
+	for gy in range(center_key.y - 1, center_key.y + 2):
+		for gx in range(center_key.x - 1, center_key.x + 2):
+			var gkey := Vector2i(gx, gy)
+			if not _spatial_grid.has(gkey):
+				continue
+			var bucket: Array = _spatial_grid[gkey]
+			for other in bucket:
+				if other == parent_cell or not (other is BaseCell) or not is_instance_valid(other) or not other.is_inside_tree():
+					continue
+				if not _is_relevant_separation_target(parent_cell.owner_type, other.owner_type):
+					continue
+				var diff: Vector2 = my_pos - other.global_position
+				var dist_sq: float = diff.length_squared()
+				if dist_sq > separation_range_sq or dist_sq <= 0.01:
+					continue
+				var min_dist: float = my_scaled_radius + (other.radius * other.scale.x) + 5.0
+				var min_dist_sq: float = min_dist * min_dist
+				if dist_sq >= min_dist_sq:
+					continue
+				var dist: float = sqrt(dist_sq)
+				var dir: Vector2 = diff / dist
+				var force: float = (1.0 - (dist / min_dist)) * push_force
+				push_vector += dir * force
 		
 	# Применяем силу отталкивания
 	parent_cell.velocity += push_vector * delta * 50.0

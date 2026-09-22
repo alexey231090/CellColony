@@ -85,19 +85,21 @@ func _is_target_valid_for_fire(node: Node2D, parent: BaseCell) -> bool:
 		return true # Враг/Нейтрал — всегда цель
 	return false
 
+func _ready() -> void:
+	scan_timer = randf_range(0.0, SCAN_INTERVAL)
+
 func _find_closest_target(parent: BaseCell) -> Node2D:
 	var closest: Node2D = null
 	var min_dist_sq: float = AUTO_SCAN_RANGE_SQ
-	var target_groups: Array = TARGET_GROUPS_BY_OWNER.get(parent.owner_type, ["cells"])
-	for group_name in target_groups:
-		var cells = get_tree().get_nodes_in_group(String(group_name))
-		for cell in cells:
-			if cell == parent or not (cell is Node2D):
-				continue
-			var dist_sq: float = global_position.distance_squared_to(cell.global_position)
-			if dist_sq < min_dist_sq and _is_target_valid_for_fire(cell, parent):
-				min_dist_sq = dist_sq
-				closest = cell
+	var cells := get_tree().get_nodes_in_group("cells")
+	for node in cells:
+		var cell := node as BaseCell
+		if cell == null or cell == parent:
+			continue
+		var dist_sq: float = global_position.distance_squared_to(cell.global_position)
+		if dist_sq < min_dist_sq and _is_target_valid_for_fire(cell, parent):
+			min_dist_sq = dist_sq
+			closest = cell
 	return closest
 
 

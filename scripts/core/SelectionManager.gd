@@ -1018,18 +1018,17 @@ func show_floating_message(text_str: String, color: Color = Color.WHITE) -> void
 	settings.shadow_color = Color(0, 0, 0, 0.5)
 	msg.label_settings = settings
 	
-	# Создаем CanvasLayer для правильного порядка отрисовки поверх всего UI
-	var cl = CanvasLayer.new()
-	cl.layer = 150
-	popup_host.add_child(cl)
-	cl.add_child(msg)
+	# Используем существующий HUDLayer, чтобы не плодить отдельные CanvasLayer
+	var hud_layer = popup_host.get_node_or_null("HUDLayer")
+	var host_layer: Node = hud_layer if hud_layer != null else popup_host
+	host_layer.add_child(msg)
 	
 	var vp_size = get_viewport().get_visible_rect().size
 	msg.size.x = 600
 	msg.position = Vector2(vp_size.x / 2.0 - 300.0, vp_size.y * 0.4)
 	
-	var tween = create_tween()
+	var tween = msg.create_tween()
 	tween.set_parallel(true)
 	tween.tween_property(msg, "position:y", msg.position.y - 120.0, 1.5).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
 	tween.tween_property(msg, "modulate:a", 0.0, 1.5).set_trans(Tween.TRANS_EXPO).set_ease(Tween.EASE_IN)
-	tween.chain().tween_callback(cl.queue_free)
+	tween.chain().tween_callback(msg.queue_free)

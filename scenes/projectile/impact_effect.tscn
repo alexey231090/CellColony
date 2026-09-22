@@ -4,16 +4,18 @@
 script/source = "extends Node2D
 
 var time_passed: float = 0.0
-var lifetime: float = 0.28
+var lifetime: float = 0.16
 var color: Color = Color.WHITE
-var particles: Array[Dictionary] = []
+var positions: PackedVector2Array = PackedVector2Array()
+var velocities: PackedVector2Array = PackedVector2Array()
 
 func _ready() -> void:
-	for i in range(7):
-		particles.append({
-			\"pos\": Vector2.ZERO,
-			\"vel\": Vector2(randf_range(-1, 1), randf_range(-1, 1)).normalized() * randf_range(90, 210)
-		})
+	z_index = 12
+	positions.resize(3)
+	velocities.resize(3)
+	for i in range(3):
+		positions[i] = Vector2.ZERO
+		velocities[i] = Vector2(randf_range(-1.0, 1.0), randf_range(-1.0, 1.0)).normalized() * randf_range(110.0, 220.0)
 
 func _process(delta: float) -> void:
 	time_passed += delta
@@ -21,16 +23,17 @@ func _process(delta: float) -> void:
 		queue_free()
 		return
 	
-	for p in particles:
-		p.pos += p.vel * delta
+	for i in range(3):
+		positions[i] += velocities[i] * delta
 	queue_redraw()
 
 func _draw() -> void:
-	var factor = 1.0 - (time_passed / lifetime)
-	var c = color
+	var factor: float = 1.0 - (time_passed / lifetime)
+	var c: Color = color
 	c.a = factor
-	for p in particles:
-		draw_circle(p.pos, 4.0 * factor, c)
+	var r: float = 3.5 * factor
+	for i in range(3):
+		draw_circle(positions[i], r, c)
 "
 
 [node name="ImpactEffect" type="Node2D"]

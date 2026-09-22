@@ -126,9 +126,39 @@ func _build_notes(summary: Dictionary, current: Dictionary) -> Array[String]:
 		notes.append("Static memory increased noticeably during the sampled window, which may indicate allocations or content streaming spikes.")
 	if int(current.get("orphan_node_count", 0)) > 0:
 		notes.append("Orphan nodes are present, which can indicate leaked nodes.")
+	var breakdown := _get_node_breakdown()
+	if not breakdown.is_empty():
+		notes.append("Top Scene Nodes: %s" % breakdown)
 	if notes.is_empty():
 		notes.append("No obvious red flags were detected in the sampled window; inspect worst frames for spikes.")
 	return notes
+
+func _get_node_breakdown() -> String:
+	var tree := get_tree()
+	if tree == null or tree.root == null:
+		return ""
+	var counts := {}
+	var stack: Array[Node] = [tree.root]
+	while not stack.is_empty():
+		var n: Node = stack.pop_back()
+		var c_name := n.get_class()
+		if n.get_script() != null and "resource_path" in n.get_script():
+			var s_path: String = n.get_script().resource_path.get_file()
+			if not s_path.is_empty():
+				c_name = s_path.get_basename()
+		counts[c_name] = counts.get(c_name, 0) + 1
+		for child in n.get_children():
+			stack.append(child)
+	
+	var pairs: Array = []
+	for k in counts.keys():
+		pairs.append({"name": k, "count": counts[k]})
+	pairs.sort_custom(func(a: Dictionary, b: Dictionary) -> bool: return int(a.count) > int(b.count))
+	
+	var res: Array[String] = []
+	for i in range(mini(6, pairs.size())):
+		res.append("%s: %d" % [pairs[i].name, pairs[i].count])
+	return ", ".join(res)
 
 
 func _get_worst_frames() -> Array[Dictionary]:

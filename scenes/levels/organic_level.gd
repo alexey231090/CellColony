@@ -160,7 +160,7 @@ func _ready() -> void:
 	base_positions.append(player_base_pos)
 	var player_cell = _spawn_cell(player_base_pos, BaseCell.OwnerType.PLAYER, 30.0)
 	player_cell.assigned_perk = "speed"
-	player_cell.z_index = 100
+	player_cell.z_index = 6
 	var difficulty: String = String(level_data.get("selected_difficulty", "easy"))
 	var enemy_start_cell_count: int = _get_enemy_start_cell_count(difficulty)
 	var configured_enemy_types: Array = level_data.get("enemy_types", [])
@@ -465,6 +465,8 @@ func _stars_to_text(stars: int) -> String:
 func _generate_borders_organic(level_data: Dictionary) -> PackedVector2Array:
 	var border_node: StaticBody2D = StaticBody2D.new()
 	border_node.name = "BiologicalWalls"
+	border_node.collision_layer = 2
+	border_node.collision_mask = 0
 	add_child(border_node)
 	var palette := _get_level_palette(level_data)
 	
@@ -522,6 +524,12 @@ func _generate_borders_organic(level_data: Dictionary) -> PackedVector2Array:
 		blob_pts.reverse()
 	center /= float(max(1, blob_pts.size()))
 	
+	var wall_visual := WallVisual.new()
+	wall_visual.name = "WallVisual"
+	wall_visual.wall_color = outer_wall_color
+	wall_visual.z_index = -5
+	border_node.add_child(wall_visual)
+	
 	for i in range(blob_pts.size()):
 		var p0: Vector2 = blob_pts[i]
 		var p1: Vector2 = blob_pts[(i + 1) % blob_pts.size()]
@@ -548,11 +556,7 @@ func _generate_borders_organic(level_data: Dictionary) -> PackedVector2Array:
 			ext_p1 + outward * visual_thickness,
 			ext_p0 + outward * visual_thickness,
 		])
-		var visual_poly: Polygon2D = Polygon2D.new()
-		visual_poly.polygon = visual_poly_pts
-		visual_poly.color = outer_wall_color
-		visual_poly.z_index = -5
-		border_node.add_child(visual_poly)
+		wall_visual.polygons.append(visual_poly_pts)
 		
 		var coll_poly_pts: PackedVector2Array = PackedVector2Array([
 			coll_inner_p0,

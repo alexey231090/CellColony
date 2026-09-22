@@ -19,8 +19,8 @@ enum OwnerType { NEUTRAL, PLAYER, ENEMY_RED, ENEMY_GREEN, ENEMY_YELLOW }
 @export_range(0.1, 10.0, 0.1) var slow_regen_interval: float = 3.0
 @export_range(0.1, 10.0, 0.1) var slow_regen_amount: float = 1.0
 
-@onready var energy_label: Label = $EnergyLabel
-@onready var contr_label: Label = $ContrLabel
+var energy_label: Label = null
+var contr_label: Label = null
 @onready var shield_overlay: ColorRect = $ShieldOverlay
 @onready var screen_notifier: VisibleOnScreenNotifier2D = get_node_or_null("VisibleOnScreenNotifier2D")
 
@@ -124,6 +124,9 @@ static func get_colony_center(tree: SceneTree, owner: OwnerType) -> Vector2:
 	return colony_center / float(count)
 
 func _ready() -> void:
+	collision_layer = 1
+	collision_mask = 2
+	z_index = 5
 	add_to_group("cells")
 	mouse_entered.connect(_on_mouse_entered)
 	mouse_exited.connect(_on_mouse_exited)
@@ -139,25 +142,8 @@ func _ready() -> void:
 	if shield_overlay and shield_overlay.material:
 		shield_overlay.material = shield_overlay.material.duplicate()
 	
-	if energy_label:
-		# Оформляем цифры красиво прямо из кода, чтобы они хорошо читались
-		var settings = LabelSettings.new()
-		settings.font_size = 22
-		settings.font_color = Color(1.0, 1.0, 1.0, 0.9) # Слегка прозрачный белый
-		settings.outline_size = 6
-		settings.outline_color = Color(0.1, 0.1, 0.1, 0.7) # Мягкая темная обводка
-		settings.shadow_size = 4
-		settings.shadow_color = Color(0, 0, 0, 0.5)
-		settings.shadow_offset = Vector2(1, 2)
-		energy_label.label_settings = settings
+	# Лейблы энергии теперь рисуются напрямую через draw_string в _draw()
 
-	if contr_label:
-		var c_settings = LabelSettings.new()
-		c_settings.font_size = 18
-		c_settings.font_color = Color(0.2, 0.6, 1.0, 0.9) # Синий
-		c_settings.outline_size = 4
-		c_settings.outline_color = Color(0, 0, 0, 0.8)
-		contr_label.label_settings = c_settings
 
 func _update_groups() -> void:
 	# Убираем из всех фракционных групп
@@ -291,21 +277,24 @@ func _get_shoot_tension() -> float:
 	var normalized_time: float = clampf(_shoot_tension_timer / shoot_tension_duration, 0.0, 1.0)
 	return smoothstep(0.0, 1.0, normalized_time)
 
+static var _cached_reward_settings: LabelSettings = null
+
 func _spawn_reward_popup(amount: float) -> void:
 	var viewport := get_viewport()
 	if viewport == null:
 		return
 
-	var popup_host: Node = get_tree().current_scene
+	var tree := get_tree()
+	if tree == null:
+		return
+
+	var popup_host: Node = tree.current_scene
 	if popup_host == null:
 		popup_host = self
 
-	var canvas_layer := CanvasLayer.new()
-	canvas_layer.name = "RewardPopupLayer"
-	canvas_layer.layer = 140
-	canvas_layer.process_mode = Node.PROCESS_MODE_ALWAYS
-	canvas_layer.add_to_group("reward_popups")
-	popup_host.add_child(canvas_layer)
+	# Используем существующий HUDLayer уровня, если есть, чтобы не плодить отдельные CanvasLayer
+	var hud_layer: Node = popup_host.get_node_or_null("HUDLayer")
+	var host_layer: Node = hud_layer if hud_layer != null else popup_host
 
 	var popup := Label.new()
 	var display_amount := maxi(1, roundi(amount))
@@ -315,29 +304,31 @@ func _spawn_reward_popup(amount: float) -> void:
 	popup.pivot_offset = popup.size * 0.5
 	popup.mouse_filter = Control.MOUSE_FILTER_IGNORE
 
-	var settings := LabelSettings.new()
-	settings.font_size = 28
-	settings.font_color = Color(0.26, 0.72, 1.0, 1.0)
-	settings.outline_size = 6
-	settings.outline_color = Color(0.02, 0.06, 0.1, 0.9)
-	settings.shadow_size = 3
-	settings.shadow_color = Color(0.0, 0.0, 0.0, 0.5)
-	settings.shadow_offset = Vector2(0, 2)
-	popup.label_settings = settings
-	canvas_layer.add_child(popup)
+	if _cached_reward_settings == null:
+		var settings := LabelSettings.new()
+		settings.font_size = 28
+		settings.font_color = Color(0.26, 0.72, 1.0, 1.0)
+		settings.outline_size = 6
+		settings.outline_color = Color(0.02, 0.06, 0.1, 0.9)
+		settings.shadow_size = 3
+		settings.shadow_color = Color(0.0, 0.0, 0.0, 0.5)
+		settings.shadow_offset = Vector2(0, 2)
+		_cached_reward_settings = settings
+	popup.label_settings = _cached_reward_settings
+	host_layer.add_child(popup)
 
 	var world_pos := global_position + Vector2(0.0, -radius * scale.x * 1.8)
 	var screen_pos: Vector2 = viewport.get_canvas_transform() * world_pos
 	popup.position = screen_pos - popup.size * 0.5
 	popup.scale = Vector2(0.7, 0.7)
 
-	var tween := canvas_layer.create_tween()
+	var tween := popup.create_tween()
 	tween.set_pause_mode(Tween.TWEEN_PAUSE_PROCESS)
 	tween.set_parallel(true)
 	tween.tween_property(popup, "scale", Vector2(1.15, 1.15), 0.14).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
 	tween.tween_property(popup, "position:y", popup.position.y - 78.0, 0.72).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
 	tween.tween_property(popup, "modulate:a", 0.0, 0.72).set_trans(Tween.TRANS_EXPO).set_ease(Tween.EASE_IN).set_delay(0.06)
-	tween.chain().tween_callback(canvas_layer.queue_free)
+	tween.chain().tween_callback(popup.queue_free)
 
 func _draw() -> void:
 	if not is_on_screen:
@@ -386,8 +377,8 @@ func _draw() -> void:
 		var aim_weight: float = clampf(shoot_tension * 1.35, 0.0, 1.0)
 		draw_angle = lerp_angle(visual_angle, _shoot_tension_angle, aim_weight)
 	
-	# Применяем трансформацию ко всему, что будет нарисовано ниже
-	draw_set_transform(Vector2.ZERO, draw_angle, Vector2(scale_x, scale_y))
+	var rot_cos: float = cos(draw_angle)
+	var rot_sin: float = sin(draw_angle)
 	
 	# Уникальный сдвиг фазы анимации для этой конкретной клетки
 	var phase_offset = (global_position.x + global_position.y) * 0.01
@@ -399,9 +390,9 @@ func _draw() -> void:
 	var tension_contraction: float = 1.0 - shoot_body_contraction * shoot_tension
 	var current_radius = radius * breathe_factor * tension_contraction + (hit_intensity * 5.0)
 	var screen_radius: float = _get_screen_radius(current_radius)
-	var is_low_detail: bool = screen_radius < 18.0
-	var is_medium_detail: bool = not is_low_detail and screen_radius < 30.0
-	var organelles_enabled: bool = stats.current_energy > 15.0 and screen_radius >= 10.0
+	var is_low_detail: bool = screen_radius < 26.0
+	var is_medium_detail: bool = not is_low_detail and screen_radius < 45.0
+	var organelles_enabled: bool = stats.current_energy > 15.0 and screen_radius >= 26.0
 
 	# Мягкая игровая подсветка цели: две полупрозрачные ауры и тонкий читаемый контур.
 	# Цвет нейтрали чуть теплее, а враги сохраняют цвет своей фракции.
@@ -429,7 +420,7 @@ func _draw() -> void:
 		glow_color.a = 0.15 + sin(local_time * 2.5) * 0.05 
 		draw_circle(Vector2.ZERO, current_radius * 1.5, glow_color)
 	
-	# 2. Основное тело клетки (волнистая мембрана)
+	# 2. Основное тело клетки (волнистая мембрана с деформацией без draw_set_transform)
 	var num_points: int = 12 if is_low_detail else (16 if is_medium_detail else 20)
 	var points = PackedVector2Array()
 	var fill_color = display_color.darkened(0.2)
@@ -443,7 +434,9 @@ func _draw() -> void:
 			wobble += sin(angle * 12.0 + time * 20.0) * hit_impact_wobble
 			
 		var r = current_radius + wobble
-		points.append(Vector2(cos(angle), sin(angle)) * r)
+		var bx = cos(angle) * r * scale_x
+		var by = sin(angle) * r * scale_y
+		points.append(Vector2(bx * rot_cos - by * rot_sin, bx * rot_sin + by * rot_cos))
 	
 	# Оптимизация: один цвет вместо PackedColorArray
 	draw_colored_polygon(points, fill_color)
@@ -465,12 +458,16 @@ func _draw() -> void:
 			var v_pts = PackedVector2Array()
 			var start_ang = _vein_rng.randf_range(0.0, TAU)
 			var c_pos = Vector2(cos(start_ang), sin(start_ang)) * (current_radius * 0.9)
-			v_pts.append(c_pos)
+			var vx = c_pos.x * scale_x
+			var vy = c_pos.y * scale_y
+			v_pts.append(Vector2(vx * rot_cos - vy * rot_sin, vx * rot_sin + vy * rot_cos))
 			
 			for seg in range(4):
 				var to_center = -c_pos.normalized().rotated(_vein_rng.randf_range(-0.6, 0.6))
 				c_pos += to_center * (current_radius * 0.2)
-				v_pts.append(c_pos)
+				var svx = c_pos.x * scale_x
+				var svy = c_pos.y * scale_y
+				v_pts.append(Vector2(svx * rot_cos - svy * rot_sin, svx * rot_sin + svy * rot_cos))
 			
 			draw_polyline(v_pts, vein_color, 2.0 + _vein_rng.randf_range(0.0, 1.5), true)
 	
@@ -518,38 +515,70 @@ func _draw() -> void:
 		draw_arc(Vector2.ZERO, current_radius * (1.22 + tutorial_pulse * 0.06), 0.0, TAU, 48, tutorial_ring, 3.4, true)
 		draw_arc(Vector2.ZERO, current_radius * (1.36 + tutorial_pulse * 0.08), 0.0, TAU, 48, tutorial_ring_soft, 1.8, true)
 	
-	# 4. ЭНЕРГЕТИЧЕСКИЙ КУПОЛ (ЩИТ / СПРИНТ) - визуализация перенесена в _process
-	
 	# 4. Ядро (Nucleus) - плавает около центра
 	var nucleus_pos = Vector2(cos(local_time * 1.5), sin(local_time * 2.1)) * (current_radius * 0.15)
 	if shoot_tension > 0.001:
 		var local_shoot_direction := Vector2.RIGHT.rotated(_shoot_tension_angle - draw_angle)
 		nucleus_pos -= local_shoot_direction * current_radius * shoot_nucleus_recoil * shoot_tension
+	var nx = nucleus_pos.x * scale_x
+	var ny = nucleus_pos.y * scale_y
+	var final_nucleus_pos = Vector2(nx * rot_cos - ny * rot_sin, nx * rot_sin + ny * rot_cos)
 	var nucleus_color = display_color.lightened(0.6)
 	if rapid_fire_timer > 0:
 		nucleus_color = Color(1.0, 0.6, 0.1) # Раскаленное оранжевое ядро
 	nucleus_color.a = 0.85
-	draw_circle(nucleus_pos, current_radius * 0.4, nucleus_color)
+	draw_circle(final_nucleus_pos, current_radius * 0.4, nucleus_color)
 	# Блик на ядре оставляем всегда, чтобы клетка не выглядела пустой на дальнем плане.
-	var highlight_pos = nucleus_pos + Vector2(-current_radius * 0.1, -current_radius * 0.1)
-	draw_circle(highlight_pos, current_radius * 0.1, Color.WHITE)
+	var hl_offset = Vector2(-current_radius * 0.1, -current_radius * 0.1)
+	var hlx = hl_offset.x * rot_cos - hl_offset.y * rot_sin
+	var hly = hl_offset.x * rot_sin + hl_offset.y * rot_cos
+	draw_circle(final_nucleus_pos + Vector2(hlx, hly), current_radius * 0.1, Color.WHITE)
 	
 	# 5. Органеллы (маленькие точки внутри), которые медленно кружатся (или быстро при спринте)
 	var organelle_count: int = 0
 	if organelles_enabled:
-		organelle_count = 1 if screen_radius < 20.0 else (2 if is_medium_detail else 3)
+		organelle_count = 1 if screen_radius < 32.0 else (2 if is_medium_detail else 3)
 	for i in range(organelle_count):
 		var org_speed = 1.0 + i * 0.2
 		if speed_boost_timer > 0:
 			org_speed *= 4.0 # Завихрение энергии внутри
 			
 		var org_angle = local_time * org_speed + (i * TAU / 3.0)
-		# орбита чуть дышит
 		var org_dist = current_radius * 0.6 + sin(local_time * 3.0 + i) * 3.0
-		var org_pos = Vector2(cos(org_angle), sin(org_angle)) * org_dist
+		var ox = cos(org_angle) * org_dist * scale_x
+		var oy = sin(org_angle) * org_dist * scale_y
+		var final_org_pos = Vector2(ox * rot_cos - oy * rot_sin, ox * rot_sin + oy * rot_cos)
 		var org_color = display_color.lightened(0.3)
 		org_color.a = 0.7
-		draw_circle(org_pos, current_radius * 0.12, org_color)
+		draw_circle(final_org_pos, current_radius * 0.12, org_color)
+
+	# 6. Отрисовка энергии и вклада (прямой батчинг без Control-нод)
+	var show_energy: bool = false
+	match owner_type:
+		OwnerType.PLAYER:
+			show_energy = screen_radius >= 14.0
+		OwnerType.NEUTRAL:
+			show_energy = is_info_focused
+		_:
+			show_energy = is_info_focused
+
+	var font: Font = ThemeDB.fallback_font
+	if show_energy and font != null:
+		var energy_val := roundi(stats.current_energy)
+		var energy_text := str(energy_val)
+		var font_size: int = clampi(roundi(20.0 / maxf(0.5, scale.x)), 13, 24)
+		var str_size := font.get_string_size(energy_text, HORIZONTAL_ALIGNMENT_CENTER, -1, font_size)
+		var text_pos := Vector2(-str_size.x * 0.5, font_size * 0.35)
+		draw_string_outline(font, text_pos, energy_text, HORIZONTAL_ALIGNMENT_LEFT, -1, font_size, 4, Color(0.05, 0.05, 0.05, 0.85))
+		draw_string(font, text_pos, energy_text, HORIZONTAL_ALIGNMENT_LEFT, -1, font_size, Color(1.0, 1.0, 1.0, 0.95))
+
+	var player_cont: float = contributions.get(OwnerType.PLAYER, 0.0)
+	if player_cont > 0.5 and font != null:
+		var cont_text := "+%d" % roundi(player_cont)
+		var c_font_size: int = clampi(roundi(16.0 / maxf(0.5, scale.x)), 11, 18)
+		var c_pos := Vector2(current_radius * 0.72, -current_radius * 0.72 + c_font_size * 0.35)
+		draw_string_outline(font, c_pos, cont_text, HORIZONTAL_ALIGNMENT_LEFT, -1, c_font_size, 3, Color(0.0, 0.0, 0.0, 0.85))
+		draw_string(font, c_pos, cont_text, HORIZONTAL_ALIGNMENT_LEFT, -1, c_font_size, Color(0.35, 0.75, 1.0, 0.95))
 
 
 func _get_cell_color() -> Color:
@@ -909,44 +938,17 @@ func _update_visuals() -> void:
 	queue_redraw()
 
 func _update_size() -> void:
-	var target_scale = max(0.5, 1.0 + (stats.current_energy * stats.size_multiplier))
-	scale = lerp(scale, Vector2(target_scale, target_scale), 0.1)
+	var target_scale := maxf(0.5, 1.0 + (stats.current_energy * stats.size_multiplier))
+	var diff := target_scale - scale.x
+	if absf(diff) > 0.003:
+		var new_s := lerpf(scale.x, target_scale, 0.1)
+		scale = Vector2(new_s, new_s)
+	elif scale.x != target_scale:
+		scale = Vector2(target_scale, target_scale)
 
 func _update_ui() -> void:
-	var screen_radius: float = _get_screen_radius(radius * scale.x)
-	var show_energy: bool = false
-	match owner_type:
-		OwnerType.PLAYER:
-			show_energy = screen_radius >= 14.0
-		OwnerType.NEUTRAL:
-			show_energy = is_info_focused
-		_:
-			show_energy = is_info_focused
-
-	if energy_label:
-		if show_energy:
-			# roundi() переводит float в красивый int без ".0"
-			energy_label.text = str(roundi(stats.current_energy))
-			# Чтобы текст не расплющивало вместе с желейной физикой:
-			# Используем общий scale клетки, а не её текущий сплющенный scale_x / scale_y
-			var base_scale = max(0.5, 1.0 + (stats.current_energy * stats.size_multiplier))
-			energy_label.scale = Vector2.ONE / base_scale
-			_set_energy_ui_visible(true)
-		else:
-			_set_energy_ui_visible(false)
-	
-	if contr_label:
-		var player_cont = contributions.get(OwnerType.PLAYER, 0.0)
-		if player_cont > 0.5:
-			contr_label.text = "+" + str(roundi(player_cont))
-			_set_contribution_ui_visible(true)
-			# Позиционируем Label за пределами клетки
-			contr_label.position = Vector2(radius * 0.8, -radius * 1.5)
-			
-			var base_scale = max(0.5, 1.0 + (stats.current_energy * stats.size_multiplier))
-			contr_label.scale = Vector2.ONE / base_scale
-		else:
-			_set_contribution_ui_visible(false)
+	if is_on_screen:
+		queue_redraw()
 
 func _get_screen_radius(world_radius: float) -> float:
 	var viewport := get_viewport()
@@ -956,10 +958,10 @@ func _get_screen_radius(world_radius: float) -> float:
 	var screen_offset: Vector2 = canvas_transform.basis_xform(Vector2(world_radius, 0.0))
 	return screen_offset.length()
 
-func _set_energy_ui_visible(visible: bool) -> void:
-	if energy_label and energy_label.visible != visible:
-		energy_label.visible = visible
+func _set_energy_ui_visible(_visible: bool) -> void:
+	if is_on_screen:
+		queue_redraw()
 
-func _set_contribution_ui_visible(visible: bool) -> void:
-	if contr_label and contr_label.visible != visible:
-		contr_label.visible = visible
+func _set_contribution_ui_visible(_visible: bool) -> void:
+	if is_on_screen:
+		queue_redraw()

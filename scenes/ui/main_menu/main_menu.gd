@@ -1332,6 +1332,7 @@ func _populate_levels() -> void:
 	if level_list == null:
 		return
 	for child in level_list.get_children():
+		level_list.remove_child(child)
 		child.queue_free()
 
 	var level_manager := get_node_or_null("/root/LevelManager")
@@ -1917,6 +1918,10 @@ func _start_level(level_num: int, difficulty: String) -> void:
 		scene_path = lm.get_current_level_scene_path()
 
 	_hide_panel(difficulty_panel)
+	if level_list != null:
+		for child in level_list.get_children():
+			level_list.remove_child(child)
+			child.queue_free()
 	var tween = create_tween()
 	tween.tween_interval(0.3)
 	tween.tween_callback(func():

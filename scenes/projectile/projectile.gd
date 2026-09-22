@@ -17,13 +17,12 @@ var trail_timer: float = 0.0
 const MAX_TRAIL_POINTS: int = 15
 
 # Жизненный цикл снаряда
-var max_lifetime: float = 4.0
-var current_lifetime: float = 4.0
-var fade_start_time: float = 0.5
+var max_lifetime: float = 1.1
+var current_lifetime: float = 1.1
+var fade_start_time: float = 0.25
 
 func _ready() -> void:
 	_sync_visual_direction()
-	# Рисуем фигуру 1 раз при старте
 	queue_redraw()
 
 func _sync_visual_direction() -> void:
@@ -33,62 +32,44 @@ func _sync_visual_direction() -> void:
 	rotation = direction.angle()
 
 func _draw() -> void:
-	if not _is_pos_on_screen(global_position):
-		return
 	var current_radius = 5.5
+	var fade_alpha := clampf(current_lifetime / fade_start_time, 0.0, 1.0) if current_lifetime <= fade_start_time else 1.0
+	var base_col := projectile_color
+	base_col.a *= fade_alpha
 	
 	# Свечение (Glow)
-	var glow_color = projectile_color
-	glow_color.a = 0.25
-	draw_circle(Vector2.ZERO, current_radius * 2.0, glow_color)
+	var glow_color = base_col
+	glow_color.a = 0.22 * fade_alpha
+	draw_circle(Vector2.ZERO, current_radius * 1.8, glow_color)
 	
-	# Хвост: рисуем статичный хвост по оси -X (т.к. мы уже повернули Area2D)
-	for i in range(3):
-		var factor = 1.0 - (float(i) / 3.0)
-		# Хвост направлен строго влево (-X), так как X — это direction
-		var t_pos = Vector2(-1.0, 0) * (i * 6.0)
-		var t_col = projectile_color
-		t_col.a = factor * 0.7
-		draw_circle(t_pos, current_radius * factor, t_col)
+	# Компактный кометный хвост (1 легкая точка вместо цикла из 3)
+	var tail_col = base_col
+	tail_col.a = 0.45 * fade_alpha
+	draw_circle(Vector2(-7.0, 0), current_radius * 0.65, tail_col)
 	
 	# Голова кометы
 	var final_radius = current_radius
 	if is_virus:
 		final_radius *= 1.4 # Вирус крупнее
-		# Доп. свечение для вируса
-		var v_glow = projectile_color
-		v_glow.a = 0.4
-		draw_circle(Vector2.ZERO, final_radius * 1.5, v_glow)
+		var v_glow = base_col
+		v_glow.a = 0.35 * fade_alpha
+		draw_circle(Vector2.ZERO, final_radius * 1.4, v_glow)
 		
-	draw_circle(Vector2.ZERO, final_radius, projectile_color)
+	draw_circle(Vector2.ZERO, final_radius, base_col)
 	
 	var core_col = Color.WHITE
 	if is_virus: core_col = Color(0.1, 0.0, 0.2)
-	draw_circle(Vector2.ZERO, final_radius * 0.4, core_col)
+	core_col.a *= fade_alpha
+	draw_circle(Vector2.ZERO, final_radius * 0.42, core_col)
 	
-	# РИСУЕМ ШЛЕЙФ (если есть точки)
+	# Шлейф вируса (только если активен вирус)
 	if not trail_points.is_empty():
-		# Шлейф рисуем вне трансформации вращения, 
-		# либо учитываем, что draw_circle(Vector2.ZERO) это центр.
-		# Чтобы шлейф не вращался вместе с головой при изменении направления, 
-		# лучше рисовать его в глобальных координатах через DrawPolyline, 
-		# предварительно переведя в локальные.
-		var local_points = PackedVector2Array()
 		for i in range(trail_points.size()):
-			# Перевод из глобальной позиции в локальную относительно снаряда
-			# Но т.к. мы внутри _draw и есть вращение, нужно отменить вращение или 
-			# рисовать без draw_set_transform.
-			# Проще всего: вычитать global_position и поворачивать на -rotation
 			var p = (trail_points[i] - global_position).rotated(-rotation)
-			local_points.append(p)
-		
-		# Рисуем шлейф как серию кругов или линию
-		for i in range(local_points.size()):
-			var p = local_points[i]
 			var life_factor = 1.0 - float(i) / MAX_TRAIL_POINTS
-			var t_col = projectile_color
-			t_col.a = life_factor * 0.5
-			draw_circle(p, final_radius * life_factor * 0.7, t_col)
+			var t_col = base_col
+			t_col.a = life_factor * 0.4 * fade_alpha
+			draw_circle(p, final_radius * life_factor * 0.6, t_col)
 
 func _process(delta: float) -> void:
 	_sync_visual_direction()
@@ -99,14 +80,18 @@ func _process(delta: float) -> void:
 	# Уменьшаем время жизни
 	current_lifetime -= delta
 	
-	# Плавное растворение в конце средствами GPU (modulate)
-	if current_lifetime <= fade_start_time:
-		var alpha = max(0.0, current_lifetime / fade_start_time)
-		modulate.a = alpha # Бесплатная прозрачность на уровне рендерера
-	
 	# Удаление если время вышло
-	if current_lifetime <= 0:
+	if current_lifetime <= 0.0:
 		queue_free()
+		return
+	
+	# Быстрое отсечение при отдалении от экрана
+	if current_lifetime < (max_lifetime - 0.3) and not _is_pos_on_screen(global_position):
+		queue_free()
+		return
+	
+	if current_lifetime <= fade_start_time:
+		queue_redraw()
 	
 	# Обновление шлейфа (только для вируса, троттлинг ~30fps)
 	if is_virus:
@@ -236,7 +221,29 @@ func _spawn_impact_effect(pos: Vector2, p_color: Color, p_scale: Vector2 = Vecto
 	impact.color = p_color
 	impact.scale = p_scale
 
+static var _cached_camera: Camera2D = null
+static var _cached_camera_frame: int = -1
+static var _cached_half_w: float = 1200.0
+static var _cached_half_h: float = 800.0
+static var _cached_cam_pos: Vector2 = Vector2.ZERO
+
 func _is_pos_on_screen(pos: Vector2) -> bool:
+	var current_frame := Engine.get_process_frames()
+	if _cached_camera_frame != current_frame:
+		_cached_camera_frame = current_frame
+		var vp := get_viewport()
+		_cached_camera = vp.get_camera_2d() if vp else null
+		if is_instance_valid(_cached_camera):
+			_cached_cam_pos = _cached_camera.global_position
+			var zx: float = maxf(0.1, _cached_camera.zoom.x)
+			var zy: float = maxf(0.1, _cached_camera.zoom.y)
+			_cached_half_w = (960.0 / zx) + 150.0
+			_cached_half_h = (540.0 / zy) + 150.0
+	
+	if is_instance_valid(_cached_camera):
+		return absf(pos.x - _cached_cam_pos.x) <= _cached_half_w and \
+			   absf(pos.y - _cached_cam_pos.y) <= _cached_half_h
+	
 	var vp := get_viewport()
 	if vp == null:
 		return true

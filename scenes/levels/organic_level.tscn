@@ -1,16 +1,16 @@
-[gd_scene load_steps=22 format=3 uid="uid://dg0u8n3n4v5u6"]
+[gd_scene format=3 uid="uid://dg0u8n3n4v5u6"]
 
-[ext_resource type="Script" path="res://scenes/levels/organic_level.gd" id="1_org"]
-[ext_resource type="Script" path="res://scripts/core/SelectionManager.gd" id="2_sm"]
-[ext_resource type="Script" path="res://scripts/core/CameraFollow.gd" id="3_cam"]
-[ext_resource type="Script" path="res://scripts/core/PerkButtonPanel.gd" id="4_pbp"]
-[ext_resource type="Shader" path="res://scenes/environment/background.gdshader" id="5_shader"]
-[ext_resource type="Script" path="res://scripts/core/fps_counter.gd" id="6_fps"]
-[ext_resource type="Script" path="res://scripts/core/PerkEnergyBar.gd" id="7_peb"]
+[ext_resource type="Script" uid="uid://dt3avfojsktp2" path="res://scenes/levels/organic_level.gd" id="1_org"]
+[ext_resource type="Script" uid="uid://odonncolli0p" path="res://scripts/core/SelectionManager.gd" id="2_sm"]
+[ext_resource type="Script" uid="uid://cf35f2y81m0gb" path="res://scripts/core/CameraFollow.gd" id="3_cam"]
+[ext_resource type="Script" uid="uid://dtfnenitb5o65" path="res://scripts/core/PerkButtonPanel.gd" id="4_pbp"]
+[ext_resource type="Shader" uid="uid://dumm2ibcfyxao" path="res://scenes/environment/background.gdshader" id="5_shader"]
+[ext_resource type="Script" uid="uid://wtdsrlqfg7i5" path="res://scripts/core/fps_counter.gd" id="6_fps"]
+[ext_resource type="Script" uid="uid://clnmv5luiblln" path="res://scripts/core/PerkEnergyBar.gd" id="7_peb"]
 [ext_resource type="PackedScene" path="res://scenes/ui/dev_console.tscn" id="8_console"]
-[ext_resource type="Script" path="res://scripts/core/AIFactionManager.gd" id="9_ai"]
+[ext_resource type="Script" uid="uid://bqfqu5xcs4owa" path="res://scripts/core/AIFactionManager.gd" id="9_ai"]
 [ext_resource type="AudioStream" uid="uid://ddicvbj8rpvtl" path="res://audio/Cell_ColloniyMusic1_2.ogg" id="10_music"]
-[ext_resource type="Script" path="res://scenes/levels/level_sfx.gd" id="11_sfx"]
+[ext_resource type="Script" uid="uid://2df3jjpcd8xh" path="res://scenes/levels/level_sfx.gd" id="11_sfx"]
 [ext_resource type="AudioStream" uid="uid://b4sr8x0npf1k2" path="res://audio/FireCell_1.ogg" id="12_fire_1"]
 [ext_resource type="AudioStream" uid="uid://c7v1mkaq5uan3" path="res://audio/FireCell_2.ogg" id="13_fire_2"]
 [ext_resource type="AudioStream" uid="uid://jfriyvnl50rq" path="res://audio/DemageCell.ogg" id="14_damage_1"]
@@ -19,6 +19,7 @@
 [ext_resource type="AudioStream" uid="uid://bi5ifyp2ot54u" path="res://audio/shot_shield.ogg" id="17_shield_1"]
 [ext_resource type="AudioStream" uid="uid://dbb4d6ja71fr7" path="res://audio/shot_shield_1.ogg" id="18_shield_2"]
 [ext_resource type="AudioStream" uid="uid://3svhtt05k5fa" path="res://audio/active_perk.ogg" id="19_active_perk"]
+
 [sub_resource type="ShaderMaterial" id="ShaderMaterial_org"]
 shader = ExtResource("5_shader")
 shader_parameter/color1 = Color(0.04, 0.08, 0.12, 1)
@@ -29,16 +30,16 @@ shader_parameter/caustics_intensity = 0.42
 shader_parameter/particles_intensity = 0.35
 shader_parameter/cam_offset = Vector2(0, 0)
 
-[node name="OrganicLevel" type="Node2D"]
+[node name="OrganicLevel" type="Node2D" unique_id=539603267]
 script = ExtResource("1_org")
 
-[node name="LevelMusic" type="AudioStreamPlayer" parent="."]
+[node name="LevelMusic" type="AudioStreamPlayer" parent="." unique_id=572796998]
 stream = ExtResource("10_music")
-autoplay = true
 volume_db = -8.519375
+autoplay = true
 bus = &"Music"
 
-[node name="LevelSfx" type="Node2D" parent="."]
+[node name="LevelSfx" type="Node2D" parent="." unique_id=1203310585]
 script = ExtResource("11_sfx")
 fire_sound_1 = ExtResource("12_fire_1")
 fire_sound_2 = ExtResource("13_fire_2")
@@ -49,10 +50,10 @@ shield_sound_1 = ExtResource("17_shield_1")
 shield_sound_2 = ExtResource("18_shield_2")
 active_perk_sound = ExtResource("19_active_perk")
 
-[node name="BackgroundLayer" type="CanvasLayer" parent="."]
+[node name="BackgroundLayer" type="CanvasLayer" parent="." unique_id=328315230]
 layer = -1
 
-[node name="ColorRect" type="TextureRect" parent="BackgroundLayer"]
+[node name="ColorRect" type="TextureRect" parent="BackgroundLayer" unique_id=1472030466]
 material = SubResource("ShaderMaterial_org")
 anchors_preset = 15
 anchor_right = 1.0
@@ -63,55 +64,46 @@ mouse_filter = 2
 expand_mode = 1
 stretch_mode = 6
 
-
-
-
-[node name="SelectionManager" type="Node" parent="."]
+[node name="SelectionManager" type="Node" parent="." unique_id=1406964410]
 script = ExtResource("2_sm")
 SHIELD_ENERGY_COST = 25.0
 SPEED_ENERGY_COST = 15.0
 RAPID_FIRE_ENERGY_COST = 20.0
 VIRUS_ENERGY_COST = 30.0
 
-[node name="PerkButtonPanel" type="CanvasLayer" parent="."]
+[node name="PerkButtonPanel" type="CanvasLayer" parent="." unique_id=591007598]
 script = ExtResource("4_pbp")
 
-[node name="Camera2D" type="Camera2D" parent="."]
+[node name="Camera2D" type="Camera2D" parent="." unique_id=1361576973]
 ignore_rotation = false
 limit_smoothed = true
 position_smoothing_enabled = true
 script = ExtResource("3_cam")
 look_ahead_factor = 2.0
 
-[node name="HUDLayer" type="CanvasLayer" parent="."]
+[node name="HUDLayer" type="CanvasLayer" parent="." unique_id=1941506967]
 layer = 100
 
-[node name="PerkEnergyBar" type="Control" parent="HUDLayer"]
+[node name="PerkEnergyBar" type="Control" parent="HUDLayer" unique_id=636266602]
 layout_mode = 3
 anchors_preset = 0
 script = ExtResource("7_peb")
 
-[node name="FPSCounter" type="Label" parent="HUDLayer"]
+[node name="FPSCounter" type="Label" parent="HUDLayer" unique_id=1144223786]
 offset_right = 40.0
 offset_bottom = 23.0
 script = ExtResource("6_fps")
 
-[node name="DevConsole" parent="." instance=ExtResource("8_console")]
-layout_mode = 3
-anchors_preset = 15
-anchor_right = 1.0
-anchor_bottom = 1.0
-grow_horizontal = 2
-grow_vertical = 2
+[node name="DevConsole" parent="." unique_id=256193806 instance=ExtResource("8_console")]
 
-[node name="AIManager_Red" type="Node" parent="."]
+[node name="AIManager_Red" type="Node" parent="." unique_id=1120944229]
 script = ExtResource("9_ai")
 faction = 2
 
-[node name="AIManager_Green" type="Node" parent="."]
+[node name="AIManager_Green" type="Node" parent="." unique_id=896471731]
 script = ExtResource("9_ai")
 faction = 3
 
-[node name="AIManager_Yellow" type="Node" parent="."]
+[node name="AIManager_Yellow" type="Node" parent="." unique_id=1108725982]
 script = ExtResource("9_ai")
 faction = 4
