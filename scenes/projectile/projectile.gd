@@ -17,11 +17,14 @@ var trail_timer: float = 0.0
 const MAX_TRAIL_POINTS: int = 15
 
 # Жизненный цикл снаряда
-var max_lifetime: float = 1.1
-var current_lifetime: float = 1.1
-var fade_start_time: float = 0.25
+var max_lifetime: float = 4.0
+var current_lifetime: float = 4.0
+var fade_start_time: float = 0.5
+
+static var simplified_render: bool = false
 
 func _ready() -> void:
+	add_to_group("projectiles")
 	_sync_visual_direction()
 	queue_redraw()
 
@@ -36,6 +39,11 @@ func _draw() -> void:
 	var fade_alpha := clampf(current_lifetime / fade_start_time, 0.0, 1.0) if current_lifetime <= fade_start_time else 1.0
 	var base_col := projectile_color
 	base_col.a *= fade_alpha
+	
+	if simplified_render:
+		var simple_radius = current_radius * (1.3 if is_virus else 1.0)
+		draw_circle(Vector2.ZERO, simple_radius, base_col)
+		return
 	
 	# Свечение (Glow)
 	var glow_color = base_col
@@ -72,8 +80,6 @@ func _draw() -> void:
 			draw_circle(p, final_radius * life_factor * 0.6, t_col)
 
 func _process(delta: float) -> void:
-	_sync_visual_direction()
-
 	# Прямой полёт снаряда
 	position += direction * speed * delta
 	
@@ -85,8 +91,8 @@ func _process(delta: float) -> void:
 		queue_free()
 		return
 	
-	# Быстрое отсечение при отдалении от экрана
-	if current_lifetime < (max_lifetime - 0.3) and not _is_pos_on_screen(global_position):
+	# Отсечение только если снаряд улетел далеко за экран после 2.0с полёта
+	if current_lifetime < (max_lifetime - 2.0) and not _is_pos_on_screen(global_position):
 		queue_free()
 		return
 	

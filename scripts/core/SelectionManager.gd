@@ -56,6 +56,9 @@ var move_target_pos: Vector2 = Vector2.ZERO
 var has_move_target: bool = false
 var info_focus_cell: BaseCell = null
 var tutorial_manager: Node = null
+var _cached_player_colony_center: Vector2 = Vector2.ZERO
+var _player_colony_center_timer: float = 0.0
+const COLONY_CENTER_CACHE_INTERVAL: float = 0.08
 
 func _ready() -> void:
 	add_to_group("selection_manager")
@@ -119,10 +122,17 @@ func _process(delta: float) -> void:
 		
 	_update_cursor_visual()
 	_update_drag_preview()
-	_update_attack_target_line()
-	_update_move_target_visual()
+	_update_attack_target_line(delta)
+	_update_move_target_visual(delta)
 
-func _update_attack_target_line() -> void:
+func _get_cached_player_colony_center(delta: float) -> Vector2:
+	_player_colony_center_timer -= delta
+	if _player_colony_center_timer <= 0.0 or _cached_player_colony_center == Vector2.ZERO:
+		_player_colony_center_timer = COLONY_CENTER_CACHE_INTERVAL
+		_cached_player_colony_center = BaseCell.get_colony_center(get_tree(), BaseCell.OwnerType.PLAYER)
+	return _cached_player_colony_center
+
+func _update_attack_target_line(delta: float) -> void:
 	if attack_target_line == null:
 		return
 
@@ -133,18 +143,11 @@ func _update_attack_target_line() -> void:
 		attack_target_line.hide()
 		return
 
-	var player_cells_raw = get_tree().get_nodes_in_group("player_cells")
-	var player_cells: Array[BaseCell] = []
-	for node in player_cells_raw:
-		var cell := node as BaseCell
-		if cell:
-			player_cells.append(cell)
-
-	if player_cells.is_empty():
+	var colony_center := _get_cached_player_colony_center(delta)
+	if colony_center == Vector2.ZERO:
 		attack_target_line.hide()
 		return
 
-	var colony_center := BaseCell.get_colony_center(get_tree(), BaseCell.OwnerType.PLAYER)
 	attack_target_line.clear_points()
 	attack_target_line.add_point(colony_center)
 	attack_target_line.add_point(attack_target_node.global_position)
@@ -186,7 +189,7 @@ func _clear_move_target_visual() -> void:
 	if is_instance_valid(move_target_marker):
 		move_target_marker.hide()
 
-func _update_move_target_visual() -> void:
+func _update_move_target_visual(delta: float) -> void:
 	if move_target_line == null:
 		return
 
@@ -196,18 +199,11 @@ func _update_move_target_visual() -> void:
 			move_target_marker.hide()
 		return
 
-	var player_cells_raw = get_tree().get_nodes_in_group("player_cells")
-	var player_cells: Array[BaseCell] = []
-	for node in player_cells_raw:
-		var cell := node as BaseCell
-		if cell:
-			player_cells.append(cell)
-
-	if player_cells.is_empty():
+	var colony_center := _get_cached_player_colony_center(delta)
+	if colony_center == Vector2.ZERO:
 		_clear_move_target_visual()
 		return
 
-	var colony_center := BaseCell.get_colony_center(get_tree(), BaseCell.OwnerType.PLAYER)
 	if colony_center.distance_to(move_target_pos) <= MOVE_TARGET_ARRIVAL_DISTANCE:
 		_clear_move_target_visual()
 		return

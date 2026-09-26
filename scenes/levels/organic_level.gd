@@ -230,6 +230,7 @@ func _process(delta: float) -> void:
 			_victory_check_delay -= delta
 		else:
 			_check_result_condition()
+			_victory_check_delay = 0.35
 
 	if _result_menu_pending:
 		_result_menu_delay -= delta

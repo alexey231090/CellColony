@@ -19,6 +19,8 @@ enum OwnerType { NEUTRAL, PLAYER, ENEMY_RED, ENEMY_GREEN, ENEMY_YELLOW }
 @export_range(0.1, 10.0, 0.1) var slow_regen_interval: float = 3.0
 @export_range(0.1, 10.0, 0.1) var slow_regen_amount: float = 1.0
 
+static var simplified_render: bool = false
+
 var energy_label: Label = null
 var contr_label: Label = null
 @onready var shield_overlay: ColorRect = $ShieldOverlay
@@ -226,6 +228,7 @@ func _capture(new_owner: OwnerType) -> void:
 	if mover:
 		mover.is_active = false
 		mover.target_position = global_position
+		mover.on_owner_changed(new_owner)
 	
 	owner_type = new_owner
 	_update_groups()
@@ -348,7 +351,7 @@ func _draw() -> void:
 		display_color = display_color.lerp(Color.WHITE, 0.08 * _hover_strength)
 	
 	# Цвет обводки меняется если активен щит или скорострельность или спринт
-	var outline_color = display_color.lightened(0.4)
+	var outline_color: Color = display_color.lightened(0.4)
 	if reflect_chance > 0.0:
 		# Цвет обводки совпадает с цветом щита
 		var s_color = _get_cell_color().lightened(0.5)
@@ -364,6 +367,22 @@ func _draw() -> void:
 		var pulse = (sin(time * 20.0) + 1.0) / 2.0
 		var cyan = Color(0.0, 0.8, 1.0)
 		outline_color = display_color.lerp(cyan, 0.6 + pulse * 0.4)
+	
+	if simplified_render:
+		draw_circle(Vector2.ZERO, radius, display_color.darkened(0.2))
+		draw_arc(Vector2.ZERO, radius, 0.0, TAU, 24, outline_color, 2.5, true)
+		
+		# Отрисовка числа энергии
+		var font: Font = ThemeDB.fallback_font
+		if font != null:
+			var energy_val := roundi(stats.current_energy)
+			var energy_text := str(energy_val)
+			var font_size: int = clampi(roundi(20.0 / maxf(0.5, scale.x)), 13, 24)
+			var str_size := font.get_string_size(energy_text, HORIZONTAL_ALIGNMENT_CENTER, -1, font_size)
+			var text_pos := Vector2(-str_size.x * 0.5, font_size * 0.35)
+			draw_string_outline(font, text_pos, energy_text, HORIZONTAL_ALIGNMENT_LEFT, -1, font_size, 4, Color(0.05, 0.05, 0.05, 0.85))
+			draw_string(font, text_pos, energy_text, HORIZONTAL_ALIGNMENT_LEFT, -1, font_size, Color(1.0, 1.0, 1.0, 0.95))
+		return
 	
 	# ==========================================
 	# ЖЕЛЕЙНАЯ ФИЗИКА (Squash and Stretch)
@@ -786,7 +805,8 @@ func _apply_stranded_damage(delta: float) -> void:
 			return
 
 func _physics_process(_delta: float) -> void:
-	move_and_slide()
+	if velocity.length_squared() > 0.01:
+		move_and_slide()
 
 func command_attack(target_pos: Vector2, target_node: Node2D = null) -> void:
 	if is_infected: return # Зараженная клетка не слушает команд

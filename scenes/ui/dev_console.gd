@@ -356,6 +356,22 @@ func _build_settings() -> void:
 		"apply": Callable(self, "_apply_level_shader_enabled")
 	})
 	_settings.append({
+		"id": "simple_cells_mode",
+		"name": "Клетки: Простые кружки (тест FPS)",
+		"type": "bool",
+		"value": BaseCell.simplified_render,
+		"desc": "ON — клетки рисуются простыми кружками без органики и полигонов. OFF — обычный вид.",
+		"apply": Callable(self, "_apply_simple_cells_mode")
+	})
+	_settings.append({
+		"id": "simple_projectiles_mode",
+		"name": "Выстрелы: Простые кружки (тест FPS)",
+		"type": "bool",
+		"value": Projectile.simplified_render,
+		"desc": "ON — снаряды рисуются простыми точками без свечений и хвостов. OFF — обычный вид.",
+		"apply": Callable(self, "_apply_simple_projectiles_mode")
+	})
+	_settings.append({
 		"id": "audio_master_volume_db",
 		"name": "АУДИО: Общая громкость (дБ)",
 		"type": "float",
@@ -866,6 +882,20 @@ func _apply_level_shader_enabled(enabled: bool) -> void:
 			var main_node = get_tree().get_first_node_in_group("main")
 			if main_node != null and main_node.has_method("set_shader_enabled"):
 				main_node.set_shader_enabled(enabled)
+
+func _apply_simple_cells_mode(enabled: bool) -> void:
+	BaseCell.simplified_render = enabled
+	var cells := get_tree().get_nodes_in_group("cells")
+	for c in cells:
+		if c is CanvasItem:
+			(c as CanvasItem).queue_redraw()
+
+func _apply_simple_projectiles_mode(enabled: bool) -> void:
+	Projectile.simplified_render = enabled
+	var projs := get_tree().get_nodes_in_group("projectiles")
+	for p in projs:
+		if p is CanvasItem:
+			(p as CanvasItem).queue_redraw()
 
 func _get_bus_volume_db(bus_name: StringName, fallback: float) -> float:
 	var bus_index: int = AudioServer.get_bus_index(bus_name)
