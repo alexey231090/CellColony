@@ -203,6 +203,8 @@ func _ready() -> void:
 	call_deferred("_apply_ai_difficulty", difficulty)
 	_victory_check_delay = 0.4
 	_victory_ready = true
+	if has_node("/root/AdManager"):
+		get_node("/root/AdManager").gameplay_start()
 	
 	print("--- ORGANIC LEVEL LOADED: Чистое пространство (0,0), сложность: %s ---" % difficulty)
 
@@ -340,6 +342,8 @@ func _exit_tree() -> void:
 	Engine.time_scale = 1.0
 	get_tree().paused = false
 	MoverModule.clear_grid()
+	if has_node("/root/AdManager"):
+		get_node("/root/AdManager").gameplay_stop()
 
 func _setup_tutorial(level_data: Dictionary, player_cell: BaseCell) -> void:
 	if not bool(level_data.get("is_tutorial", false)):
@@ -378,6 +382,8 @@ func _trigger_victory() -> void:
 	_result_menu_pending = true
 	_result_menu_delay = VICTORY_SLOWMO_DURATION
 	_victory_payload = _build_victory_payload()
+	if has_node("/root/AdManager"):
+		get_node("/root/AdManager").gameplay_stop()
 	_begin_result_slowmo()
 
 func _trigger_defeat() -> void:
@@ -388,6 +394,8 @@ func _trigger_defeat() -> void:
 	_result_menu_pending = true
 	_result_menu_delay = VICTORY_SLOWMO_DURATION
 	_victory_payload = _build_defeat_payload()
+	if has_node("/root/AdManager"):
+		get_node("/root/AdManager").gameplay_stop()
 	_begin_result_slowmo()
 
 func _begin_result_slowmo() -> void:

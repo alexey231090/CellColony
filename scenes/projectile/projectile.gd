@@ -22,6 +22,8 @@ var current_lifetime: float = 4.0
 var fade_start_time: float = 0.5
 
 static var simplified_render: bool = false
+static var push_strength: float = 8.0
+static var max_push_speed: float = 25.0
 
 func _ready() -> void:
 	add_to_group("projectiles")
@@ -167,10 +169,14 @@ func _impact(cell: BaseCell) -> void:
 	# Создаем вспышку
 	_spawn_impact_effect(global_position, projectile_color)
 	
-	# Добавляем толчок только если это НЕ союзник
-	if is_enemy_hit:
-		var push_strength = 50.0
-		cell.velocity += direction * push_strength
+	# Добавляем мягкий толчок только если это НЕ союзник
+	if is_enemy_hit and push_strength > 0.0 and direction.length_squared() > 0.0001:
+		var push_dir := direction.normalized()
+		var current_push_speed := cell.velocity.dot(push_dir)
+		if current_push_speed < max_push_speed:
+			var push_impulse := minf(push_strength, max_push_speed - current_push_speed)
+			if push_impulse > 0.0:
+				cell.velocity += push_dir * push_impulse
 	
 	# Наносим урон/лечение
 	if is_virus:

@@ -29,6 +29,7 @@ LocalizationManager="*res://scripts/core/LocalizationManager.gd"
 AIProfilerRuntime="*res://addons/ai_profiler_export/runtime/ai_profiler_runtime.gd"
 LevelManager="*res://scripts/core/LevelManager.gd"
 LoadingManager="*res://scripts/core/LoadingManager.gd"
+AdManager="*res://scripts/core/AdManager.gd"
 YandexSDK="*uid://do62bxakwgyfx"
 
 [display]

@@ -77,6 +77,7 @@ var _result_mode: String = "victory"
 var _defeat_fx_layer: Control = null
 var _defeat_fx_time: float = 0.0
 var _defeat_fx_particles: Array[Dictionary] = []
+var _is_transitioning: bool = false
 
 func _ready() -> void:
 	layer = 130
@@ -118,6 +119,8 @@ func setup_defeat(current_level: int) -> void:
 	_apply_result_palette(true)
 
 func show_victory() -> void:
+	_is_transitioning = false
+	_set_buttons_disabled(false)
 	_stop_silent_fireworks()
 	_initial_fireworks_finished = false
 	if lose_music != null:
@@ -128,8 +131,13 @@ func show_victory() -> void:
 	_start_title_animation()
 	_animate_victory_panel()
 	_play_fireworks_sequence()
+	var ad_mgr = get_node_or_null("/root/AdManager")
+	if ad_mgr and ad_mgr.ad_trigger_timing == AdManager.AdTriggerTiming.ON_RESULT_SCREEN:
+		ad_mgr.show_interstitial()
 
 func show_defeat() -> void:
+	_is_transitioning = false
+	_set_buttons_disabled(false)
 	_stop_silent_fireworks()
 	if won_music != null:
 		won_music.stop()
@@ -139,6 +147,9 @@ func show_defeat() -> void:
 	_start_title_animation()
 	_animate_victory_panel()
 	_play_defeat_effect()
+	var ad_mgr = get_node_or_null("/root/AdManager")
+	if ad_mgr and ad_mgr.ad_trigger_timing == AdManager.AdTriggerTiming.ON_RESULT_SCREEN:
+		ad_mgr.show_interstitial()
 
 func _setup_audio_players() -> void:
 	ui_hover_sfx = AudioStreamPlayer.new()
@@ -710,13 +721,37 @@ func _make_button(text: String, accent: Color) -> Button:
 	return btn
 
 func _on_next_pressed() -> void:
+	_handle_exit_action(_do_next_level)
+
+func _on_replay_pressed() -> void:
+	_handle_exit_action(_do_replay_level)
+
+func _on_menu_pressed() -> void:
+	_handle_exit_action(_do_go_to_menu)
+
+func _handle_exit_action(action: Callable) -> void:
+	if _is_transitioning:
+		return
+	_is_transitioning = true
 	_stop_result_animations()
+	_set_buttons_disabled(true)
+	_play_ui_click_sound()
+
+	var ad_mgr = get_node_or_null("/root/AdManager")
+	if ad_mgr and ad_mgr.ad_trigger_timing == AdManager.AdTriggerTiming.ON_ACTION:
+		ad_mgr.show_interstitial(func(_was_shown: bool) -> void:
+			action.call()
+		)
+	else:
+		action.call()
+
+func _do_next_level() -> void:
 	get_tree().paused = false
 	Engine.time_scale = 1.0
 	visible = false
 	var level_manager := get_node_or_null("/root/LevelManager")
 	if not _has_next_level or level_manager == null:
-		_on_menu_pressed()
+		_do_go_to_menu()
 		return
 
 	level_manager.queue_level_selection(_next_level_num)
@@ -725,8 +760,7 @@ func _on_next_pressed() -> void:
 	else:
 		get_tree().change_scene_to_file("res://scenes/ui/main_menu/main_menu.tscn")
 
-func _on_replay_pressed() -> void:
-	_stop_result_animations()
+func _do_replay_level() -> void:
 	get_tree().paused = false
 	Engine.time_scale = 1.0
 	visible = false
@@ -744,8 +778,7 @@ func _on_replay_pressed() -> void:
 	else:
 		get_tree().reload_current_scene()
 
-func _on_menu_pressed() -> void:
-	_stop_result_animations()
+func _do_go_to_menu() -> void:
 	get_tree().paused = false
 	Engine.time_scale = 1.0
 	visible = false
@@ -753,6 +786,11 @@ func _on_menu_pressed() -> void:
 		get_node("/root/LoadingManager").transition_to_scene("res://scenes/ui/main_menu/main_menu.tscn")
 	else:
 		get_tree().change_scene_to_file("res://scenes/ui/main_menu/main_menu.tscn")
+
+func _set_buttons_disabled(disabled: bool) -> void:
+	if next_btn: next_btn.disabled = disabled
+	if replay_btn: replay_btn.disabled = disabled
+	if menu_btn: menu_btn.disabled = disabled
 
 func _stop_result_animations() -> void:
 	_stop_silent_fireworks()

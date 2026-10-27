@@ -804,9 +804,15 @@ func _apply_stranded_damage(delta: float) -> void:
 			_capture(OwnerType.NEUTRAL)
 			return
 
-func _physics_process(_delta: float) -> void:
+func _physics_process(delta: float) -> void:
 	if velocity.length_squared() > 0.01:
 		move_and_slide()
+		# Нейтральные клетки не управляются MoverModule (оптимизация),
+		# поэтому плавно гасим полученный импульс от выстрелов/толчков здесь:
+		if owner_type == OwnerType.NEUTRAL:
+			velocity = velocity.lerp(Vector2.ZERO, 8.0 * delta)
+			if velocity.length_squared() < 0.15:
+				velocity = Vector2.ZERO
 
 func command_attack(target_pos: Vector2, target_node: Node2D = null) -> void:
 	if is_infected: return # Зараженная клетка не слушает команд

@@ -362,6 +362,8 @@ func toggle_pause() -> void:
 	get_tree().paused = is_open
 	
 	if is_open:
+		if has_node("/root/AdManager"):
+			get_node("/root/AdManager").gameplay_stop()
 		_sync_audio_controls()
 		overlay.visible = true
 		var tween = create_tween().set_parallel()
@@ -370,6 +372,8 @@ func toggle_pause() -> void:
 		center_panel.pivot_offset = center_panel.size / 2.0
 		tween.tween_property(center_panel, "scale", Vector2(1.0, 1.0), 0.2).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
 	else:
+		if has_node("/root/AdManager"):
+			get_node("/root/AdManager").gameplay_start()
 		var tween = create_tween().set_parallel()
 		tween.tween_property(overlay, "modulate:a", 0.0, 0.15)
 		tween.tween_property(center_panel, "scale", Vector2(0.95, 0.95), 0.15)
@@ -386,6 +390,8 @@ func _input(event: InputEvent) -> void:
 			get_viewport().set_input_as_handled()
 
 func _on_main_menu_pressed() -> void:
+	if has_node("/root/AdManager"):
+		get_node("/root/AdManager").gameplay_stop()
 	get_tree().paused = false # Снимаем паузу перед переходом
 	is_open = false
 	if overlay:

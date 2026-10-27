@@ -512,6 +512,35 @@ func _build_settings() -> void:
 		"apply": Callable(self, "_apply_cell_speed")
 	})
 	_settings.append({
+		"id": "projectile_push_strength",
+		"name": "Толчок от выстрела",
+		"type": "float",
+		"value": Projectile.push_strength,
+		"min": 0.0,
+		"max": 50.0,
+		"step": 1.0,
+		"desc": "Enter — ввод числа. ←→ — шаг 1.0. Сила отталкивания клетки при попадании (по умолч. 8).",
+		"apply": Callable(self, "_apply_projectile_push_strength")
+	})
+	_settings.append({
+		"id": "ad_trigger_timing",
+		"name": "Реклама: момент показа",
+		"type": "int",
+		"value": 1,
+		"min": 1,
+		"max": 2,
+		"desc": "1 - При нажатии кнопок перехода (Правило Яндекса). 2 - Сразу при появлении экрана победы/поражения.",
+		"apply": Callable(self, "_apply_ad_trigger_timing")
+	})
+	_settings.append({
+		"id": "ad_test_show",
+		"name": "Реклама: тестовый вызов",
+		"type": "bool",
+		"value": false,
+		"desc": "Временный триггер. ON — немедленно запросить показ полноэкранной рекламы через AdManager.",
+		"apply": Callable(self, "_apply_ad_test_show")
+	})
+	_settings.append({
 		"id": "ai_decision_interval",
 		"name": "ИИ: интервал решений",
 		"type": "float",
@@ -862,6 +891,10 @@ func _apply_cell_speed(v: float) -> void:
 		main.cell_speed_mult = v
 		print("DEV: Множитель скорости клеток = ", v)
 
+func _apply_projectile_push_strength(v: float) -> void:
+	Projectile.push_strength = v
+	print("DEV: Сила толчка снаряда = ", v)
+
 func _apply_show_fps(enabled: bool) -> void:
 	var root := get_tree().current_scene
 	if root == null:
@@ -1136,6 +1169,24 @@ func _apply_fill_medium_stars(enabled: bool) -> void:
 
 func _apply_fill_hard_stars(enabled: bool) -> void:
 	_apply_fill_stars_trigger(enabled, 3, "fill_hard_stars")
+
+func _apply_ad_trigger_timing(v: int) -> void:
+	var ad_mgr = get_node_or_null("/root/AdManager")
+	if ad_mgr:
+		ad_mgr.ad_trigger_timing = v as AdManager.AdTriggerTiming
+		print("DEV: Момент показа рекламы = ", v)
+
+func _apply_ad_test_show(enabled: bool) -> void:
+	if not enabled:
+		return
+	var ad_mgr = get_node_or_null("/root/AdManager")
+	if ad_mgr:
+		ad_mgr.show_interstitial(func(was_shown: bool):
+			print("DEV: Тестовая реклама закрыта, was_shown: ", was_shown)
+			_set_setting_value_by_id("ad_test_show", false)
+		)
+	else:
+		_set_setting_value_by_id("ad_test_show", false)
 
 func _apply_fill_stars_trigger(enabled: bool, stars: int, setting_id: String) -> void:
 	if not enabled:

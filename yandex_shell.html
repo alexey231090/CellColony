@@ -189,6 +189,75 @@ body {
         }
         window.dispatchEvent(new CustomEvent('yandex_lang_changed', { detail: lang }));
     };
+
+    // === ПОЛНОЭКРАННАЯ РЕКЛАМА (INTERSTITIAL / showFullscreenAdv) ===
+    window.showYandexFullscreenAd = function(onOpenCb, onCloseCb, onErrorCb) {
+        if (!window.ysdk || !window.ysdk.adv) {
+            console.warn('[Yandex SDK] ysdk.adv недоступен, пропуск показа рекламы');
+            if (typeof onCloseCb === 'function') onCloseCb(false);
+            return;
+        }
+        try {
+            if (window.ysdk.features && window.ysdk.features.GameplayAPI) {
+                window.ysdk.features.GameplayAPI.stop();
+            }
+        } catch (e) {
+            console.warn('[Yandex SDK] Ошибка при GameplayAPI.stop():', e);
+        }
+        window.ysdk.adv.showFullscreenAdv({
+            callbacks: {
+                onOpen: function() {
+                    console.log('[Yandex SDK] Полноэкранная реклама открыта');
+                    if (typeof onOpenCb === 'function') onOpenCb();
+                },
+                onClose: function(wasShown) {
+                    console.log('[Yandex SDK] Полноэкранная реклама закрыта. wasShown =', wasShown);
+                    if (typeof onCloseCb === 'function') onCloseCb(Boolean(wasShown));
+                },
+                onError: function(error) {
+                    console.warn('[Yandex SDK] Ошибка показа рекламы:', error);
+                    if (typeof onErrorCb === 'function') onErrorCb(String(error));
+                    if (typeof onCloseCb === 'function') onCloseCb(false);
+                },
+                onOffline: function() {
+                    console.warn('[Yandex SDK] Реклама offline');
+                    if (typeof onCloseCb === 'function') onCloseCb(false);
+                }
+            }
+        });
+    };
+
+    // Алиас ShowAd для совместимости с аддонами
+    window.ShowAd = function(callback) {
+        window.showYandexFullscreenAd(
+            function() { if (typeof callback === 'function') callback(['opened']); },
+            function(wasShown) { if (typeof callback === 'function') callback(['closed', wasShown]); },
+            function(err) { if (typeof callback === 'function') callback(['error', err]); }
+        );
+    };
+
+    // GameplayAPI (уведомления платформы об активности игры)
+    window.yandexGameplayStart = function() {
+        if (window.ysdk && window.ysdk.features && window.ysdk.features.GameplayAPI) {
+            try {
+                window.ysdk.features.GameplayAPI.start();
+                console.log('[Yandex SDK] GameplayAPI.start()');
+            } catch (e) {
+                console.warn('[Yandex SDK] Ошибка GameplayAPI.start():', e);
+            }
+        }
+    };
+
+    window.yandexGameplayStop = function() {
+        if (window.ysdk && window.ysdk.features && window.ysdk.features.GameplayAPI) {
+            try {
+                window.ysdk.features.GameplayAPI.stop();
+                console.log('[Yandex SDK] GameplayAPI.stop()');
+            } catch (e) {
+                console.warn('[Yandex SDK] Ошибка GameplayAPI.stop():', e);
+            }
+        }
+    };
 </script>
 <!-- === КОНЕЦ: YANDEX GAMES SDK === -->
 
